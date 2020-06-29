@@ -948,6 +948,10 @@
 <span id="948">948</span>
 <span id="949">949</span>
 <span id="950">950</span>
+<span id="951">951</span>
+<span id="952">952</span>
+<span id="953">953</span>
+<span id="954">954</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1105,6 +1109,10 @@
             <span class="ident">accounts</span>: <span class="macro">vec</span><span class="macro">!</span>[],
             <span class="ident">mint_key_pair</span>: <span class="ident">cluster</span>.<span class="ident">mint_key_pair</span>().<span class="ident">clone</span>(),
         }
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">take_account</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">AccountData</span> {
+        <span class="self">self</span>.<span class="ident">accounts</span>.<span class="ident">remove</span>(<span class="number">0</span>)
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">clear</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
@@ -1698,7 +1706,7 @@
         .<span class="ident">collect</span>()
 }
 
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">execute_and_wait_transactions</span>(
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">execute_and_wait_transactions</span>(
     <span class="ident">client</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">JsonRpcAsyncClient</span>,
     <span class="ident">account</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">AccountData</span>,
     <span class="ident">txn</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SignedTransaction</span><span class="op">&gt;</span>,

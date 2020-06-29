@@ -132,6 +132,9 @@
 <span id="132">132</span>
 <span id="133">133</span>
 <span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -144,6 +147,7 @@
 <span class="kw">mod</span> <span class="ident">performance_benchmark_three_region_simulation</span>;
 <span class="kw">mod</span> <span class="ident">reboot_random_validator</span>;
 <span class="kw">mod</span> <span class="ident">recovery_time</span>;
+<span class="kw">mod</span> <span class="ident">versioning_test</span>;
 
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">collections</span>::<span class="ident">HashSet</span>, <span class="ident">fmt</span>::<span class="ident">Display</span>, <span class="ident">time</span>::<span class="ident">Duration</span>};
 
@@ -156,6 +160,7 @@
 };
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">reboot_random_validator</span>::{<span class="ident">RebootRandomValidators</span>, <span class="ident">RebootRandomValidatorsParams</span>};
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">recovery_time</span>::{<span class="ident">RecoveryTime</span>, <span class="ident">RecoveryTimeParams</span>};
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">versioning_test</span>::{<span class="ident">ValidatorVersioning</span>, <span class="ident">ValidatorVersioningParams</span>};
 
 <span class="kw">use</span> <span class="kw">crate</span>::{
     <span class="ident">cluster</span>::<span class="ident">Cluster</span>,
@@ -263,6 +268,7 @@
         <span class="ident">f</span>::<span class="op">&lt;</span><span class="ident">RebootRandomValidatorsParams</span><span class="op">&gt;</span>(),
     );
     <span class="ident">known_experiments</span>.<span class="ident">insert</span>(<span class="string">&quot;generate_cpu_flamegraph&quot;</span>, <span class="ident">f</span>::<span class="op">&lt;</span><span class="ident">CpuFlamegraphParams</span><span class="op">&gt;</span>());
+    <span class="ident">known_experiments</span>.<span class="ident">insert</span>(<span class="string">&quot;versioning_testing&quot;</span>, <span class="ident">f</span>::<span class="op">&lt;</span><span class="ident">ValidatorVersioningParams</span><span class="op">&gt;</span>());
 
     <span class="kw">let</span> <span class="ident">builder</span> <span class="op">=</span> <span class="ident">known_experiments</span>.<span class="ident">get</span>(<span class="ident">name</span>).<span class="ident">expect</span>(<span class="string">&quot;Experiment not found&quot;</span>);
     <span class="ident">builder</span>(<span class="ident">args</span>, <span class="ident">cluster</span>)
