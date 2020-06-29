@@ -772,6 +772,52 @@
 <span id="772">772</span>
 <span id="773">773</span>
 <span id="774">774</span>
+<span id="775">775</span>
+<span id="776">776</span>
+<span id="777">777</span>
+<span id="778">778</span>
+<span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
+<span id="805">805</span>
+<span id="806">806</span>
+<span id="807">807</span>
+<span id="808">808</span>
+<span id="809">809</span>
+<span id="810">810</span>
+<span id="811">811</span>
+<span id="812">812</span>
+<span id="813">813</span>
+<span id="814">814</span>
+<span id="815">815</span>
+<span id="816">816</span>
+<span id="817">817</span>
+<span id="818">818</span>
+<span id="819">819</span>
+<span id="820">820</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -976,11 +1022,57 @@
         <span class="ident">start_epoch</span>: <span class="ident">u64</span>,
         <span class="ident">end_epoch</span>: <span class="ident">u64</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LedgerInfoWithSignatures</span><span class="op">&gt;</span>, <span class="ident">bool</span>)<span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">ledger_store</span>.<span class="ident">get_epoch_ending_ledger_infos</span>(
+        <span class="self">self</span>.<span class="ident">get_epoch_ending_ledger_infos_impl</span>(
             <span class="ident">start_epoch</span>,
             <span class="ident">end_epoch</span>,
             <span class="ident">MAX_NUM_EPOCH_ENDING_LEDGER_INFO</span>,
         )
+    }
+
+    <span class="kw">fn</span> <span class="ident">get_epoch_ending_ledger_infos_impl</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">start_epoch</span>: <span class="ident">u64</span>,
+        <span class="ident">end_epoch</span>: <span class="ident">u64</span>,
+        <span class="ident">limit</span>: <span class="ident">usize</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LedgerInfoWithSignatures</span><span class="op">&gt;</span>, <span class="ident">bool</span>)<span class="op">&gt;</span> {
+        <span class="macro">ensure</span><span class="macro">!</span>(
+            <span class="ident">start_epoch</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">end_epoch</span>,
+            <span class="string">&quot;Bad epoch range [{}, {})&quot;</span>,
+            <span class="ident">start_epoch</span>,
+            <span class="ident">end_epoch</span>,
+        );
+        <span class="comment">// Note that the latest epoch can be the same with the current epoch (in most cases), or</span>
+        <span class="comment">// current_epoch + 1 (when the latest ledger_info carries next validator set)</span>
+        <span class="kw">let</span> <span class="ident">latest_epoch</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">ledger_store</span>
+            .<span class="ident">get_latest_ledger_info</span>()<span class="question-mark">?</span>
+            .<span class="ident">ledger_info</span>()
+            .<span class="ident">next_block_epoch</span>();
+        <span class="macro">ensure</span><span class="macro">!</span>(
+            <span class="ident">end_epoch</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">latest_epoch</span>,
+            <span class="string">&quot;Unable to provide epoch change ledger info for still open epoch. asked upper bound: {}, last sealed epoch: {}&quot;</span>,
+            <span class="ident">end_epoch</span>,
+            <span class="ident">latest_epoch</span> <span class="op">-</span> <span class="number">1</span>,  <span class="comment">// okay to -1 because genesis LedgerInfo has .next_block_epoch() == 1</span>
+        );
+
+        <span class="kw">let</span> (<span class="ident">paging_epoch</span>, <span class="ident">more</span>) <span class="op">=</span> <span class="kw">if</span> <span class="ident">end_epoch</span> <span class="op">-</span> <span class="ident">start_epoch</span> <span class="op">&gt;</span> <span class="ident">limit</span> <span class="kw">as</span> <span class="ident">u64</span> {
+            (<span class="ident">start_epoch</span> <span class="op">+</span> <span class="ident">limit</span> <span class="kw">as</span> <span class="ident">u64</span>, <span class="bool-val">true</span>)
+        } <span class="kw">else</span> {
+            (<span class="ident">end_epoch</span>, <span class="bool-val">false</span>)
+        };
+
+        <span class="kw">let</span> <span class="ident">lis</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">ledger_store</span>
+            .<span class="ident">get_epoch_ending_ledger_info_iter</span>(<span class="ident">start_epoch</span>, <span class="ident">paging_epoch</span>)<span class="question-mark">?</span>
+            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+        <span class="macro">ensure</span><span class="macro">!</span>(
+            <span class="ident">lis</span>.<span class="ident">len</span>() <span class="op">=</span><span class="op">=</span> (<span class="ident">paging_epoch</span> <span class="op">-</span> <span class="ident">start_epoch</span>) <span class="kw">as</span> <span class="ident">usize</span>,
+            <span class="string">&quot;DB corruption: missing epoch ending ledger info for epoch {}&quot;</span>,
+            <span class="ident">lis</span>.<span class="ident">last</span>()
+                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">li</span><span class="op">|</span> <span class="ident">li</span>.<span class="ident">ledger_info</span>().<span class="ident">next_block_epoch</span>())
+                .<span class="ident">unwrap_or</span>(<span class="ident">start_epoch</span>),
+        );
+        <span class="prelude-val">Ok</span>((<span class="ident">lis</span>, <span class="ident">more</span>))
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_transaction_with_proof</span>(

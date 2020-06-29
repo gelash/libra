@@ -292,6 +292,10 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -411,6 +415,10 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">next_epoch_state</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">EpochState</span><span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">commit_info</span>.<span class="ident">next_epoch_state</span>()
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">ends_epoch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="self">self</span>.<span class="ident">next_epoch_state</span>().<span class="ident">is_some</span>()
     }
 
     <span class="doccomment">/// Returns hash of consensus voting data in this `LedgerInfo`.</span>

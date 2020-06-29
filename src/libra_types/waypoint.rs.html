@@ -266,7 +266,7 @@
 
     <span class="doccomment">/// Generates a new waypoint given the epoch change LedgerInfo.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_epoch_boundary</span>(<span class="ident">ledger_info</span>: <span class="kw-2">&amp;</span><span class="ident">LedgerInfo</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
-        <span class="macro">ensure</span><span class="macro">!</span>(<span class="ident">ledger_info</span>.<span class="ident">next_epoch_state</span>().<span class="ident">is_some</span>(), <span class="string">&quot;No validator set&quot;</span>);
+        <span class="macro">ensure</span><span class="macro">!</span>(<span class="ident">ledger_info</span>.<span class="ident">ends_epoch</span>(), <span class="string">&quot;No validator set&quot;</span>);
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::<span class="ident">new_any</span>(<span class="ident">ledger_info</span>))
     }
 

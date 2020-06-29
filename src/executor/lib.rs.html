@@ -955,7 +955,7 @@
                 <span class="string">&quot;Version of a given epoch LI does not match local computation.&quot;</span>
             );
             <span class="macro">ensure</span><span class="macro">!</span>(
-                <span class="ident">epoch_change_li</span>.<span class="ident">ledger_info</span>().<span class="ident">next_epoch_state</span>().<span class="ident">is_some</span>(),
+                <span class="ident">epoch_change_li</span>.<span class="ident">ledger_info</span>().<span class="ident">ends_epoch</span>(),
                 <span class="string">&quot;Epoch change LI does not carry validator set&quot;</span>
             );
             <span class="macro">ensure</span><span class="macro">!</span>(
