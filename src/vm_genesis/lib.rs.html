@@ -595,7 +595,7 @@
 
     <span class="kw">let</span> <span class="ident">mint_max_coin1</span> <span class="op">=</span> <span class="ident">transaction_builder</span>::<span class="ident">encode_tiered_mint_script</span>(
         <span class="ident">coin1_tag</span>,
-        <span class="number">1</span>,
+        <span class="number">0</span>,
         <span class="ident">account_config</span>::<span class="ident">testnet_dd_account_address</span>(),
         <span class="ident">std</span>::<span class="ident">u64</span>::<span class="ident">MAX</span> <span class="op">/</span> <span class="number">2</span>,
         <span class="number">4</span>,
@@ -603,7 +603,7 @@
 
     <span class="kw">let</span> <span class="ident">mint_max_coin2</span> <span class="op">=</span> <span class="ident">transaction_builder</span>::<span class="ident">encode_tiered_mint_script</span>(
         <span class="ident">coin2_tag</span>,
-        <span class="number">2</span>,
+        <span class="number">0</span>,
         <span class="ident">account_config</span>::<span class="ident">testnet_dd_account_address</span>(),
         <span class="ident">std</span>::<span class="ident">u64</span>::<span class="ident">MAX</span> <span class="op">/</span> <span class="number">2</span>,
         <span class="number">4</span>,
