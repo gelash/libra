@@ -1830,6 +1830,14 @@
 <span id="1830">1830</span>
 <span id="1831">1831</span>
 <span id="1832">1832</span>
+<span id="1833">1833</span>
+<span id="1834">1834</span>
+<span id="1835">1835</span>
+<span id="1836">1836</span>
+<span id="1837">1837</span>
+<span id="1838">1838</span>
+<span id="1839">1839</span>
+<span id="1840">1840</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1870,7 +1878,9 @@
     <span class="ident">cli</span>::<span class="ident">Options</span>,
     <span class="ident">spec_translator</span>::<span class="ident">SpecTranslator</span>,
 };
-<span class="kw">use</span> <span class="ident">spec_lang</span>::<span class="ident">env</span>::{<span class="ident">ADDITION_OVERFLOW_UNCHECKED_PRAGMA</span>, <span class="ident">ASSUME_NO_ABORT_FROM_HERE_PRAGMA</span>};
+<span class="kw">use</span> <span class="ident">spec_lang</span>::<span class="ident">env</span>::{
+    <span class="ident">ADDITION_OVERFLOW_UNCHECKED_PRAGMA</span>, <span class="ident">ASSUME_NO_ABORT_FROM_HERE_PRAGMA</span>, <span class="ident">OPAQUE_PRAGMA</span>,
+};
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BoogieTranslator</span><span class="op">&lt;</span><span class="lifetime">&#39;env</span><span class="op">&gt;</span> {
     <span class="ident">env</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;env</span> <span class="ident">GlobalEnv</span>,
@@ -2378,10 +2388,16 @@
         <span class="self">self</span>.<span class="ident">generate_inline_function_body</span>(<span class="ident">func_target</span>);
 
         <span class="comment">// generate called function with pre and free post conditions.</span>
+        <span class="kw">let</span> <span class="ident">opaque</span> <span class="op">=</span> <span class="ident">func_target</span>.<span class="ident">is_pragma_true</span>(<span class="ident">OPAQUE_PRAGMA</span>, <span class="op">|</span><span class="op">|</span> <span class="bool-val">false</span>);
         <span class="self">self</span>.<span class="ident">generate_function_sig</span>(<span class="ident">func_target</span>, <span class="ident">FunctionEntryPoint</span>::<span class="ident">Called</span>);
+        <span class="kw">if</span> <span class="ident">opaque</span> {
+            <span class="macro">emit</span><span class="macro">!</span>(<span class="self">self</span>.<span class="ident">writer</span>, <span class="string">&quot;;&quot;</span>);
+        }
         <span class="self">self</span>.<span class="ident">generate_function_args_requires_well_formed</span>(<span class="ident">func_target</span>);
         <span class="self">self</span>.<span class="ident">generate_function_spec</span>(<span class="ident">func_target</span>, <span class="ident">FunctionEntryPoint</span>::<span class="ident">Called</span>);
-        <span class="self">self</span>.<span class="ident">generate_function_forward_body</span>(<span class="ident">func_target</span>, <span class="ident">FunctionEntryPoint</span>::<span class="ident">Called</span>);
+        <span class="kw">if</span> <span class="op">!</span><span class="ident">opaque</span> {
+            <span class="self">self</span>.<span class="ident">generate_function_forward_body</span>(<span class="ident">func_target</span>, <span class="ident">FunctionEntryPoint</span>::<span class="ident">Called</span>);
+        }
 
         <span class="comment">// If the function should not have a `_verify` entry point, stop here.</span>
         <span class="kw">if</span> <span class="op">!</span><span class="ident">func_target</span>
