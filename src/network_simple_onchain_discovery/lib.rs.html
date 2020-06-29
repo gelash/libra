@@ -154,6 +154,11 @@
 <span id="154">154</span>
 <span id="155">155</span>
 <span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -174,6 +179,8 @@
 <span class="kw">use</span> <span class="ident">once_cell</span>::<span class="ident">sync</span>::<span class="ident">Lazy</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">convert</span>::<span class="ident">TryFrom</span>, <span class="ident">time</span>::<span class="ident">Instant</span>};
 <span class="kw">use</span> <span class="ident">subscription_service</span>::<span class="ident">ReconfigSubscription</span>;
+
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">builder</span>;
 
 <span class="doccomment">/// Histogram of idle time of spent in event processing loop</span>
 <span class="kw">pub</span> <span class="kw">static</span> <span class="ident">EVENT_PROCESSING_LOOP_IDLE_DURATION_S</span>: <span class="ident">Lazy</span><span class="op">&lt;</span><span class="ident">DurationHistogram</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Lazy</span>::<span class="ident">new</span>(<span class="op">|</span><span class="op">|</span> {
@@ -201,6 +208,7 @@
 <span class="doccomment">/// for the ConnectivityManager.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConfigurationChangeListener</span> {
     <span class="ident">conn_mgr_reqs_tx</span>: <span class="ident">channel</span>::<span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">ConnectivityRequest</span><span class="op">&gt;</span>,
+    <span class="ident">reconfig_events</span>: <span class="ident">libra_channel</span>::<span class="ident">Receiver</span><span class="op">&lt;</span>(), <span class="ident">OnChainConfigPayload</span><span class="op">&gt;</span>,
     <span class="ident">role</span>: <span class="ident">RoleType</span>,
 }
 
@@ -261,9 +269,14 @@
 
 <span class="kw">impl</span> <span class="ident">ConfigurationChangeListener</span> {
     <span class="doccomment">/// Creates a new ConfigurationListener</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">conn_mgr_reqs_tx</span>: <span class="ident">channel</span>::<span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">ConnectivityRequest</span><span class="op">&gt;</span>, <span class="ident">role</span>: <span class="ident">RoleType</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
+        <span class="ident">conn_mgr_reqs_tx</span>: <span class="ident">channel</span>::<span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">ConnectivityRequest</span><span class="op">&gt;</span>,
+        <span class="ident">reconfig_events</span>: <span class="ident">libra_channel</span>::<span class="ident">Receiver</span><span class="op">&lt;</span>(), <span class="ident">OnChainConfigPayload</span><span class="op">&gt;</span>,
+        <span class="ident">role</span>: <span class="ident">RoleType</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">conn_mgr_reqs_tx</span>,
+            <span class="ident">reconfig_events</span>,
             <span class="ident">role</span>,
         }
     }
@@ -294,13 +307,10 @@
     }
 
     <span class="doccomment">/// Starts the listener to wait on reconfiguration events.  Creates an infinite loop.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">start</span>(
-        <span class="kw-2">mut</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">reconfig_events</span>: <span class="ident">libra_channel</span>::<span class="ident">Receiver</span><span class="op">&lt;</span>(), <span class="ident">OnChainConfigPayload</span><span class="op">&gt;</span>,
-    ) {
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">start</span>(<span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">loop</span> {
             <span class="kw">let</span> <span class="ident">start_idle_time</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
-            <span class="kw">let</span> <span class="ident">payload</span> <span class="op">=</span> <span class="ident">reconfig_events</span>.<span class="ident">select_next_some</span>().<span class="kw">await</span>;
+            <span class="kw">let</span> <span class="ident">payload</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">reconfig_events</span>.<span class="ident">select_next_some</span>().<span class="kw">await</span>;
             <span class="kw">let</span> <span class="ident">idle_duration</span> <span class="op">=</span> <span class="ident">start_idle_time</span>.<span class="ident">elapsed</span>();
             <span class="kw">let</span> <span class="ident">start_process_time</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
             <span class="self">self</span>.<span class="ident">process_payload</span>(<span class="ident">payload</span>).<span class="kw">await</span>;
