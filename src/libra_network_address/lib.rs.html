@@ -1043,6 +1043,24 @@
 <span id="1043">1043</span>
 <span id="1044">1044</span>
 <span id="1045">1045</span>
+<span id="1046">1046</span>
+<span id="1047">1047</span>
+<span id="1048">1048</span>
+<span id="1049">1049</span>
+<span id="1050">1050</span>
+<span id="1051">1051</span>
+<span id="1052">1052</span>
+<span id="1053">1053</span>
+<span id="1054">1054</span>
+<span id="1055">1055</span>
+<span id="1056">1056</span>
+<span id="1057">1057</span>
+<span id="1058">1058</span>
+<span id="1059">1059</span>
+<span id="1060">1060</span>
+<span id="1061">1061</span>
+<span id="1062">1062</span>
+<span id="1063">1063</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1060,7 +1078,7 @@
     <span class="ident">convert</span>::{<span class="ident">Into</span>, <span class="ident">TryFrom</span>},
     <span class="ident">fmt</span>,
     <span class="ident">iter</span>::<span class="ident">IntoIterator</span>,
-    <span class="ident">net</span>::{<span class="self">self</span>, <span class="ident">IpAddr</span>, <span class="ident">Ipv4Addr</span>, <span class="ident">Ipv6Addr</span>, <span class="ident">SocketAddr</span>},
+    <span class="ident">net</span>::{<span class="self">self</span>, <span class="ident">IpAddr</span>, <span class="ident">Ipv4Addr</span>, <span class="ident">Ipv6Addr</span>, <span class="ident">SocketAddr</span>, <span class="ident">ToSocketAddrs</span>},
     <span class="ident">num</span>,
     <span class="ident">str</span>::<span class="ident">FromStr</span>,
     <span class="ident">string</span>::<span class="ident">ToString</span>,
@@ -1418,6 +1436,24 @@
         }
 
         <span class="prelude-val">Ok</span>(<span class="ident">NetworkAddress</span>::<span class="ident">new</span>(<span class="ident">protocols</span>))
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">ToSocketAddrs</span> <span class="kw">for</span> <span class="ident">NetworkAddress</span> {
+    <span class="kw">type</span> <span class="ident">Iter</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">vec</span>::<span class="ident">IntoIter</span><span class="op">&lt;</span><span class="ident">SocketAddr</span><span class="op">&gt;</span>;
+
+    <span class="kw">fn</span> <span class="ident">to_socket_addrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>::<span class="ident">Iter</span>, <span class="ident">std</span>::<span class="ident">io</span>::<span class="ident">Error</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(((<span class="ident">ipaddr</span>, <span class="ident">port</span>), <span class="kw">_</span>)) <span class="op">=</span> <span class="ident">parse_ip_tcp</span>(<span class="self">self</span>.<span class="ident">as_slice</span>()) {
+            <span class="prelude-val">Ok</span>(<span class="macro">vec</span><span class="macro">!</span>[<span class="ident">SocketAddr</span>::<span class="ident">new</span>(<span class="ident">ipaddr</span>, <span class="ident">port</span>)].<span class="ident">into_iter</span>())
+        } <span class="kw">else</span> <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(((<span class="ident">ip_filter</span>, <span class="ident">dns_name</span>, <span class="ident">port</span>), <span class="kw">_</span>)) <span class="op">=</span> <span class="ident">parse_dns_tcp</span>(<span class="self">self</span>.<span class="ident">as_slice</span>()) {
+            <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}:{}&quot;</span>, <span class="ident">dns_name</span>, <span class="ident">port</span>).<span class="ident">to_socket_addrs</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> {
+                <span class="ident">v</span>.<span class="ident">filter</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> <span class="ident">ip_filter</span>.<span class="ident">matches</span>(<span class="ident">addr</span>.<span class="ident">ip</span>()))
+                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+                    .<span class="ident">into_iter</span>()
+            })
+        } <span class="kw">else</span> {
+            <span class="prelude-val">Ok</span>(<span class="macro">vec</span><span class="macro">!</span>[].<span class="ident">into_iter</span>())
+        }
     }
 }
 

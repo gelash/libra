@@ -85,8 +85,6 @@
 <span id="85">85</span>
 <span id="86">86</span>
 <span id="87">87</span>
-<span id="88">88</span>
-<span id="89">89</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -138,12 +136,10 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">extract_signer</span>(<span class="ident">config</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">NodeConfig</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ValidatorSigner</span> {
+    <span class="kw">let</span> <span class="ident">sr_test</span> <span class="op">=</span> <span class="ident">config</span>.<span class="ident">consensus</span>.<span class="ident">safety_rules</span>.<span class="ident">test</span>.<span class="ident">as_mut</span>().<span class="ident">unwrap</span>();
     <span class="ident">ValidatorSigner</span>::<span class="ident">new</span>(
-        <span class="ident">config</span>.<span class="ident">validator_network</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="ident">peer_id</span>(),
-        <span class="ident">config</span>
-            .<span class="ident">test</span>
-            .<span class="ident">as_mut</span>()
-            .<span class="ident">unwrap</span>()
+        <span class="ident">sr_test</span>.<span class="ident">author</span>,
+        <span class="ident">sr_test</span>
             .<span class="ident">consensus_keypair</span>
             .<span class="ident">as_mut</span>()
             .<span class="ident">unwrap</span>()

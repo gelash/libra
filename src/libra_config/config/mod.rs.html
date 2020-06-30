@@ -456,6 +456,15 @@
 <span id="456">456</span>
 <span id="457">457</span>
 <span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -773,7 +782,6 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">test</span> <span class="op">=</span> <span class="ident">TestConfig</span>::<span class="ident">new_with_temp_dir</span>();
 
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">base</span>.<span class="ident">role</span> <span class="op">=</span><span class="op">=</span> <span class="ident">RoleType</span>::<span class="ident">Validator</span> {
-            <span class="ident">test</span>.<span class="ident">initialize_storage</span> <span class="op">=</span> <span class="bool-val">true</span>;
             <span class="ident">test</span>.<span class="ident">random_account_key</span>(<span class="ident">rng</span>);
             <span class="kw">let</span> <span class="ident">peer_id</span> <span class="op">=</span> <span class="ident">libra_types</span>::<span class="ident">account_address</span>::<span class="ident">from_public_key</span>(
                 <span class="kw-2">&amp;</span><span class="ident">test</span>.<span class="ident">operator_keypair</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="ident">public_key</span>(),
@@ -786,8 +794,14 @@
 
             <span class="kw">let</span> <span class="ident">validator_network</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validator_network</span>.<span class="ident">as_mut</span>().<span class="ident">unwrap</span>();
             <span class="ident">validator_network</span>.<span class="ident">random_with_peer_id</span>(<span class="ident">rng</span>, <span class="prelude-val">Some</span>(<span class="ident">peer_id</span>));
-            <span class="ident">test</span>.<span class="ident">random_consensus_key</span>(<span class="ident">rng</span>);
+            <span class="comment">// We want to produce this key twice</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cloned_rng</span> <span class="op">=</span> <span class="ident">rng</span>.<span class="ident">clone</span>();
             <span class="ident">test</span>.<span class="ident">random_execution_key</span>(<span class="ident">rng</span>);
+
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">safety_rules_test_config</span> <span class="op">=</span> <span class="ident">SafetyRulesTestConfig</span>::<span class="ident">new</span>(<span class="ident">peer_id</span>);
+            <span class="ident">safety_rules_test_config</span>.<span class="ident">random_consensus_key</span>(<span class="ident">rng</span>);
+            <span class="ident">safety_rules_test_config</span>.<span class="ident">random_execution_key</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">cloned_rng</span>);
+            <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">safety_rules</span>.<span class="ident">test</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">safety_rules_test_config</span>);
         } <span class="kw">else</span> {
             <span class="self">self</span>.<span class="ident">validator_network</span> <span class="op">=</span> <span class="prelude-val">None</span>;
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">full_node_networks</span>.<span class="ident">is_empty</span>() {
@@ -913,6 +927,10 @@
         <span class="ident">NodeConfig</span>::<span class="ident">default_for_public_full_node</span>();
         <span class="ident">NodeConfig</span>::<span class="ident">default_for_validator</span>();
         <span class="ident">NodeConfig</span>::<span class="ident">default_for_validator_full_node</span>();
+
+        <span class="kw">let</span> <span class="ident">contents</span> <span class="op">=</span> <span class="ident">std</span>::<span class="macro">include_str</span><span class="macro">!</span>(<span class="string">&quot;test_data/safety_rules.yaml&quot;</span>);
+        <span class="ident">SafetyRulesConfig</span>::<span class="ident">parse</span>(<span class="kw-2">&amp;</span><span class="ident">contents</span>)
+            .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Error in safety_rules.yaml: {}&quot;</span>, <span class="ident">e</span>));
     }
 }
 </pre></div>
