@@ -1390,19 +1390,15 @@
             <span class="kw">let</span> <span class="ident">requests</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">gen_requests</span>();
             <span class="kw">let</span> <span class="ident">num_requests</span> <span class="op">=</span> <span class="ident">requests</span>.<span class="ident">len</span>();
             <span class="kw">let</span> <span class="ident">start_time</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
+            <span class="kw">let</span> <span class="ident">wait_util</span> <span class="op">=</span> <span class="ident">start_time</span> <span class="op">+</span> <span class="ident">wait</span>;
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_offset_time</span> <span class="op">=</span> <span class="number">0u64</span>;
             <span class="kw">for</span> <span class="ident">request</span> <span class="kw">in</span> <span class="ident">requests</span> {
                 <span class="kw">let</span> <span class="ident">cur_time</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
-                <span class="kw">let</span> <span class="ident">wait_util</span> <span class="op">=</span> <span class="ident">cur_time</span> <span class="op">+</span> <span class="ident">wait</span>;
                 <span class="ident">tx_offset_time</span> <span class="op">+</span><span class="op">=</span> (<span class="ident">cur_time</span> <span class="op">-</span> <span class="ident">start_time</span>).<span class="ident">as_millis</span>() <span class="kw">as</span> <span class="ident">u64</span>;
                 <span class="self">self</span>.<span class="ident">stats</span>.<span class="ident">submitted</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Ordering</span>::<span class="ident">Relaxed</span>);
                 <span class="kw">let</span> <span class="ident">resp</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">client</span>.<span class="ident">submit_transaction</span>(<span class="ident">request</span>).<span class="kw">await</span>;
                 <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">resp</span> {
                     <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;[{:?}] Failed to submit request: {:?}&quot;</span>, <span class="self">self</span>.<span class="ident">client</span>, <span class="ident">e</span>);
-                }
-                <span class="kw">let</span> <span class="ident">now</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
-                <span class="kw">if</span> <span class="ident">wait_util</span> <span class="op">&gt;</span> <span class="ident">now</span> {
-                    <span class="ident">time</span>::<span class="ident">delay_for</span>(<span class="ident">wait_util</span> <span class="op">-</span> <span class="ident">now</span>).<span class="kw">await</span>;
                 }
             }
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">params</span>.<span class="ident">wait_committed</span> {
@@ -1447,6 +1443,10 @@
                         .<span class="ident">latencies</span>
                         .<span class="ident">record_data_point</span>(<span class="ident">latency</span>, <span class="ident">num_requests</span> <span class="kw">as</span> <span class="ident">u64</span>);
                 }
+            }
+            <span class="kw">let</span> <span class="ident">now</span> <span class="op">=</span> <span class="ident">Instant</span>::<span class="ident">now</span>();
+            <span class="kw">if</span> <span class="ident">wait_util</span> <span class="op">&gt;</span> <span class="ident">now</span> {
+                <span class="ident">time</span>::<span class="ident">delay_for</span>(<span class="ident">wait_util</span> <span class="op">-</span> <span class="ident">now</span>).<span class="kw">await</span>;
             }
         }
         <span class="self">self</span>.<span class="ident">accounts</span>
