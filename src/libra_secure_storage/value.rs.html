@@ -70,6 +70,15 @@
 <span id="70">70</span>
 <span id="71">71</span>
 <span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -92,6 +101,7 @@
     <span class="ident">String</span>(<span class="ident">String</span>),
     <span class="ident">Transaction</span>(<span class="ident">Transaction</span>),
     <span class="ident">U64</span>(<span class="ident">u64</span>),
+    <span class="ident">Bytes</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>),
 }
 
 <span class="kw">impl</span> <span class="ident">Value</span> {
@@ -137,6 +147,14 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">transaction</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Transaction</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Value</span>::<span class="ident">Transaction</span>(<span class="ident">value</span>) <span class="op">=</span> <span class="self">self</span> {
+            <span class="prelude-val">Ok</span>(<span class="ident">value</span>)
+        } <span class="kw">else</span> {
+            <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnexpectedValueType</span>)
+        }
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">bytes</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Value</span>::<span class="ident">Bytes</span>(<span class="ident">value</span>) <span class="op">=</span> <span class="self">self</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">value</span>)
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnexpectedValueType</span>)

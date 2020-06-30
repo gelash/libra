@@ -79,6 +79,7 @@
 <span id="79">79</span>
 <span id="80">80</span>
 <span id="81">81</span>
+<span id="82">82</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -128,6 +129,7 @@
             .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">KeyNotSet</span>(<span class="ident">key</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
 
         <span class="kw">let</span> <span class="ident">value</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">response</span>.<span class="ident">value</span> {
+            <span class="ident">Value</span>::<span class="ident">Bytes</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">Bytes</span>(<span class="ident">value</span>.<span class="ident">clone</span>()),
             <span class="ident">Value</span>::<span class="ident">Ed25519PrivateKey</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="comment">// Hack because Ed25519PrivateKey does not support clone / copy</span>
                 <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="ident">lcs</span>::<span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value</span>)<span class="question-mark">?</span>;
@@ -137,8 +139,8 @@
             <span class="ident">Value</span>::<span class="ident">Ed25519PublicKey</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">Ed25519PublicKey</span>(<span class="ident">value</span>.<span class="ident">clone</span>()),
             <span class="ident">Value</span>::<span class="ident">HashValue</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">HashValue</span>(<span class="kw-2">*</span><span class="ident">value</span>),
             <span class="ident">Value</span>::<span class="ident">String</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">String</span>(<span class="ident">value</span>.<span class="ident">clone</span>()),
-            <span class="ident">Value</span>::<span class="ident">U64</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">U64</span>(<span class="kw-2">*</span><span class="ident">value</span>),
             <span class="ident">Value</span>::<span class="ident">Transaction</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">Transaction</span>(<span class="ident">value</span>.<span class="ident">clone</span>()),
+            <span class="ident">Value</span>::<span class="ident">U64</span>(<span class="ident">value</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Value</span>::<span class="ident">U64</span>(<span class="kw-2">*</span><span class="ident">value</span>),
         };
 
         <span class="kw">let</span> <span class="ident">last_update</span> <span class="op">=</span> <span class="ident">response</span>.<span class="ident">last_update</span>;

@@ -181,16 +181,42 @@
 <span id="181">181</span>
 <span id="182">182</span>
 <span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
 
 <span class="kw">use</span> <span class="ident">anyhow</span>::<span class="prelude-ty">Result</span>;
-<span class="kw">use</span> <span class="ident">consensus_types</span>::<span class="ident">common</span>::{<span class="ident">Author</span>, <span class="ident">Round</span>};
+<span class="kw">use</span> <span class="ident">consensus_types</span>::{
+    <span class="ident">common</span>::{<span class="ident">Author</span>, <span class="ident">Round</span>},
+    <span class="ident">vote</span>::<span class="ident">Vote</span>,
+};
 <span class="kw">use</span> <span class="ident">libra_crypto</span>::<span class="ident">ed25519</span>::{<span class="ident">Ed25519PrivateKey</span>, <span class="ident">Ed25519PublicKey</span>};
 <span class="kw">use</span> <span class="ident">libra_global_constants</span>::{
-    <span class="ident">CONSENSUS_KEY</span>, <span class="ident">EPOCH</span>, <span class="ident">EXECUTION_KEY</span>, <span class="ident">LAST_VOTED_ROUND</span>, <span class="ident">OPERATOR_ACCOUNT</span>, <span class="ident">PREFERRED_ROUND</span>,
-    <span class="ident">WAYPOINT</span>,
+    <span class="ident">CONSENSUS_KEY</span>, <span class="ident">EPOCH</span>, <span class="ident">EXECUTION_KEY</span>, <span class="ident">LAST_VOTE</span>, <span class="ident">LAST_VOTED_ROUND</span>, <span class="ident">OPERATOR_ACCOUNT</span>,
+    <span class="ident">PREFERRED_ROUND</span>, <span class="ident">WAYPOINT</span>,
 };
 <span class="kw">use</span> <span class="ident">libra_secure_storage</span>::{<span class="ident">CryptoStorage</span>, <span class="ident">InMemoryStorage</span>, <span class="ident">KVStorage</span>, <span class="ident">Storage</span>, <span class="ident">Value</span>};
 <span class="kw">use</span> <span class="ident">libra_types</span>::<span class="ident">waypoint</span>::<span class="ident">Waypoint</span>;
@@ -254,6 +280,10 @@
         <span class="ident">internal_store</span>.<span class="ident">set</span>(<span class="ident">OPERATOR_ACCOUNT</span>, <span class="ident">Value</span>::<span class="ident">String</span>(<span class="ident">author</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
         <span class="ident">internal_store</span>.<span class="ident">set</span>(<span class="ident">PREFERRED_ROUND</span>, <span class="ident">Value</span>::<span class="ident">U64</span>(<span class="number">0</span>))<span class="question-mark">?</span>;
         <span class="ident">internal_store</span>.<span class="ident">set</span>(<span class="ident">WAYPOINT</span>, <span class="ident">Value</span>::<span class="ident">String</span>(<span class="ident">waypoint</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
+        <span class="ident">internal_store</span>.<span class="ident">set</span>(
+            <span class="ident">LAST_VOTE</span>,
+            <span class="ident">Value</span>::<span class="ident">Bytes</span>(<span class="ident">lcs</span>::<span class="ident">to_bytes</span>::<span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vote</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>)<span class="question-mark">?</span>),
+        )<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -332,6 +362,22 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">set_waypoint</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">waypoint</span>: <span class="kw-2">&amp;</span><span class="ident">Waypoint</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">internal_store</span>
             .<span class="ident">set</span>(<span class="ident">WAYPOINT</span>, <span class="ident">Value</span>::<span class="ident">String</span>(<span class="ident">waypoint</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">last_vote</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vote</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">lcs</span>::<span class="ident">from_bytes</span>(
+            <span class="kw-2">&amp;</span><span class="self">self</span>
+                .<span class="ident">internal_store</span>
+                .<span class="ident">get</span>(<span class="ident">LAST_VOTE</span>)
+                .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">value</span>.<span class="ident">bytes</span>())<span class="question-mark">?</span>,
+        )<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="ident">result</span>)
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">set_last_vote</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">vote</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vote</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">internal_store</span>
+            .<span class="ident">set</span>(<span class="ident">LAST_VOTE</span>, <span class="ident">Value</span>::<span class="ident">Bytes</span>(<span class="ident">lcs</span>::<span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">vote</span>)<span class="question-mark">?</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
