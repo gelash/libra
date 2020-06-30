@@ -43,7 +43,7 @@
     <span class="ident">U64</span>(<span class="ident">u64</span>),
     <span class="ident">U128</span>(<span class="ident">u128</span>),
     <span class="ident">Address</span>(<span class="ident">AccountAddress</span>),
-    <span class="ident">U8Vector</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>),
+    <span class="ident">U8Vector</span>(<span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;serde_bytes&quot;</span>)]</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>),
     <span class="ident">Bool</span>(<span class="ident">bool</span>),
 }
 

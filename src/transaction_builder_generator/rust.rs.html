@@ -208,6 +208,14 @@
 <span id="208">208</span>
 <span id="209">209</span>
 <span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -249,6 +257,7 @@ use libra_types::account_address::AccountAddress;
     } <span class="kw">else</span> {
         <span class="string">r#&quot;
 use libra_types::{AccountAddress, TypeTag, Script, TransactionArgument};
+use serde_bytes::ByteBuf;
 &quot;#</span>
     };
     <span class="macro">writeln</span><span class="macro">!</span>(<span class="ident">out</span>, <span class="string">&quot;{}&quot;</span>, <span class="ident">preamble</span>)
@@ -277,19 +286,19 @@ use libra_types::{AccountAddress, TypeTag, Script, TransactionArgument};
     )&quot;#</span>,
             <span class="ident">quote_code</span>(<span class="ident">abi</span>.<span class="ident">code</span>()),
             <span class="ident">quote_type_arguments</span>(<span class="ident">abi</span>.<span class="ident">ty_args</span>()),
-            <span class="ident">quote_arguments</span>(<span class="ident">abi</span>.<span class="ident">args</span>()),
+            <span class="ident">quote_arguments</span>(<span class="ident">abi</span>.<span class="ident">args</span>(), <span class="ident">local_types</span>),
         )<span class="question-mark">?</span>;
     } <span class="kw">else</span> {
         <span class="macro">writeln</span><span class="macro">!</span>(
             <span class="ident">out</span>,
             <span class="string">r#&quot;    Script {{
-        code: {},
+        code: ByteBuf::from({}),
         ty_args: vec![{}],
         args: vec![{}],
     }}&quot;#</span>,
             <span class="ident">quote_code</span>(<span class="ident">abi</span>.<span class="ident">code</span>()),
             <span class="ident">quote_type_arguments</span>(<span class="ident">abi</span>.<span class="ident">ty_args</span>()),
-            <span class="ident">quote_arguments</span>(<span class="ident">abi</span>.<span class="ident">args</span>()),
+            <span class="ident">quote_arguments</span>(<span class="ident">abi</span>.<span class="ident">args</span>(), <span class="ident">local_types</span>),
         )<span class="question-mark">?</span>;
     }
     <span class="macro">writeln</span><span class="macro">!</span>(<span class="ident">out</span>, <span class="string">&quot;}}&quot;</span>)<span class="question-mark">?</span>;
@@ -333,9 +342,9 @@ use libra_types::{AccountAddress, TypeTag, Script, TransactionArgument};
         .<span class="ident">join</span>(<span class="string">&quot;, &quot;</span>)
 }
 
-<span class="kw">fn</span> <span class="ident">quote_arguments</span>(<span class="ident">args</span>: <span class="kw-2">&amp;</span>[<span class="ident">ArgumentABI</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+<span class="kw">fn</span> <span class="ident">quote_arguments</span>(<span class="ident">args</span>: <span class="kw-2">&amp;</span>[<span class="ident">ArgumentABI</span>], <span class="ident">local_types</span>: <span class="ident">bool</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
     <span class="ident">args</span>.<span class="ident">iter</span>()
-        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">arg</span><span class="op">|</span> <span class="ident">make_transaction_argument</span>(<span class="ident">arg</span>.<span class="ident">type_tag</span>(), <span class="ident">arg</span>.<span class="ident">name</span>()))
+        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">arg</span><span class="op">|</span> <span class="ident">make_transaction_argument</span>(<span class="ident">arg</span>.<span class="ident">type_tag</span>(), <span class="ident">arg</span>.<span class="ident">name</span>(), <span class="ident">local_types</span>))
         .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
         .<span class="ident">join</span>(<span class="string">&quot;, &quot;</span>)
 }
@@ -357,7 +366,7 @@ use libra_types::{AccountAddress, TypeTag, Script, TransactionArgument};
     }
 }
 
-<span class="kw">fn</span> <span class="ident">make_transaction_argument</span>(<span class="ident">type_tag</span>: <span class="kw-2">&amp;</span><span class="ident">TypeTag</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+<span class="kw">fn</span> <span class="ident">make_transaction_argument</span>(<span class="ident">type_tag</span>: <span class="kw-2">&amp;</span><span class="ident">TypeTag</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">local_types</span>: <span class="ident">bool</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
     <span class="kw">use</span> <span class="ident">TypeTag</span>::<span class="kw-2">*</span>;
     <span class="kw">match</span> <span class="ident">type_tag</span> {
         <span class="ident">Bool</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::Bool({})&quot;</span>, <span class="ident">name</span>),
@@ -366,7 +375,13 @@ use libra_types::{AccountAddress, TypeTag, Script, TransactionArgument};
         <span class="ident">U128</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::U128({})&quot;</span>, <span class="ident">name</span>),
         <span class="ident">Address</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::Address({})&quot;</span>, <span class="ident">name</span>),
         <span class="ident">Vector</span>(<span class="ident">type_tag</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">type_tag</span>.<span class="ident">as_ref</span>() {
-            <span class="ident">U8</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::U8Vector({})&quot;</span>, <span class="ident">name</span>),
+            <span class="ident">U8</span> <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">if</span> <span class="ident">local_types</span> {
+                    <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::U8Vector({})&quot;</span>, <span class="ident">name</span>)
+                } <span class="kw">else</span> {
+                    <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;TransactionArgument::U8Vector(ByteBuf::from({}))&quot;</span>, <span class="ident">name</span>)
+                }
+            }
             <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">type_not_allowed</span>(<span class="ident">type_tag</span>),
         },
 
@@ -408,6 +423,7 @@ edition = &quot;2018&quot;
 
 [dependencies]
 serde = {{ version = &quot;1.0&quot;, features = [&quot;derive&quot;] }}
+serde_bytes = &quot;0.11&quot;
 libra_types = &quot;{}&quot;
 &quot;#</span>,
             <span class="ident">name</span>, <span class="self">self</span>.<span class="ident">libra_types_version</span>,

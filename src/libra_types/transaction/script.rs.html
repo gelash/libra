@@ -145,6 +145,8 @@
 <span id="145">145</span>
 <span id="146">146</span>
 <span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -160,6 +162,7 @@
 <span class="doccomment">/// Call a Move script.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Hash</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Script</span> {
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;serde_bytes&quot;</span>)]</span>
     <span class="ident">code</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>,
     <span class="ident">ty_args</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TypeTag</span><span class="op">&gt;</span>,
     <span class="ident">args</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TransactionArgument</span><span class="op">&gt;</span>,
@@ -208,6 +211,7 @@
     <span class="doccomment">/// Some text comment.</span>
     <span class="ident">doc</span>: <span class="ident">String</span>,
     <span class="doccomment">/// The `code` value to set in the `Script` object.</span>
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;serde_bytes&quot;</span>)]</span>
     <span class="ident">code</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>,
     <span class="doccomment">/// The names of the type arguments.</span>
     <span class="ident">ty_args</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TypeArgumentABI</span><span class="op">&gt;</span>,

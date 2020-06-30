@@ -57,6 +57,10 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -72,10 +76,14 @@
 <span class="kw">mod</span> <span class="ident">consensus</span>;
 <span class="doccomment">/// Libra transactions.</span>
 <span class="kw">mod</span> <span class="ident">libra</span>;
+<span class="doccomment">/// Analyze Serde formats to detect certain patterns.</span>
+<span class="kw">mod</span> <span class="ident">linter</span>;
 <span class="doccomment">/// Move ABI.</span>
 <span class="kw">mod</span> <span class="ident">move_abi</span>;
 <span class="doccomment">/// Network messages.</span>
 <span class="kw">mod</span> <span class="ident">network</span>;
+
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">linter</span>::<span class="ident">lint_lcs_format</span>;
 
 <span class="macro">arg_enum</span><span class="macro">!</span> {
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">StructOpt</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>)]</span>
