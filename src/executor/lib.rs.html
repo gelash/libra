@@ -820,6 +820,9 @@
 <span id="820">820</span>
 <span id="821">821</span>
 <span id="822">822</span>
+<span id="823">823</span>
+<span id="824">824</span>
+<span id="825">825</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -831,14 +834,18 @@
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">mod</span> <span class="ident">mock_vm</span>;
 <span class="kw">mod</span> <span class="ident">speculation_cache</span>;
+<span class="kw">mod</span> <span class="ident">types</span>;
 
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db_bootstrapper</span>;
 
+<span class="kw">use</span> <span class="kw">crate</span>::{
+    <span class="ident">speculation_cache</span>::<span class="ident">SpeculationCache</span>,
+    <span class="ident">types</span>::{<span class="ident">ProcessedVMOutput</span>, <span class="ident">TransactionData</span>},
+};
 <span class="kw">use</span> <span class="ident">anyhow</span>::{<span class="ident">bail</span>, <span class="ident">ensure</span>, <span class="ident">format_err</span>, <span class="prelude-ty">Result</span>};
 <span class="kw">use</span> <span class="ident">debug_interface</span>::<span class="ident">prelude</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">executor_types</span>::{
-    <span class="ident">BlockExecutor</span>, <span class="ident">ChunkExecutor</span>, <span class="ident">Error</span>, <span class="ident">ExecutedTrees</span>, <span class="ident">ProcessedVMOutput</span>, <span class="ident">ProofReader</span>,
-    <span class="ident">StateComputeResult</span>, <span class="ident">TransactionData</span>,
+    <span class="ident">BlockExecutor</span>, <span class="ident">ChunkExecutor</span>, <span class="ident">Error</span>, <span class="ident">ExecutedTrees</span>, <span class="ident">ProofReader</span>, <span class="ident">StateComputeResult</span>,
 };
 <span class="kw">use</span> <span class="ident">libra_crypto</span>::{
     <span class="ident">hash</span>::{<span class="ident">CryptoHash</span>, <span class="ident">EventAccumulatorHasher</span>, <span class="ident">TransactionAccumulatorHasher</span>},
@@ -864,7 +871,6 @@
 <span class="kw">use</span> <span class="ident">libra_vm</span>::<span class="ident">VMExecutor</span>;
 <span class="kw">use</span> <span class="ident">once_cell</span>::<span class="ident">sync</span>::<span class="ident">Lazy</span>;
 <span class="kw">use</span> <span class="ident">scratchpad</span>::<span class="ident">SparseMerkleTree</span>;
-<span class="kw">use</span> <span class="ident">speculation_cache</span>::<span class="ident">SpeculationCache</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">collections</span>::{<span class="ident">hash_map</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>},
     <span class="ident">convert</span>::<span class="ident">TryFrom</span>,
