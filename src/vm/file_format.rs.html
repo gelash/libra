@@ -3618,7 +3618,7 @@
     <span class="doccomment">/// Converts this instance into `CompiledModule` after verifying it for basic internal</span>
     <span class="doccomment">/// consistency. This includes bounds checks but no others.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">freeze</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">VMResult</span><span class="op">&lt;</span><span class="ident">CompiledModule</span><span class="op">&gt;</span> {
-        <span class="ident">BoundsChecker</span>::<span class="ident">new</span>(<span class="kw-2">&amp;</span><span class="self">self</span>).<span class="ident">verify</span>()<span class="question-mark">?</span>;
+        <span class="ident">BoundsChecker</span>::<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="self">self</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">CompiledModule</span>(<span class="self">self</span>))
     }
 }

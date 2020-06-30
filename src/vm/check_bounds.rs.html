@@ -474,8 +474,6 @@
 <span id="474">474</span>
 <span id="475">475</span>
 <span id="476">476</span>
-<span id="477">477</span>
-<span id="478">478</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -498,51 +496,49 @@
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="ident">BoundsChecker</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">CompiledModuleMut</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span> { <span class="ident">module</span> }
-    }
-
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">verify</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">VMResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">verify</span>(<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">CompiledModuleMut</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">VMResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">bounds_check</span> <span class="op">=</span> <span class="self">Self</span> { <span class="ident">module</span> };
         <span class="comment">// TODO: this will not be true once we change CompiledScript and remove the</span>
         <span class="comment">// FunctionDefinition for `main`</span>
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">module_handles</span>.<span class="ident">is_empty</span>() {
+        <span class="kw">if</span> <span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">module_handles</span>.<span class="ident">is_empty</span>() {
             <span class="kw">let</span> <span class="ident">status</span> <span class="op">=</span>
                 <span class="ident">verification_error</span>(<span class="ident">IndexKind</span>::<span class="ident">ModuleHandle</span>, <span class="number">0</span>, <span class="ident">StatusCode</span>::<span class="ident">NO_MODULE_HANDLES</span>);
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">status</span>);
         }
 
-        <span class="kw">for</span> <span class="ident">signature</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">signatures</span> {
-            <span class="self">self</span>.<span class="ident">check_signature</span>(<span class="ident">signature</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">signature</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">signatures</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_signature</span>(<span class="ident">signature</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">constant</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">constant_pool</span> {
-            <span class="self">self</span>.<span class="ident">check_constant</span>(<span class="ident">constant</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">constant</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">constant_pool</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_constant</span>(<span class="ident">constant</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">module_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">module_handles</span> {
-            <span class="self">self</span>.<span class="ident">check_module_handle</span>(<span class="ident">module_handle</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">module_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">module_handles</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_module_handle</span>(<span class="ident">module_handle</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">struct_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">struct_handles</span> {
-            <span class="self">self</span>.<span class="ident">check_struct_handle</span>(<span class="ident">struct_handle</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">struct_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">struct_handles</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_struct_handle</span>(<span class="ident">struct_handle</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">function_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">function_handles</span> {
-            <span class="self">self</span>.<span class="ident">check_function_handle</span>(<span class="ident">function_handle</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">function_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">function_handles</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_function_handle</span>(<span class="ident">function_handle</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">field_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">field_handles</span> {
-            <span class="self">self</span>.<span class="ident">check_field_handle</span>(<span class="ident">field_handle</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">field_handle</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">field_handles</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_field_handle</span>(<span class="ident">field_handle</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">struct_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">struct_def_instantiations</span> {
-            <span class="self">self</span>.<span class="ident">check_struct_instantiation</span>(<span class="ident">struct_instantiation</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">struct_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">struct_def_instantiations</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_struct_instantiation</span>(<span class="ident">struct_instantiation</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">function_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">function_instantiations</span> {
-            <span class="self">self</span>.<span class="ident">check_function_instantiation</span>(<span class="ident">function_instantiation</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">function_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">function_instantiations</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_function_instantiation</span>(<span class="ident">function_instantiation</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">field_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">field_instantiations</span> {
-            <span class="self">self</span>.<span class="ident">check_field_instantiation</span>(<span class="ident">field_instantiation</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">field_instantiation</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">field_instantiations</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_field_instantiation</span>(<span class="ident">field_instantiation</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> <span class="ident">struct_def</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">struct_defs</span> {
-            <span class="self">self</span>.<span class="ident">check_struct_def</span>(<span class="ident">struct_def</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> <span class="ident">struct_def</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">struct_defs</span> {
+            <span class="ident">bounds_check</span>.<span class="ident">check_struct_def</span>(<span class="ident">struct_def</span>)<span class="question-mark">?</span>
         }
-        <span class="kw">for</span> (<span class="ident">function_def_idx</span>, <span class="ident">function_def</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">function_defs</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>() {
-            <span class="self">self</span>.<span class="ident">check_function_def</span>(<span class="ident">function_def_idx</span>, <span class="ident">function_def</span>)<span class="question-mark">?</span>
+        <span class="kw">for</span> (<span class="ident">function_def_idx</span>, <span class="ident">function_def</span>) <span class="kw">in</span> <span class="ident">bounds_check</span>.<span class="ident">module</span>.<span class="ident">function_defs</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>()
+        {
+            <span class="ident">bounds_check</span>.<span class="ident">check_function_def</span>(<span class="ident">function_def_idx</span>, <span class="ident">function_def</span>)<span class="question-mark">?</span>
         }
         <span class="prelude-val">Ok</span>(())
     }
