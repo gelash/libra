@@ -691,7 +691,6 @@
 <span id="691">691</span>
 <span id="692">692</span>
 <span id="693">693</span>
-<span id="694">694</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1078,10 +1077,9 @@
     <span class="doccomment">/// a timeout.</span>
     <span class="doccomment">/// 2) Otherwise vote for a NIL block and sign a timeout.</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_local_timeout</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">round</span>: <span class="ident">Round</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">anyhow</span>::<span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="macro">ensure</span><span class="macro">!</span>(
-            <span class="self">self</span>.<span class="ident">round_state</span>.<span class="ident">process_local_timeout</span>(<span class="ident">round</span>),
-            <span class="string">&quot;[RoundManager] local timeout is stale&quot;</span>
-        );
+        <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">round_state</span>.<span class="ident">process_local_timeout</span>(<span class="ident">round</span>) {
+            <span class="kw">return</span> <span class="prelude-val">Ok</span>(());
+        }
 
         <span class="kw">let</span> (<span class="ident">use_last_vote</span>, <span class="kw-2">mut</span> <span class="ident">timeout_vote</span>) <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">round_state</span>.<span class="ident">vote_sent</span>() {
             <span class="prelude-val">Some</span>(<span class="ident">vote</span>) <span class="kw">if</span> <span class="ident">vote</span>.<span class="ident">vote_data</span>().<span class="ident">proposed</span>().<span class="ident">round</span>() <span class="op">=</span><span class="op">=</span> <span class="ident">round</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="bool-val">true</span>, <span class="ident">vote</span>),
