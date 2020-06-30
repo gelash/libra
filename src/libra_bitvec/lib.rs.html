@@ -296,6 +296,7 @@
 <span id="296">296</span>
 <span id="297">297</span>
 <span id="298">298</span>
+<span id="299">299</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -349,6 +350,7 @@
 <span class="doccomment">/// ```</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Default</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BitVec</span> {
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;serde_bytes&quot;</span>)]</span>
     <span class="ident">inner</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>,
 }
 
@@ -426,7 +428,7 @@
     <span class="kw">where</span>
         <span class="ident">D</span>: <span class="ident">Deserializer</span><span class="op">&lt;</span><span class="lifetime">&#39;de</span><span class="op">&gt;</span>,
     {
-        <span class="kw">let</span> <span class="ident">v</span> <span class="op">=</span> <span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span><span class="op">&gt;</span>::<span class="ident">deserialize</span>(<span class="ident">deserializer</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">v</span> <span class="op">=</span> <span class="ident">serde_bytes</span>::<span class="ident">ByteBuf</span>::<span class="ident">deserialize</span>(<span class="ident">deserializer</span>)<span class="question-mark">?</span>.<span class="ident">into_vec</span>();
         <span class="kw">if</span> <span class="ident">v</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="ident">MAX_BUCKETS</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">D</span>::<span class="ident">Error</span>::<span class="ident">custom</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;BitVec too long: {}&quot;</span>, <span class="ident">v</span>.<span class="ident">len</span>())));
         }
