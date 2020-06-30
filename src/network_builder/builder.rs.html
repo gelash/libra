@@ -680,23 +680,6 @@
 <span id="680">680</span>
 <span id="681">681</span>
 <span id="682">682</span>
-<span id="683">683</span>
-<span id="684">684</span>
-<span id="685">685</span>
-<span id="686">686</span>
-<span id="687">687</span>
-<span id="688">688</span>
-<span id="689">689</span>
-<span id="690">690</span>
-<span id="691">691</span>
-<span id="692">692</span>
-<span id="693">693</span>
-<span id="694">694</span>
-<span id="695">695</span>
-<span id="696">696</span>
-<span id="697">697</span>
-<span id="698">698</span>
-<span id="699">699</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -789,14 +772,12 @@
     <span class="ident">network_context</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">NetworkContext</span><span class="op">&gt;</span>,
     <span class="comment">// TODO(philiphayes): better support multiple listening addrs</span>
     <span class="ident">listen_address</span>: <span class="ident">NetworkAddress</span>,
-    <span class="ident">advertised_address</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span>,
     <span class="ident">seed_peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">authentication_mode</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">AuthenticationMode</span><span class="op">&gt;</span>,
     <span class="ident">channel_size</span>: <span class="ident">usize</span>,
     <span class="ident">direct_send_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
     <span class="ident">rpc_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
-    <span class="ident">discovery_interval_ms</span>: <span class="ident">u64</span>,
     <span class="ident">upstream_handlers</span>:
         <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">ProtocolId</span>, <span class="ident">libra_channel</span>::<span class="ident">Sender</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">ProtocolId</span>), <span class="ident">PeerManagerNotification</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">connection_event_handlers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">conn_notifs_channel</span>::<span class="ident">Sender</span><span class="op">&gt;</span>,
@@ -846,7 +827,6 @@
             <span class="ident">chain_id</span>,
             <span class="ident">network_context</span>: <span class="ident">Arc</span>::<span class="ident">new</span>(<span class="ident">NetworkContext</span>::<span class="ident">new</span>(<span class="ident">network_id</span>, <span class="ident">role</span>, <span class="ident">peer_id</span>)),
             <span class="ident">listen_address</span>,
-            <span class="ident">advertised_address</span>: <span class="prelude-val">None</span>,
             <span class="ident">seed_peers</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
             <span class="ident">trusted_peers</span>: <span class="ident">Arc</span>::<span class="ident">new</span>(<span class="ident">RwLock</span>::<span class="ident">new</span>(<span class="ident">HashMap</span>::<span class="ident">new</span>())),
             <span class="ident">authentication_mode</span>: <span class="prelude-val">None</span>,
@@ -859,7 +839,6 @@
             <span class="ident">pm_reqs_rx</span>,
             <span class="ident">connection_reqs_tx</span>,
             <span class="ident">connection_reqs_rx</span>,
-            <span class="ident">discovery_interval_ms</span>: <span class="ident">constants</span>::<span class="ident">DISCOVERY_INTERVAL_MS</span>,
             <span class="ident">connectivity_check_interval_ms</span>: <span class="ident">constants</span>::<span class="ident">CONNECTIVITY_CHECK_INTERNAL_MS</span>,
             <span class="ident">max_concurrent_network_reqs</span>: <span class="ident">constants</span>::<span class="ident">MAX_CONCURRENT_NETWORK_REQS</span>,
             <span class="ident">max_concurrent_network_notifs</span>: <span class="ident">constants</span>::<span class="ident">MAX_CONCURRENT_NETWORK_NOTIFS</span>,
@@ -941,10 +920,10 @@
 
         <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">config</span>.<span class="ident">discovery_method</span> {
             <span class="ident">DiscoveryMethod</span>::<span class="ident">Gossip</span>(<span class="ident">gossip_config</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="ident">network_builder</span>
-                    .<span class="ident">advertised_address</span>(<span class="ident">gossip_config</span>.<span class="ident">advertised_address</span>.<span class="ident">clone</span>())
-                    .<span class="ident">discovery_interval_ms</span>(<span class="ident">gossip_config</span>.<span class="ident">discovery_interval_ms</span>)
-                    .<span class="ident">add_gossip_discovery</span>();
+                <span class="ident">network_builder</span>.<span class="ident">add_gossip_discovery</span>(
+                    <span class="ident">gossip_config</span>.<span class="ident">advertised_address</span>.<span class="ident">clone</span>(),
+                    <span class="ident">gossip_config</span>.<span class="ident">discovery_interval_ms</span>,
+                );
                 <span class="comment">// HACK: gossip relies on on-chain discovery for the eligible peers update.</span>
                 <span class="kw">if</span> <span class="ident">role</span> <span class="op">=</span><span class="op">=</span> <span class="ident">RoleType</span>::<span class="ident">Validator</span> {
                     <span class="ident">network_builder</span>.<span class="ident">add_configuration_change_listener</span>(<span class="ident">role</span>);
@@ -977,12 +956,6 @@
         <span class="self">self</span>
     }
 
-    <span class="doccomment">/// Set an address to advertise, if different from the listen address</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">advertised_address</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">advertised_address</span>: <span class="ident">NetworkAddress</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> {
-        <span class="self">self</span>.<span class="ident">advertised_address</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">advertised_address</span>);
-        <span class="self">self</span>
-    }
-
     <span class="doccomment">/// Set trusted peers.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">trusted_peers</span>(
         <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>,
@@ -995,12 +968,6 @@
     <span class="doccomment">/// Set seed peers to bootstrap discovery</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">seed_peers</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">seed_peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> {
         <span class="self">self</span>.<span class="ident">seed_peers</span> <span class="op">=</span> <span class="ident">seed_peers</span>;
-        <span class="self">self</span>
-    }
-
-    <span class="doccomment">/// Set discovery ticker interval</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">discovery_interval_ms</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">discovery_interval_ms</span>: <span class="ident">u64</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> {
-        <span class="self">self</span>.<span class="ident">discovery_interval_ms</span> <span class="op">=</span> <span class="ident">discovery_interval_ms</span>;
         <span class="self">self</span>
     }
 
@@ -1171,7 +1138,11 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// This is for testing purposes only and should not be used in production networks.</span>
     <span class="comment">// TODO:  remove the pub qualifier</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_gossip_discovery</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_gossip_discovery</span>(
+        <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>,
+        <span class="ident">advertised_address</span>: <span class="ident">NetworkAddress</span>,
+        <span class="ident">discovery_interval_ms</span>: <span class="ident">u64</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">conn_mgr_reqs_tx</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">conn_mgr_reqs_tx</span>()
             .<span class="ident">expect</span>(<span class="string">&quot;ConnectivityManager not enabled&quot;</span>);
@@ -1190,10 +1161,6 @@
         <span class="comment">// TODO(philiphayes): in network_builder setup, only bind the channels.</span>
         <span class="comment">// wait until PeerManager is running to actual setup gossip discovery.</span>
 
-        <span class="kw">let</span> <span class="ident">advertised_address</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">advertised_address</span>
-            .<span class="ident">clone</span>()
-            .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">listen_address</span>.<span class="ident">clone</span>());
         <span class="kw">let</span> <span class="ident">authentication_mode</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">authentication_mode</span>
             .<span class="ident">as_ref</span>()
@@ -1202,7 +1169,6 @@
         <span class="kw">let</span> <span class="ident">advertised_address</span> <span class="op">=</span> <span class="ident">advertised_address</span>.<span class="ident">append_prod_protos</span>(<span class="ident">pubkey</span>, <span class="ident">HANDSHAKE_VERSION</span>);
 
         <span class="kw">let</span> <span class="ident">addrs</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">advertised_address</span>];
-        <span class="kw">let</span> <span class="ident">discovery_interval_ms</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">discovery_interval_ms</span>;
 
         <span class="self">self</span>.<span class="ident">discovery_builder</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">DiscoveryBuilder</span>::<span class="ident">create</span>(
             <span class="self">self</span>.<span class="ident">network_context</span>(),
