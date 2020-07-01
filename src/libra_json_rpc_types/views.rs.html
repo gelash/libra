@@ -599,6 +599,18 @@
 <span id="599">599</span>
 <span id="600">600</span>
 <span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1101,6 +1113,11 @@
     <span class="kw">pub</span> <span class="ident">scaling_factor</span>: <span class="ident">u64</span>,
     <span class="kw">pub</span> <span class="ident">fractional_part</span>: <span class="ident">u64</span>,
     <span class="kw">pub</span> <span class="ident">to_lbr_exchange_rate</span>: <span class="ident">f32</span>,
+    <span class="kw">pub</span> <span class="ident">mint_events_key</span>: <span class="ident">BytesView</span>,
+    <span class="kw">pub</span> <span class="ident">burn_events_key</span>: <span class="ident">BytesView</span>,
+    <span class="kw">pub</span> <span class="ident">preburn_events_key</span>: <span class="ident">BytesView</span>,
+    <span class="kw">pub</span> <span class="ident">cancel_burn_events_key</span>: <span class="ident">BytesView</span>,
+    <span class="kw">pub</span> <span class="ident">exchange_rate_update_events_key</span>: <span class="ident">BytesView</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">CurrencyInfoResource</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">CurrencyInfoView</span> {
@@ -1110,6 +1127,13 @@
             <span class="ident">scaling_factor</span>: <span class="ident">info</span>.<span class="ident">scaling_factor</span>(),
             <span class="ident">fractional_part</span>: <span class="ident">info</span>.<span class="ident">fractional_part</span>(),
             <span class="ident">to_lbr_exchange_rate</span>: <span class="ident">info</span>.<span class="ident">exchange_rate</span>(),
+            <span class="ident">mint_events_key</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">info</span>.<span class="ident">mint_events</span>().<span class="ident">key</span>().<span class="ident">as_bytes</span>()),
+            <span class="ident">burn_events_key</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">info</span>.<span class="ident">burn_events</span>().<span class="ident">key</span>().<span class="ident">as_bytes</span>()),
+            <span class="ident">preburn_events_key</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">info</span>.<span class="ident">preburn_events</span>().<span class="ident">key</span>().<span class="ident">as_bytes</span>()),
+            <span class="ident">cancel_burn_events_key</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">info</span>.<span class="ident">cancel_burn_events</span>().<span class="ident">key</span>().<span class="ident">as_bytes</span>()),
+            <span class="ident">exchange_rate_update_events_key</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(
+                <span class="ident">info</span>.<span class="ident">exchange_rate_update_events</span>().<span class="ident">key</span>().<span class="ident">as_bytes</span>(),
+            ),
         }
     }
 }
