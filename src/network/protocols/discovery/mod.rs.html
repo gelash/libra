@@ -458,8 +458,6 @@
 <span id="458">458</span>
 <span id="459">459</span>
 <span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -516,7 +514,6 @@
 <span class="kw">use</span> <span class="ident">libra_logger</span>::<span class="ident">prelude</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">libra_metrics</span>::<span class="ident">IntCounterVec</span>;
 <span class="kw">use</span> <span class="ident">libra_network_address</span>::<span class="ident">NetworkAddress</span>;
-<span class="kw">use</span> <span class="ident">libra_security_logger</span>::{<span class="ident">security_log</span>, <span class="ident">SecurityEvent</span>};
 <span class="kw">use</span> <span class="ident">libra_types</span>::<span class="ident">PeerId</span>;
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">rngs</span>::<span class="ident">SmallRng</span>, <span class="ident">Rng</span>, <span class="ident">SeedableRng</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
@@ -796,9 +793,8 @@
                             <span class="self">self</span>.<span class="ident">note</span>.<span class="ident">epoch</span>()
                         );
                         <span class="kw">if</span> <span class="ident">note</span>.<span class="ident">epoch</span>() <span class="op">=</span><span class="op">=</span> <span class="ident">std</span>::<span class="ident">u64</span>::<span class="ident">MAX</span> {
-                            <span class="ident">security_log</span>(<span class="ident">SecurityEvent</span>::<span class="ident">InvalidDiscoveryMsg</span>)
-                                .<span class="ident">data</span>(<span class="string">&quot;Older note received for self has u64::MAX epoch.&quot;</span>)
-                                .<span class="ident">log</span>();
+                            <span class="macro">send_struct_log</span><span class="macro">!</span>(<span class="ident">security_log</span>(<span class="ident">security_events</span>::<span class="ident">INVALID_DISCOVERY_MSG</span>)
+                                .<span class="ident">data</span>(<span class="string">&quot;error&quot;</span>, <span class="string">&quot;Older note received for self has u64::MAX epoch.&quot;</span>));
                             <span class="kw">continue</span>;
                         }
                         <span class="ident">note</span> <span class="op">=</span> <span class="ident">Note</span>::<span class="ident">new</span>(

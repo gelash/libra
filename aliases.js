@@ -63,7 +63,6 @@ ALIASES["libra_secure_net"] = {};
 ALIASES["libra_secure_push_metrics"] = {};
 ALIASES["libra_secure_storage"] = {};
 ALIASES["libra_secure_time"] = {};
-ALIASES["libra_security_logger"] = {};
 ALIASES["libra_state_view"] = {};
 ALIASES["libra_swarm"] = {};
 ALIASES["libra_temppath"] = {};
