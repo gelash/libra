@@ -182,13 +182,18 @@
 <span id="182">182</span>
 <span id="183">183</span>
 <span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
 
 <span class="doccomment">//! Integration tests for validator_network.</span>
 
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">builder</span>::{<span class="ident">AuthenticationMode</span>, <span class="ident">NetworkBuilder</span>};
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">builder</span>::<span class="ident">NetworkBuilder</span>;
 <span class="kw">use</span> <span class="ident">channel</span>::<span class="ident">message_queues</span>::<span class="ident">QueueStyle</span>;
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">executor</span>::<span class="ident">block_on</span>, <span class="ident">StreamExt</span>};
 <span class="kw">use</span> <span class="ident">libra_config</span>::{<span class="ident">chain_id</span>::<span class="ident">ChainId</span>, <span class="ident">config</span>::<span class="ident">RoleType</span>, <span class="ident">network_id</span>::<span class="ident">NetworkId</span>};
@@ -199,7 +204,9 @@
 <span class="kw">use</span> <span class="ident">network</span>::{
     <span class="ident">constants</span>::<span class="ident">NETWORK_CHANNEL_SIZE</span>,
     <span class="ident">error</span>::<span class="ident">NetworkError</span>,
-    <span class="ident">peer_manager</span>::{<span class="ident">ConnectionRequestSender</span>, <span class="ident">PeerManagerRequestSender</span>},
+    <span class="ident">peer_manager</span>::{
+        <span class="ident">builder</span>::<span class="ident">AuthenticationMode</span>, <span class="ident">ConnectionRequestSender</span>, <span class="ident">PeerManagerRequestSender</span>,
+    },
     <span class="ident">protocols</span>::{
         <span class="ident">network</span>::{<span class="ident">Event</span>, <span class="ident">NetworkEvents</span>, <span class="ident">NetworkSender</span>, <span class="ident">NewNetworkSender</span>},
         <span class="ident">rpc</span>::<span class="ident">error</span>::<span class="ident">RpcError</span>,
@@ -311,6 +318,8 @@
     .<span class="ident">into_iter</span>()
     .<span class="ident">collect</span>();
 
+    <span class="kw">let</span> <span class="ident">authentication_mode</span> <span class="op">=</span> <span class="ident">AuthenticationMode</span>::<span class="ident">Mutual</span>(<span class="ident">listener_identity_private_key</span>);
+
     <span class="comment">// Set up the listener network</span>
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">network_builder</span> <span class="op">=</span> <span class="ident">NetworkBuilder</span>::<span class="ident">new</span>(
         <span class="ident">runtime</span>.<span class="ident">handle</span>().<span class="ident">clone</span>(),
@@ -319,15 +328,16 @@
         <span class="ident">RoleType</span>::<span class="ident">Validator</span>,
         <span class="ident">listener_peer_id</span>,
         <span class="ident">listener_addr</span>,
+        <span class="ident">authentication_mode</span>,
     );
     <span class="ident">network_builder</span>
-        .<span class="ident">authentication_mode</span>(<span class="ident">AuthenticationMode</span>::<span class="ident">Mutual</span>(<span class="ident">listener_identity_private_key</span>))
         .<span class="ident">trusted_peers</span>(<span class="ident">trusted_peers</span>.<span class="ident">clone</span>())
         .<span class="ident">add_connectivity_manager</span>();
     <span class="kw">let</span> (<span class="ident">listener_sender</span>, <span class="kw-2">mut</span> <span class="ident">listener_events</span>) <span class="op">=</span> <span class="ident">network_builder</span>
         .<span class="ident">add_protocol_handler</span>::<span class="op">&lt;</span><span class="ident">DummyNetworkSender</span>, <span class="ident">DummyNetworkEvents</span><span class="op">&gt;</span>(<span class="ident">network_endpoint_config</span>());
     <span class="kw">let</span> <span class="ident">listener_addr</span> <span class="op">=</span> <span class="ident">network_builder</span>.<span class="ident">build</span>();
 
+    <span class="kw">let</span> <span class="ident">authentication_mode</span> <span class="op">=</span> <span class="ident">AuthenticationMode</span>::<span class="ident">Mutual</span>(<span class="ident">dialer_identity_private_key</span>);
     <span class="comment">// Set up the dialer network</span>
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">network_builder</span> <span class="op">=</span> <span class="ident">NetworkBuilder</span>::<span class="ident">new</span>(
         <span class="ident">runtime</span>.<span class="ident">handle</span>().<span class="ident">clone</span>(),
@@ -336,9 +346,9 @@
         <span class="ident">RoleType</span>::<span class="ident">Validator</span>,
         <span class="ident">dialer_peer_id</span>,
         <span class="ident">dialer_addr</span>,
+        <span class="ident">authentication_mode</span>,
     );
     <span class="ident">network_builder</span>
-        .<span class="ident">authentication_mode</span>(<span class="ident">AuthenticationMode</span>::<span class="ident">Mutual</span>(<span class="ident">dialer_identity_private_key</span>))
         .<span class="ident">trusted_peers</span>(<span class="ident">trusted_peers</span>)
         .<span class="ident">seed_peers</span>(
             [(<span class="ident">listener_peer_id</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">listener_addr</span>])]
