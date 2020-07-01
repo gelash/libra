@@ -262,6 +262,8 @@
 <span id="262">262</span>
 <span id="263">263</span>
 <span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -296,10 +298,12 @@
       );
       if (copy(initial_amount) &gt; 0) {
          with_cap = LibraAccount.extract_withdraw_capability(copy(account));
-         LibraAccount.deposit&lt;Token&gt;(
-           copy(account),
+         LibraAccount.pay_from&lt;Token&gt;(
+           &amp;with_cap,
            move(fresh_address),
-           LibraAccount.withdraw_from&lt;Token&gt;(&amp;with_cap, move(initial_amount))
+           move(initial_amount),
+           h\&quot;\&quot;,
+           h\&quot;\&quot;
          );
          LibraAccount.restore_withdraw_capability(move(with_cap));
       }

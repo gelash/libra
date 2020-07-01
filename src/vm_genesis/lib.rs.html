@@ -616,7 +616,7 @@
     <span class="ident">context</span>.<span class="ident">set_sender</span>(<span class="ident">account_config</span>::<span class="ident">treasury_compliance_account_address</span>());
     <span class="ident">context</span>.<span class="ident">exec_script</span>(<span class="kw-2">&amp;</span><span class="ident">create_dd_script</span>);
 
-    <span class="comment">// add coins</span>
+    <span class="comment">// add coins to the DD account</span>
     <span class="ident">context</span>.<span class="ident">set_sender</span>(<span class="ident">account_config</span>::<span class="ident">testnet_dd_account_address</span>());
     <span class="ident">context</span>.<span class="ident">exec_script</span>(<span class="kw-2">&amp;</span><span class="ident">add_lbr</span>);
     <span class="ident">context</span>.<span class="ident">exec_script</span>(<span class="kw-2">&amp;</span><span class="ident">add_coin2</span>);
@@ -701,7 +701,7 @@
         <span class="comment">//1, // This is the proper number of events for mainnet. Once we have a good layering</span>
         <span class="comment">// strategy for mainnet/testnet genesis writesets uncomment this and remove the line</span>
         <span class="comment">// below.</span>
-        <span class="number">15</span>, <span class="comment">// XXX/TODO(tzakian). For testnet only!</span>
+        <span class="number">12</span>, <span class="comment">// XXX/TODO(tzakian). For testnet only!</span>
         <span class="string">&quot;Genesis transaction should emit one event, but found {} events: {:?}&quot;</span>,
         <span class="ident">events</span>.<span class="ident">len</span>(),
         <span class="ident">events</span>,
