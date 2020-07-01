@@ -1602,7 +1602,7 @@
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">SignedTransaction</span> {
     <span class="kw">let</span> <span class="ident">add_all_currencies</span> <span class="op">=</span> <span class="bool-val">false</span>;
     <span class="ident">gen_submit_transaction_request</span>(
-        <span class="ident">transaction_builder</span>::<span class="ident">encode_create_child_vasp_account</span>(
+        <span class="ident">transaction_builder</span>::<span class="ident">encode_create_child_vasp_account_script</span>(
             <span class="ident">account_config</span>::<span class="ident">coin1_tag</span>(),
             <span class="kw-2">*</span><span class="ident">receiver</span>,
             <span class="ident">receiver_auth_key_prefix</span>,

@@ -1801,6 +1801,10 @@
 <span id="1801">1801</span>
 <span id="1802">1802</span>
 <span id="1803">1803</span>
+<span id="1804">1804</span>
+<span id="1805">1805</span>
+<span id="1806">1806</span>
+<span id="1807">1807</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -2326,9 +2330,11 @@
         );
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">assoc_root_account</span> {
             <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">association_transaction_with_local_assoc_root_account</span>(
-                <span class="ident">TransactionPayload</span>::<span class="ident">Script</span>(<span class="ident">transaction_builder</span>::<span class="ident">encode_publishing_option_script</span>(
-                    <span class="ident">VMPublishingOption</span>::<span class="ident">CustomScripts</span>,
-                )),
+                <span class="ident">TransactionPayload</span>::<span class="ident">Script</span>(
+                    <span class="ident">transaction_builder</span>::<span class="ident">encode_modify_publishing_option_script</span>(
+                        <span class="ident">VMPublishingOption</span>::<span class="ident">CustomScripts</span>,
+                    ),
+                ),
                 <span class="ident">is_blocking</span>,
             ),
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unimplemented</span><span class="macro">!</span>(),
@@ -2352,9 +2358,11 @@
         );
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">assoc_root_account</span> {
             <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">association_transaction_with_local_assoc_root_account</span>(
-                <span class="ident">TransactionPayload</span>::<span class="ident">Script</span>(<span class="ident">transaction_builder</span>::<span class="ident">encode_publishing_option_script</span>(
-                    <span class="ident">VMPublishingOption</span>::<span class="ident">Locked</span>(<span class="ident">StdlibScript</span>::<span class="ident">whitelist</span>()),
-                )),
+                <span class="ident">TransactionPayload</span>::<span class="ident">Script</span>(
+                    <span class="ident">transaction_builder</span>::<span class="ident">encode_modify_publishing_option_script</span>(
+                        <span class="ident">VMPublishingOption</span>::<span class="ident">Locked</span>(<span class="ident">StdlibScript</span>::<span class="ident">whitelist</span>()),
+                    ),
+                ),
                 <span class="ident">is_blocking</span>,
             ),
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unimplemented</span><span class="macro">!</span>(),
