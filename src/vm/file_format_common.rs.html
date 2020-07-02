@@ -429,6 +429,12 @@
 <span id="429">429</span>
 <span id="430">430</span>
 <span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -457,9 +463,9 @@
     <span class="doccomment">/// The blob that must start a binary.</span>
     <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">LIBRA_MAGIC_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">4</span>;
     <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">LIBRA_MAGIC</span>: [<span class="ident">u8</span>; <span class="ident">BinaryConstants</span>::<span class="ident">LIBRA_MAGIC_SIZE</span>] <span class="op">=</span> [<span class="number">0xA1</span>, <span class="number">0x1C</span>, <span class="number">0xEB</span>, <span class="number">0x0B</span>];
-    <span class="doccomment">/// The `LIBRA_MAGIC` size, 1 byte for major version, 1 byte for minor version and 1 byte</span>
+    <span class="doccomment">/// The `LIBRA_MAGIC` size, 4 byte for major version and 1 byte</span>
     <span class="doccomment">/// for table count.</span>
-    <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">HEADER_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="ident">BinaryConstants</span>::<span class="ident">LIBRA_MAGIC_SIZE</span> <span class="op">+</span> <span class="number">3</span>;
+    <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">HEADER_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="ident">BinaryConstants</span>::<span class="ident">LIBRA_MAGIC_SIZE</span> <span class="op">+</span> <span class="number">5</span>;
     <span class="doccomment">/// A (Table Type, Start Offset, Byte Count) size, which is 1 byte for the type and</span>
     <span class="doccomment">/// 4 bytes for the offset/count.</span>
     <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">TABLE_HEADER_SIZE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u8</span> <span class="op">*</span> <span class="number">2</span> <span class="op">+</span> <span class="number">1</span>;
@@ -754,6 +760,12 @@
 <span class="doccomment">/// Write a `u128` in Little Endian format.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">write_u128</span>(<span class="ident">binary</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">BinaryData</span>, <span class="ident">value</span>: <span class="ident">u128</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
     <span class="ident">binary</span>.<span class="ident">extend</span>(<span class="kw-2">&amp;</span><span class="ident">value</span>.<span class="ident">to_le_bytes</span>())
+}
+
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">read_u32</span>(<span class="ident">cursor</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Cursor</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">buf</span> <span class="op">=</span> [<span class="number">0</span>; <span class="number">4</span>];
+    <span class="ident">cursor</span>.<span class="ident">read_exact</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">buf</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="ident">u32</span>::<span class="ident">from_le_bytes</span>(<span class="ident">buf</span>))
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">read_u8</span>(<span class="ident">cursor</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Cursor</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> {

@@ -1265,9 +1265,6 @@
 <span id="1265">1265</span>
 <span id="1266">1266</span>
 <span id="1267">1267</span>
-<span id="1268">1268</span>
-<span id="1269">1269</span>
-<span id="1270">1270</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1429,7 +1426,7 @@
     <span class="doccomment">/// [`CompiledScript::serialize`].</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serialize</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">binary</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">binary_data</span> <span class="op">=</span> <span class="ident">BinaryData</span>::<span class="ident">from</span>(<span class="ident">binary</span>.<span class="ident">clone</span>());
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ser</span> <span class="op">=</span> <span class="ident">ScriptSerializer</span>::<span class="ident">new</span>(<span class="number">1</span>, <span class="number">0</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ser</span> <span class="op">=</span> <span class="ident">ScriptSerializer</span>::<span class="ident">new</span>(<span class="number">1</span>);
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">temp</span> <span class="op">=</span> <span class="ident">BinaryData</span>::<span class="ident">new</span>();
 
         <span class="ident">ser</span>.<span class="ident">common</span>.<span class="ident">serialize_common_tables</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">temp</span>, <span class="self">self</span>)<span class="question-mark">?</span>;
@@ -1467,7 +1464,7 @@
     <span class="doccomment">/// [`CompiledModule::serialize`].</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serialize</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">binary</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">binary_data</span> <span class="op">=</span> <span class="ident">BinaryData</span>::<span class="ident">from</span>(<span class="ident">binary</span>.<span class="ident">clone</span>());
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ser</span> <span class="op">=</span> <span class="ident">ModuleSerializer</span>::<span class="ident">new</span>(<span class="number">1</span>, <span class="number">0</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ser</span> <span class="op">=</span> <span class="ident">ModuleSerializer</span>::<span class="ident">new</span>(<span class="number">1</span>);
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">temp</span> <span class="op">=</span> <span class="ident">BinaryData</span>::<span class="ident">new</span>();
         <span class="ident">ser</span>.<span class="ident">serialize_tables</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">temp</span>, <span class="self">self</span>)<span class="question-mark">?</span>;
         <span class="kw">if</span> <span class="ident">temp</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="ident">u32</span>::<span class="ident">max_value</span>() <span class="kw">as</span> <span class="ident">usize</span> {
@@ -1498,8 +1495,7 @@
 <span class="doccomment">/// `CompiledModule`.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">struct</span> <span class="ident">CommonSerializer</span> {
-    <span class="ident">major_version</span>: <span class="ident">u8</span>,
-    <span class="ident">minor_version</span>: <span class="ident">u8</span>,
+    <span class="ident">major_version</span>: <span class="ident">u32</span>,
     <span class="ident">table_count</span>: <span class="ident">u8</span>,
     <span class="ident">module_handles</span>: (<span class="ident">u32</span>, <span class="ident">u32</span>),
     <span class="ident">struct_handles</span>: (<span class="ident">u32</span>, <span class="ident">u32</span>),
@@ -2137,10 +2133,9 @@
 }
 
 <span class="kw">impl</span> <span class="ident">CommonSerializer</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u8</span>, <span class="ident">minor_version</span>: <span class="ident">u8</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">CommonSerializer</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">CommonSerializer</span> {
         <span class="ident">CommonSerializer</span> {
             <span class="ident">major_version</span>,
-            <span class="ident">minor_version</span>,
             <span class="ident">table_count</span>: <span class="number">0</span>,
             <span class="ident">module_handles</span>: (<span class="number">0</span>, <span class="number">0</span>),
             <span class="ident">struct_handles</span>: (<span class="number">0</span>, <span class="number">0</span>),
@@ -2155,8 +2150,7 @@
 
     <span class="kw">fn</span> <span class="ident">serialize_header</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">binary</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">BinaryData</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="ident">serialize_magic</span>(<span class="ident">binary</span>)<span class="question-mark">?</span>;
-        <span class="ident">binary</span>.<span class="ident">push</span>(<span class="self">self</span>.<span class="ident">major_version</span>)<span class="question-mark">?</span>;
-        <span class="ident">binary</span>.<span class="ident">push</span>(<span class="self">self</span>.<span class="ident">minor_version</span>)<span class="question-mark">?</span>;
+        <span class="ident">write_u32</span>(<span class="ident">binary</span>, <span class="self">self</span>.<span class="ident">major_version</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -2375,9 +2369,9 @@
 }
 
 <span class="kw">impl</span> <span class="ident">ModuleSerializer</span> {
-    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u8</span>, <span class="ident">minor_version</span>: <span class="ident">u8</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ModuleSerializer</span> {
+    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ModuleSerializer</span> {
         <span class="ident">ModuleSerializer</span> {
-            <span class="ident">common</span>: <span class="ident">CommonSerializer</span>::<span class="ident">new</span>(<span class="ident">major_version</span>, <span class="ident">minor_version</span>),
+            <span class="ident">common</span>: <span class="ident">CommonSerializer</span>::<span class="ident">new</span>(<span class="ident">major_version</span>),
             <span class="ident">struct_defs</span>: (<span class="number">0</span>, <span class="number">0</span>),
             <span class="ident">struct_def_instantiations</span>: (<span class="number">0</span>, <span class="number">0</span>),
             <span class="ident">function_defs</span>: (<span class="number">0</span>, <span class="number">0</span>),
@@ -2521,9 +2515,9 @@
 }
 
 <span class="kw">impl</span> <span class="ident">ScriptSerializer</span> {
-    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u8</span>, <span class="ident">minor_version</span>: <span class="ident">u8</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ScriptSerializer</span> {
+    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">major_version</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ScriptSerializer</span> {
         <span class="ident">ScriptSerializer</span> {
-            <span class="ident">common</span>: <span class="ident">CommonSerializer</span>::<span class="ident">new</span>(<span class="ident">major_version</span>, <span class="ident">minor_version</span>),
+            <span class="ident">common</span>: <span class="ident">CommonSerializer</span>::<span class="ident">new</span>(<span class="ident">major_version</span>),
         }
     }
 

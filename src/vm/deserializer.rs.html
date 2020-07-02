@@ -1399,16 +1399,6 @@
 <span id="1399">1399</span>
 <span id="1400">1400</span>
 <span id="1401">1401</span>
-<span id="1402">1402</span>
-<span id="1403">1403</span>
-<span id="1404">1404</span>
-<span id="1405">1405</span>
-<span id="1406">1406</span>
-<span id="1407">1407</span>
-<span id="1408">1408</span>
-<span id="1409">1409</span>
-<span id="1410">1410</span>
-<span id="1411">1411</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -1719,19 +1709,9 @@
             <span class="ident">VMStatus</span>::<span class="ident">new</span>(<span class="ident">StatusCode</span>::<span class="ident">MALFORMED</span>).<span class="ident">with_message</span>(<span class="string">&quot;Bad binary header&quot;</span>.<span class="ident">to_string</span>())
         );
     }
-    <span class="kw">let</span> <span class="ident">major_ver</span> <span class="op">=</span> <span class="number">1u8</span>;
-    <span class="kw">let</span> <span class="ident">minor_ver</span> <span class="op">=</span> <span class="number">0u8</span>;
-    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">ver</span>) <span class="op">=</span> <span class="ident">read_u8</span>(<span class="ident">cursor</span>) {
+    <span class="kw">let</span> <span class="ident">major_ver</span> <span class="op">=</span> <span class="number">1u32</span>;
+    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">ver</span>) <span class="op">=</span> <span class="ident">read_u32</span>(<span class="ident">cursor</span>) {
         <span class="kw">if</span> <span class="ident">ver</span> <span class="op">!</span><span class="op">=</span> <span class="ident">major_ver</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">VMStatus</span>::<span class="ident">new</span>(<span class="ident">StatusCode</span>::<span class="ident">UNKNOWN_VERSION</span>));
-        }
-    } <span class="kw">else</span> {
-        <span class="kw">return</span> <span class="prelude-val">Err</span>(
-            <span class="ident">VMStatus</span>::<span class="ident">new</span>(<span class="ident">StatusCode</span>::<span class="ident">MALFORMED</span>).<span class="ident">with_message</span>(<span class="string">&quot;Bad binary header&quot;</span>.<span class="ident">to_string</span>())
-        );
-    }
-    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">ver</span>) <span class="op">=</span> <span class="ident">read_u8</span>(<span class="ident">cursor</span>) {
-        <span class="kw">if</span> <span class="ident">ver</span> <span class="op">!</span><span class="op">=</span> <span class="ident">minor_ver</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">VMStatus</span>::<span class="ident">new</span>(<span class="ident">StatusCode</span>::<span class="ident">UNKNOWN_VERSION</span>));
         }
     } <span class="kw">else</span> {
