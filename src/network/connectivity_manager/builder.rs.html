@@ -130,6 +130,9 @@
 <span id="130">130</span>
 <span id="131">131</span>
 <span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -139,7 +142,6 @@
     <span class="ident">counters</span>,
     <span class="ident">peer_manager</span>::{<span class="ident">conn_notifs_channel</span>, <span class="ident">ConnectionRequestSender</span>},
 };
-<span class="kw">use</span> <span class="ident">channel</span>::{<span class="self">self</span>};
 <span class="kw">use</span> <span class="ident">futures</span>::<span class="ident">stream</span>::<span class="ident">StreamExt</span>;
 <span class="kw">use</span> <span class="ident">futures_util</span>::<span class="ident">stream</span>::<span class="ident">Fuse</span>;
 <span class="kw">use</span> <span class="ident">libra_config</span>::<span class="ident">network_id</span>::<span class="ident">NetworkContext</span>;
@@ -147,7 +149,7 @@
 <span class="kw">use</span> <span class="ident">libra_network_address</span>::<span class="ident">NetworkAddress</span>;
 <span class="kw">use</span> <span class="ident">libra_types</span>::<span class="ident">PeerId</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
-    <span class="ident">collections</span>::<span class="ident">HashMap</span>,
+    <span class="ident">collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>},
     <span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>},
     <span class="ident">time</span>::<span class="ident">Duration</span>,
 };
@@ -162,8 +164,9 @@
 <span class="doccomment">/// The configuration fields for ConnectivityManager</span>
 <span class="kw">struct</span> <span class="ident">ConnectivityManagerBuilderConfig</span> {
     <span class="ident">network_context</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">NetworkContext</span><span class="op">&gt;</span>,
-    <span class="ident">eligible</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">seed_peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">eligible</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">seed_addrs</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">seed_pubkeys</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">connectivity_check_interval_ms</span>: <span class="ident">u64</span>,
     <span class="ident">backoff_base</span>: <span class="ident">u64</span>,
     <span class="ident">max_connection_delay_ms</span>: <span class="ident">u64</span>,
@@ -190,8 +193,9 @@
 <span class="kw">impl</span> <span class="ident">ConnectivityManagerBuilder</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">create</span>(
         <span class="ident">network_context</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">NetworkContext</span><span class="op">&gt;</span>,
-        <span class="ident">eligible</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">seed_peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">eligible</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">seed_addrs</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">NetworkAddress</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">seed_pubkeys</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
         <span class="ident">connectivity_check_interval_ms</span>: <span class="ident">u64</span>,
         <span class="ident">backoff_base</span>: <span class="ident">u64</span>,
         <span class="ident">max_connection_delay_ms</span>: <span class="ident">u64</span>,
@@ -208,7 +212,8 @@
             <span class="ident">config</span>: <span class="prelude-val">Some</span>(<span class="ident">ConnectivityManagerBuilderConfig</span> {
                 <span class="ident">network_context</span>,
                 <span class="ident">eligible</span>,
-                <span class="ident">seed_peers</span>,
+                <span class="ident">seed_addrs</span>,
+                <span class="ident">seed_pubkeys</span>,
                 <span class="ident">connectivity_check_interval_ms</span>,
                 <span class="ident">backoff_base</span>,
                 <span class="ident">max_connection_delay_ms</span>,
@@ -240,7 +245,8 @@
                 <span class="ident">ConnectivityManager</span>::<span class="ident">new</span>(
                     <span class="ident">config</span>.<span class="ident">network_context</span>,
                     <span class="ident">config</span>.<span class="ident">eligible</span>,
-                    <span class="ident">config</span>.<span class="ident">seed_peers</span>,
+                    <span class="ident">config</span>.<span class="ident">seed_addrs</span>,
+                    <span class="ident">config</span>.<span class="ident">seed_pubkeys</span>,
                     <span class="ident">interval</span>(<span class="ident">Duration</span>::<span class="ident">from_millis</span>(<span class="ident">config</span>.<span class="ident">connectivity_check_interval_ms</span>)).<span class="ident">fuse</span>(),
                     <span class="ident">config</span>.<span class="ident">connection_reqs_tx</span>,
                     <span class="ident">config</span>.<span class="ident">connection_notifs_rx</span>,

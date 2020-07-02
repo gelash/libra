@@ -478,7 +478,7 @@
 };
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">clone</span>::<span class="ident">Clone</span>,
-    <span class="ident">collections</span>::<span class="ident">HashMap</span>,
+    <span class="ident">collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>},
     <span class="ident">fmt</span>::<span class="ident">Debug</span>,
     <span class="ident">num</span>::<span class="ident">NonZeroUsize</span>,
     <span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>},
@@ -518,7 +518,7 @@
     <span class="ident">direct_send_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
     <span class="ident">rpc_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
     <span class="ident">authentication_mode</span>: <span class="ident">AuthenticationMode</span>,
-    <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">TransportContext</span> {
@@ -527,7 +527,7 @@
         <span class="ident">direct_send_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
         <span class="ident">rpc_protocols</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ProtocolId</span><span class="op">&gt;</span>,
         <span class="ident">authentication_mode</span>: <span class="ident">AuthenticationMode</span>,
-        <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">chain_id</span>,
@@ -653,7 +653,7 @@
         <span class="ident">network_context</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">NetworkContext</span><span class="op">&gt;</span>,
         <span class="comment">// TODO(philiphayes): better support multiple listening addrs</span>
         <span class="ident">listen_address</span>: <span class="ident">NetworkAddress</span>,
-        <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">trusted_peers</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">x25519</span>::<span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
         <span class="ident">authentication_mode</span>: <span class="ident">AuthenticationMode</span>,
         <span class="ident">channel_size</span>: <span class="ident">usize</span>,
         <span class="ident">max_concurrent_network_reqs</span>: <span class="ident">usize</span>,

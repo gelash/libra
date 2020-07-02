@@ -187,6 +187,11 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -215,7 +220,10 @@
 };
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">rngs</span>::<span class="ident">StdRng</span>, <span class="ident">SeedableRng</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">collections</span>::<span class="ident">HashMap</span>, <span class="ident">time</span>::<span class="ident">Duration</span>};
+<span class="kw">use</span> <span class="ident">std</span>::{
+    <span class="ident">collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>},
+    <span class="ident">time</span>::<span class="ident">Duration</span>,
+};
 <span class="kw">use</span> <span class="ident">tokio</span>::<span class="ident">runtime</span>::<span class="ident">Runtime</span>;
 
 <span class="kw">const</span> <span class="ident">TEST_RPC_PROTOCOL</span>: <span class="ident">ProtocolId</span> <span class="op">=</span> <span class="ident">ProtocolId</span>::<span class="ident">ConsensusRpc</span>;
@@ -301,19 +309,21 @@
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">StdRng</span>::<span class="ident">from_seed</span>(<span class="ident">TEST_SEED</span>);
     <span class="kw">let</span> <span class="ident">dialer_identity_private_key</span> <span class="op">=</span> <span class="ident">x25519</span>::<span class="ident">PrivateKey</span>::<span class="ident">generate</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">rng</span>);
     <span class="kw">let</span> <span class="ident">dialer_identity_public_key</span> <span class="op">=</span> <span class="ident">dialer_identity_private_key</span>.<span class="ident">public_key</span>();
+    <span class="kw">let</span> <span class="ident">dialer_pubkeys</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">dialer_identity_public_key</span>].<span class="ident">into_iter</span>().<span class="ident">collect</span>();
 
     <span class="comment">// Setup keys for listener.</span>
     <span class="kw">let</span> <span class="ident">listener_identity_private_key</span> <span class="op">=</span> <span class="ident">x25519</span>::<span class="ident">PrivateKey</span>::<span class="ident">generate</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">rng</span>);
     <span class="kw">let</span> <span class="ident">listener_identity_public_key</span> <span class="op">=</span> <span class="ident">listener_identity_private_key</span>.<span class="ident">public_key</span>();
+    <span class="kw">let</span> <span class="ident">listener_pubkeys</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">listener_identity_public_key</span>].<span class="ident">into_iter</span>().<span class="ident">collect</span>();
 
     <span class="comment">// Setup listen addresses</span>
     <span class="kw">let</span> <span class="ident">dialer_addr</span>: <span class="ident">NetworkAddress</span> <span class="op">=</span> <span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.<span class="ident">parse</span>().<span class="ident">unwrap</span>();
     <span class="kw">let</span> <span class="ident">listener_addr</span>: <span class="ident">NetworkAddress</span> <span class="op">=</span> <span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.<span class="ident">parse</span>().<span class="ident">unwrap</span>();
 
     <span class="comment">// Setup trusted peers.</span>
-    <span class="kw">let</span> <span class="ident">trusted_peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[
-        (<span class="ident">dialer_peer_id</span>, <span class="ident">dialer_identity_public_key</span>),
-        (<span class="ident">listener_peer_id</span>, <span class="ident">listener_identity_public_key</span>),
+    <span class="kw">let</span> <span class="ident">seed_pubkeys</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[
+        (<span class="ident">dialer_peer_id</span>, <span class="ident">dialer_pubkeys</span>),
+        (<span class="ident">listener_peer_id</span>, <span class="ident">listener_pubkeys</span>),
     ]
     .<span class="ident">into_iter</span>()
     .<span class="ident">collect</span>();
@@ -331,13 +341,18 @@
         <span class="ident">authentication_mode</span>,
     );
     <span class="ident">network_builder</span>
-        .<span class="ident">trusted_peers</span>(<span class="ident">trusted_peers</span>.<span class="ident">clone</span>())
+        .<span class="ident">seed_pubkeys</span>(<span class="ident">seed_pubkeys</span>.<span class="ident">clone</span>())
         .<span class="ident">add_connectivity_manager</span>();
     <span class="kw">let</span> (<span class="ident">listener_sender</span>, <span class="kw-2">mut</span> <span class="ident">listener_events</span>) <span class="op">=</span> <span class="ident">network_builder</span>
         .<span class="ident">add_protocol_handler</span>::<span class="op">&lt;</span><span class="ident">DummyNetworkSender</span>, <span class="ident">DummyNetworkEvents</span><span class="op">&gt;</span>(<span class="ident">network_endpoint_config</span>());
     <span class="kw">let</span> <span class="ident">listener_addr</span> <span class="op">=</span> <span class="ident">network_builder</span>.<span class="ident">build</span>();
 
     <span class="kw">let</span> <span class="ident">authentication_mode</span> <span class="op">=</span> <span class="ident">AuthenticationMode</span>::<span class="ident">Mutual</span>(<span class="ident">dialer_identity_private_key</span>);
+    <span class="kw">let</span> <span class="ident">seed_addrs</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> [(<span class="ident">listener_peer_id</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">listener_addr</span>])]
+        .<span class="ident">iter</span>()
+        .<span class="ident">cloned</span>()
+        .<span class="ident">collect</span>();
+
     <span class="comment">// Set up the dialer network</span>
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">network_builder</span> <span class="op">=</span> <span class="ident">NetworkBuilder</span>::<span class="ident">new</span>(
         <span class="ident">runtime</span>.<span class="ident">handle</span>().<span class="ident">clone</span>(),
@@ -349,13 +364,8 @@
         <span class="ident">authentication_mode</span>,
     );
     <span class="ident">network_builder</span>
-        .<span class="ident">trusted_peers</span>(<span class="ident">trusted_peers</span>)
-        .<span class="ident">seed_peers</span>(
-            [(<span class="ident">listener_peer_id</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">listener_addr</span>])]
-                .<span class="ident">iter</span>()
-                .<span class="ident">cloned</span>()
-                .<span class="ident">collect</span>(),
-        )
+        .<span class="ident">seed_addrs</span>(<span class="ident">seed_addrs</span>)
+        .<span class="ident">seed_pubkeys</span>(<span class="ident">seed_pubkeys</span>)
         .<span class="ident">add_connectivity_manager</span>();
     <span class="kw">let</span> (<span class="ident">dialer_sender</span>, <span class="kw-2">mut</span> <span class="ident">dialer_events</span>) <span class="op">=</span> <span class="ident">network_builder</span>
         .<span class="ident">add_protocol_handler</span>::<span class="op">&lt;</span><span class="ident">DummyNetworkSender</span>, <span class="ident">DummyNetworkEvents</span><span class="op">&gt;</span>(<span class="ident">network_endpoint_config</span>());

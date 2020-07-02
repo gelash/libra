@@ -104,15 +104,13 @@
 <span class="doccomment">//! Usage example:</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ```</span>
-<span class="doccomment">//! use network::{</span>
-<span class="doccomment">//!     noise::{HandshakeAuthMode, NoiseUpgrader, AntiReplayTimestamps},</span>
-<span class="doccomment">//! };</span>
+<span class="doccomment">//! use network::noise::{AntiReplayTimestamps, HandshakeAuthMode, NoiseUpgrader};</span>
 <span class="doccomment">//! use futures::{executor, future, io::{AsyncReadExt, AsyncWriteExt}};</span>
 <span class="doccomment">//! use memsocket::MemorySocket;</span>
 <span class="doccomment">//! use libra_crypto::{x25519, ed25519, Uniform, PrivateKey, test_utils::TEST_SEED};</span>
 <span class="doccomment">//! use rand::{rngs::StdRng, SeedableRng};</span>
 <span class="doccomment">//! use libra_types::PeerId;</span>
-<span class="doccomment">//! use std::{collections::HashMap, sync::{Arc, RwLock}};</span>
+<span class="doccomment">//! use std::{collections::{HashSet, HashMap}, sync::{Arc, RwLock}};</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! fn example() -&gt; std::io::Result&lt;()&gt; {</span>
 <span class="doccomment">//! // create client and server NoiseUpgrader</span>
@@ -126,11 +124,13 @@
 <span class="doccomment">//! let server_peer_id = PeerId::random();</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! // create list of trusted peers</span>
-<span class="doccomment">//! let mut trusted_peers = Arc::new(RwLock::new(HashMap::new()));</span>
-<span class="doccomment">//! {</span>
-<span class="doccomment">//!     trusted_peers.write().unwrap().insert(client_peer_id, client_public);</span>
-<span class="doccomment">//!     trusted_peers.write().unwrap().insert(server_peer_id, server_public);</span>
-<span class="doccomment">//! }</span>
+<span class="doccomment">//! let client_pubkey_set: HashSet&lt;_&gt; = vec![client_public].into_iter().collect();</span>
+<span class="doccomment">//! let server_pubkey_set: HashSet&lt;_&gt; = vec![server_public].into_iter().collect();</span>
+<span class="doccomment">//! let trusted_peers: HashMap&lt;_, _&gt; = vec![</span>
+<span class="doccomment">//!     (client_peer_id, client_pubkey_set),</span>
+<span class="doccomment">//!     (server_peer_id, server_pubkey_set)</span>
+<span class="doccomment">//! ].into_iter().collect();</span>
+<span class="doccomment">//! let trusted_peers = Arc::new(RwLock::new(trusted_peers));</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! let client_auth = HandshakeAuthMode::mutual(trusted_peers.clone());</span>
 <span class="doccomment">//! let client = NoiseUpgrader::new(client_peer_id, client_private, client_auth);</span>
