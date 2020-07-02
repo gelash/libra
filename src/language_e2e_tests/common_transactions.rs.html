@@ -304,10 +304,6 @@
 <span id="304">304</span>
 <span id="305">305</span>
 <span id="306">306</span>
-<span id="307">307</span>
-<span id="308">308</span>
-<span id="309">309</span>
-<span id="310">310</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -330,15 +326,12 @@
     <span class="kw">let</span> <span class="ident">code</span> <span class="op">=</span> <span class="string">&quot;
     import 0x1.Libra;
     import 0x1.LibraAccount;
-    import 0x1.Roles;
 
     main&lt;Token&gt;(account: &amp;signer, fresh_address: address, auth_key_prefix: vector&lt;u8&gt;, initial_amount: u64) {
-      let role_cap: Roles.Capability&lt;Roles.LibraRootRole&gt;;
       let with_cap: LibraAccount.WithdrawCapability;
 
-      role_cap = Roles.extract_privilege_to_capability&lt;Roles.LibraRootRole&gt;(copy(account));
       LibraAccount.create_unhosted_account&lt;Token&gt;(
-        copy(account), &amp;role_cap, copy(fresh_address), move(auth_key_prefix), false
+        copy(account), copy(fresh_address), move(auth_key_prefix), false
       );
       if (copy(initial_amount) &gt; 0) {
          with_cap = LibraAccount.extract_withdraw_capability(copy(account));
@@ -351,7 +344,6 @@
          );
          LibraAccount.restore_withdraw_capability(move(with_cap));
       }
-      Roles.restore_capability_to_privilege&lt;Roles.LibraRootRole&gt;(copy(account), move(role_cap));
       return;
     }
 &quot;</span>;
