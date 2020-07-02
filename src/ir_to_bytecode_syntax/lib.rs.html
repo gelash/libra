@@ -194,10 +194,6 @@
 <span id="194">194</span>
 <span id="195">195</span>
 <span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
-<span id="199">199</span>
-<span id="200">200</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -308,9 +304,6 @@
 <span class="doccomment">//! ```text</span>
 <span class="doccomment">//! // module operators are available only inside the module that declares n.</span>
 <span class="doccomment">//! mop ∈ ModuleOp ::=</span>
-<span class="doccomment">//!   | move_to_sender&lt;n&gt;(e) // type: &#39;Self.n -&gt; unit&#39;</span>
-<span class="doccomment">//!                          // publishes resource struct &#39;n&#39; under sender&#39;s address</span>
-<span class="doccomment">//!                          // fails if there is already a resource present for &#39;Self.n&#39;</span>
 <span class="doccomment">//!   | move_from&lt;n&gt;(e)      // type: &#39;address -&gt; Self.n&#39;</span>
 <span class="doccomment">//!                          // removes the resource struct &#39;n&#39; at the specified address</span>
 <span class="doccomment">//!                          // fails if there is no resource present for &#39;Self.n&#39;</span>
@@ -329,7 +322,6 @@
 <span class="doccomment">//!                               // releases the reference given</span>
 <span class="doccomment">//!   | freeze(x)                 // type: &#39;&amp;mut t -&gt; &amp;t&#39;</span>
 <span class="doccomment">//!                               // coerce a mutable reference to an immutable reference</span>
-<span class="doccomment">//!   | get_txn_sender()          // type: &#39;unit -&gt; address&#39;</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! call ∈ Call ::=</span>
 <span class="doccomment">//!   | mop</span>

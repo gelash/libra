@@ -448,27 +448,6 @@
 <span id="448">448</span>
 <span id="449">449</span>
 <span id="450">450</span>
-<span id="451">451</span>
-<span id="452">452</span>
-<span id="453">453</span>
-<span id="454">454</span>
-<span id="455">455</span>
-<span id="456">456</span>
-<span id="457">457</span>
-<span id="458">458</span>
-<span id="459">459</span>
-<span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
-<span id="469">469</span>
-<span id="470">470</span>
-<span id="471">471</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -514,7 +493,6 @@
     <span class="kw">use</span> <span class="kw">crate</span>::{
         <span class="ident">hlir</span>::<span class="ident">ast</span>::<span class="kw-2">*</span>,
         <span class="ident">parser</span>::<span class="ident">ast</span>::{<span class="ident">BinOp</span>, <span class="ident">UnaryOp</span>, <span class="ident">Var</span>},
-        <span class="ident">shared</span>::<span class="kw-2">*</span>,
     };
     <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">BTreeSet</span>};
 
@@ -678,6 +656,7 @@
             <span class="op">|</span> <span class="ident">E</span>::<span class="ident">Builtin</span>(<span class="kw">_</span>, <span class="kw">_</span>)
             <span class="op">|</span> <span class="ident">E</span>::<span class="ident">Freeze</span>(<span class="kw">_</span>)
             <span class="op">|</span> <span class="ident">E</span>::<span class="ident">Dereference</span>(<span class="kw">_</span>)
+            <span class="op">|</span> <span class="ident">E</span>::<span class="ident">ModuleCall</span>(<span class="kw">_</span>)
             <span class="op">|</span> <span class="ident">E</span>::<span class="ident">Move</span> { .. }
             <span class="op">|</span> <span class="ident">E</span>::<span class="ident">Borrow</span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
 
@@ -688,7 +667,6 @@
             <span class="ident">E</span>::<span class="ident">BinopExp</span>(<span class="ident">e1</span>, <span class="ident">op</span>, <span class="ident">e2</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="ident">can_subst_exp_binary</span>(<span class="ident">op</span>) <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">can_subst_exp_single</span>(<span class="ident">e1</span>) <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">can_subst_exp_single</span>(<span class="ident">e2</span>)
             }
-            <span class="ident">E</span>::<span class="ident">ModuleCall</span>(<span class="ident">mcall</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">can_subst_exp_module_call</span>(<span class="ident">mcall</span>),
             <span class="ident">E</span>::<span class="ident">ExpList</span>(<span class="ident">es</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">es</span>.<span class="ident">iter</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">can_subst_exp_item</span>(<span class="ident">i</span>)),
             <span class="ident">E</span>::<span class="ident">Pack</span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="ident">fields</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">all</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="ident">e</span>)<span class="op">|</span> <span class="ident">can_subst_exp_single</span>(<span class="ident">e</span>)),
 
@@ -702,26 +680,6 @@
 
     <span class="kw">fn</span> <span class="ident">can_subst_exp_binary</span>(<span class="macro">sp</span><span class="macro">!</span>(<span class="kw">_</span>, <span class="ident">op_</span>): <span class="kw-2">&amp;</span><span class="ident">BinOp</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
         <span class="ident">op_</span>.<span class="ident">is_pure</span>()
-    }
-
-    <span class="kw">fn</span> <span class="ident">can_subst_exp_module_call</span>(<span class="ident">mcall</span>: <span class="kw-2">&amp;</span><span class="ident">ModuleCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
-        <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">shared</span>::<span class="ident">fake_natives</span>::<span class="ident">transaction</span> <span class="kw">as</span> <span class="ident">TXN</span>;
-        <span class="kw">let</span> <span class="ident">ModuleCall</span> {
-            <span class="ident">module</span>,
-            <span class="ident">name</span>,
-            <span class="ident">arguments</span>,
-            ..
-        } <span class="op">=</span> <span class="ident">mcall</span>;
-        <span class="kw">let</span> <span class="ident">a_m_f</span> <span class="op">=</span> (
-            <span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="number">0</span>.<span class="ident">value</span>.<span class="ident">address</span>,
-            <span class="ident">module</span>.<span class="number">0</span>.<span class="ident">value</span>.<span class="ident">name</span>.<span class="ident">value</span>(),
-            <span class="ident">name</span>.<span class="ident">value</span>(),
-        );
-        <span class="kw">let</span> <span class="ident">call_is_pure</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">a_m_f</span> {
-            (<span class="kw-2">&amp;</span><span class="ident">Address</span>::<span class="ident">LIBRA_CORE</span>, <span class="ident">TXN</span>::<span class="ident">MOD</span>, <span class="ident">TXN</span>::<span class="ident">SENDER</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">true</span>,
-            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
-        };
-        <span class="ident">call_is_pure</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">can_subst_exp_single</span>(<span class="ident">arguments</span>)
     }
 
     <span class="kw">fn</span> <span class="ident">can_subst_exp_item</span>(<span class="ident">item</span>: <span class="kw-2">&amp;</span><span class="ident">ExpListItem</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {

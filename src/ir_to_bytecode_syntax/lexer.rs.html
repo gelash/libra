@@ -459,11 +459,6 @@
 <span id="459">459</span>
 <span id="460">460</span>
 <span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -530,8 +525,6 @@
     <span class="ident">Exists</span>,
     <span class="ident">False</span>,
     <span class="ident">Freeze</span>,
-    <span class="doccomment">/// Function to get transaction sender in the Move language</span>
-    <span class="ident">GetTxnSender</span>,
     <span class="doccomment">/// Like borrow_global, but for spec language</span>
     <span class="ident">Global</span>,
     <span class="doccomment">/// Like exists, but for spec language</span>
@@ -549,7 +542,6 @@
     <span class="ident">Module</span>,
     <span class="ident">Move</span>,
     <span class="ident">MoveFrom</span>,
-    <span class="ident">MoveToSender</span>,
     <span class="ident">MoveTo</span>,
     <span class="ident">Native</span>,
     <span class="ident">Old</span>,
@@ -720,7 +712,6 @@
                             <span class="string">&quot;borrow_global_mut&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">BorrowGlobalMut</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
                             <span class="string">&quot;exists&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">Exists</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
                             <span class="string">&quot;move_from&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">MoveFrom</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
-                            <span class="string">&quot;move_to_sender&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">MoveToSender</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
                             <span class="string">&quot;move_to&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">MoveTo</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
                             <span class="string">&quot;main&quot;</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">Main</span>, <span class="ident">len</span>),
                             <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">Tok</span>::<span class="ident">NameBeginTyValue</span>, <span class="ident">len</span> <span class="op">+</span> <span class="number">1</span>),
@@ -897,7 +888,6 @@
         <span class="string">&quot;ensures&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">Ensures</span>,
         <span class="string">&quot;false&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">False</span>,
         <span class="string">&quot;freeze&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">Freeze</span>,
-        <span class="string">&quot;get_txn_sender&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">GetTxnSender</span>,
         <span class="string">&quot;global&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">Global</span>,              <span class="comment">// spec language</span>
         <span class="string">&quot;global_exists&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">GlobalExists</span>, <span class="comment">// spec language</span>
         <span class="string">&quot;to_u8&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Tok</span>::<span class="ident">ToU8</span>,

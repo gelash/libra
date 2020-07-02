@@ -695,9 +695,6 @@
 <span id="695">695</span>
 <span id="696">696</span>
 <span id="697">697</span>
-<span id="698">698</span>
-<span id="699">699</span>
-<span id="700">700</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -818,7 +815,6 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">PartialEq</span>)]</span>
 <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">large_enum_variant</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">BuiltinFunction_</span> {
-    <span class="ident">MoveToSender</span>(<span class="ident">Type</span>),
     <span class="ident">MoveTo</span>(<span class="ident">Type</span>),
     <span class="ident">MoveFrom</span>(<span class="ident">Type</span>),
     <span class="ident">BorrowGlobal</span>(<span class="ident">bool</span>, <span class="ident">Type</span>),
@@ -918,7 +914,6 @@
         <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">naming</span>::<span class="ident">ast</span>::<span class="ident">BuiltinFunction_</span> <span class="kw">as</span> <span class="ident">NB</span>;
         <span class="kw">use</span> <span class="ident">BuiltinFunction_</span> <span class="kw">as</span> <span class="ident">B</span>;
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">B</span>::<span class="ident">MoveToSender</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NB</span>::<span class="ident">MOVE_TO_SENDER</span>,
             <span class="ident">B</span>::<span class="ident">MoveTo</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NB</span>::<span class="ident">MOVE_TO</span>,
             <span class="ident">B</span>::<span class="ident">MoveFrom</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NB</span>::<span class="ident">MOVE_FROM</span>,
             <span class="ident">B</span>::<span class="ident">BorrowGlobal</span>(<span class="bool-val">false</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NB</span>::<span class="ident">BORROW_GLOBAL</span>,
@@ -1306,7 +1301,6 @@
         <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">naming</span>::<span class="ident">ast</span>::<span class="ident">BuiltinFunction_</span> <span class="kw">as</span> <span class="ident">NF</span>;
         <span class="kw">use</span> <span class="ident">BuiltinFunction_</span> <span class="kw">as</span> <span class="ident">F</span>;
         <span class="kw">let</span> (<span class="ident">n</span>, <span class="ident">bt_opt</span>) <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">F</span>::<span class="ident">MoveToSender</span>(<span class="ident">bt</span>) <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">NF</span>::<span class="ident">MOVE_TO_SENDER</span>, <span class="prelude-val">Some</span>(<span class="ident">bt</span>)),
             <span class="ident">F</span>::<span class="ident">MoveTo</span>(<span class="ident">bt</span>) <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">NF</span>::<span class="ident">MOVE_TO</span>, <span class="prelude-val">Some</span>(<span class="ident">bt</span>)),
             <span class="ident">F</span>::<span class="ident">MoveFrom</span>(<span class="ident">bt</span>) <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">NF</span>::<span class="ident">MOVE_FROM</span>, <span class="prelude-val">Some</span>(<span class="ident">bt</span>)),
             <span class="ident">F</span>::<span class="ident">BorrowGlobal</span>(<span class="bool-val">true</span>, <span class="ident">bt</span>) <span class="op">=</span><span class="op">&gt;</span> (<span class="ident">NF</span>::<span class="ident">BORROW_GLOBAL_MUT</span>, <span class="prelude-val">Some</span>(<span class="ident">bt</span>)),

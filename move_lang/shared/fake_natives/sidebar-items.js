@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["is_fake_native",""]],"mod":[["transaction","'Native' functions that are actually bytecode isntructions Fake module around transaction meta data"]]});

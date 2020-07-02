@@ -1910,20 +1910,6 @@
 <span id="1910">1910</span>
 <span id="1911">1911</span>
 <span id="1912">1912</span>
-<span id="1913">1913</span>
-<span id="1914">1914</span>
-<span id="1915">1915</span>
-<span id="1916">1916</span>
-<span id="1917">1917</span>
-<span id="1918">1918</span>
-<span id="1919">1919</span>
-<span id="1920">1920</span>
-<span id="1921">1921</span>
-<span id="1922">1922</span>
-<span id="1923">1923</span>
-<span id="1924">1924</span>
-<span id="1925">1925</span>
-<span id="1926">1926</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -2303,13 +2289,9 @@
     <span class="doccomment">/// Get a reference to the resource(`StructName` resolved by current module) associated</span>
     <span class="doccomment">/// with the given address</span>
     <span class="ident">BorrowGlobal</span>(<span class="ident">bool</span>, <span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
-    <span class="doccomment">/// Returns the address of the current transaction&#39;s sender</span>
-    <span class="ident">GetTxnSender</span>,
 
     <span class="doccomment">/// Remove a resource of the given type from the account with the given address</span>
     <span class="ident">MoveFrom</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
-    <span class="doccomment">/// Publish an instantiated struct object into sender&#39;s account.</span>
-    <span class="ident">MoveToSender</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
     <span class="doccomment">/// Publish an instantiated struct object into signer&#39;s (signer is the first arg) account.</span>
     <span class="ident">MoveTo</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
 
@@ -2613,10 +2595,8 @@
     <span class="ident">Le</span>,
     <span class="ident">Ge</span>,
     <span class="ident">Abort</span>,
-    <span class="ident">GetTxnSenderAddress</span>,
     <span class="ident">Exists</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
     <span class="ident">MoveFrom</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
-    <span class="ident">MoveToSender</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
     <span class="ident">MoveTo</span>(<span class="ident">StructName</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>),
     <span class="ident">Shl</span>,
     <span class="ident">Shr</span>,
@@ -3532,11 +3512,7 @@
                     <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)
                 )
             }
-            <span class="ident">Builtin</span>::<span class="ident">GetTxnSender</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;get_txn_sender&quot;</span>),
             <span class="ident">Builtin</span>::<span class="ident">MoveFrom</span>(<span class="ident">t</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;move_from&lt;{}{}&gt;&quot;</span>, <span class="ident">t</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)),
-            <span class="ident">Builtin</span>::<span class="ident">MoveToSender</span>(<span class="ident">t</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;move_to_sender&lt;{}{}&gt;&quot;</span>, <span class="ident">t</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>))
-            }
             <span class="ident">Builtin</span>::<span class="ident">MoveTo</span>(<span class="ident">t</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;move_to&lt;{}{}&gt;&quot;</span>, <span class="ident">t</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)),
             <span class="ident">Builtin</span>::<span class="ident">Freeze</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;freeze&quot;</span>),
             <span class="ident">Builtin</span>::<span class="ident">ToU8</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;to_u8&quot;</span>),
@@ -3839,12 +3815,8 @@
             <span class="ident">Bytecode_</span>::<span class="ident">Le</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Le&quot;</span>),
             <span class="ident">Bytecode_</span>::<span class="ident">Ge</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Ge&quot;</span>),
             <span class="ident">Bytecode_</span>::<span class="ident">Abort</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Abort&quot;</span>),
-            <span class="ident">Bytecode_</span>::<span class="ident">GetTxnSenderAddress</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;GetTxnSenderAddress&quot;</span>),
             <span class="ident">Bytecode_</span>::<span class="ident">Exists</span>(<span class="ident">n</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Exists {}{}&quot;</span>, <span class="ident">n</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)),
             <span class="ident">Bytecode_</span>::<span class="ident">MoveFrom</span>(<span class="ident">n</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;MoveFrom {}{}&quot;</span>, <span class="ident">n</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)),
-            <span class="ident">Bytecode_</span>::<span class="ident">MoveToSender</span>(<span class="ident">n</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;MoveToSender {}{}&quot;</span>, <span class="ident">n</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>))
-            }
             <span class="ident">Bytecode_</span>::<span class="ident">MoveTo</span>(<span class="ident">n</span>, <span class="ident">tys</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;MoveTo {}{}&quot;</span>, <span class="ident">n</span>, <span class="ident">format_type_actuals</span>(<span class="ident">tys</span>)),
             <span class="ident">Bytecode_</span>::<span class="ident">Shl</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Shl&quot;</span>),
             <span class="ident">Bytecode_</span>::<span class="ident">Shr</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;Shr&quot;</span>),

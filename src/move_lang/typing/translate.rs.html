@@ -1891,12 +1891,6 @@
 <span id="1891">1891</span>
 <span id="1892">1892</span>
 <span id="1893">1893</span>
-<span id="1894">1894</span>
-<span id="1895">1895</span>
-<span id="1896">1896</span>
-<span id="1897">1897</span>
-<span id="1898">1898</span>
-<span id="1899">1899</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -3677,12 +3671,6 @@
     };
     <span class="kw">let</span> (<span class="ident">b_</span>, <span class="ident">params_ty</span>, <span class="ident">ret_ty</span>);
     <span class="kw">match</span> <span class="ident">nb_</span> {
-        <span class="ident">NB</span>::<span class="ident">MoveToSender</span>(<span class="ident">ty_arg_opt</span>) <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">ty_arg</span> <span class="op">=</span> <span class="ident">mk_ty_arg</span>(<span class="ident">ty_arg_opt</span>);
-            <span class="ident">b_</span> <span class="op">=</span> <span class="ident">TB</span>::<span class="ident">MoveToSender</span>(<span class="ident">ty_arg</span>.<span class="ident">clone</span>());
-            <span class="ident">params_ty</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">ty_arg</span>];
-            <span class="ident">ret_ty</span> <span class="op">=</span> <span class="ident">sp</span>(<span class="ident">loc</span>, <span class="ident">Type_</span>::<span class="ident">Unit</span>);
-        }
         <span class="ident">NB</span>::<span class="ident">MoveTo</span>(<span class="ident">ty_arg_opt</span>) <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">let</span> <span class="ident">ty_arg</span> <span class="op">=</span> <span class="ident">mk_ty_arg</span>(<span class="ident">ty_arg_opt</span>);
             <span class="ident">b_</span> <span class="op">=</span> <span class="ident">TB</span>::<span class="ident">MoveTo</span>(<span class="ident">ty_arg</span>.<span class="ident">clone</span>());
