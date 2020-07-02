@@ -611,6 +611,10 @@
 <span id="611">611</span>
 <span id="612">612</span>
 <span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright (c) The Libra Core Contributors</span>
 <span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
@@ -750,12 +754,14 @@
     <span class="ident">ReceivedPayment</span> {
         <span class="ident">amount</span>: <span class="ident">AmountView</span>,
         <span class="ident">sender</span>: <span class="ident">BytesView</span>,
+        <span class="ident">receiver</span>: <span class="ident">BytesView</span>,
         <span class="ident">metadata</span>: <span class="ident">BytesView</span>,
     },
     <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> <span class="op">=</span> <span class="string">&quot;sentpayment&quot;</span>)]</span>
     <span class="ident">SentPayment</span> {
         <span class="ident">amount</span>: <span class="ident">AmountView</span>,
         <span class="ident">receiver</span>: <span class="ident">BytesView</span>,
+        <span class="ident">sender</span>: <span class="ident">BytesView</span>,
         <span class="ident">metadata</span>: <span class="ident">BytesView</span>,
     },
     <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> <span class="op">=</span> <span class="string">&quot;upgrade&quot;</span>)]</span>
@@ -785,6 +791,7 @@
                 <span class="prelude-val">Ok</span>(<span class="ident">EventDataView</span>::<span class="ident">ReceivedPayment</span> {
                     <span class="ident">amount</span>: <span class="ident">amount_view</span>,
                     <span class="ident">sender</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">received_event</span>.<span class="ident">sender</span>().<span class="ident">as_ref</span>()),
+                    <span class="ident">receiver</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="kw-2">&amp;</span><span class="ident">event</span>.<span class="ident">key</span>().<span class="ident">get_creator_address</span>().<span class="ident">to_vec</span>()),
                     <span class="ident">metadata</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">received_event</span>.<span class="ident">metadata</span>()),
                 })
             } <span class="kw">else</span> {
@@ -797,6 +804,7 @@
                 <span class="prelude-val">Ok</span>(<span class="ident">EventDataView</span>::<span class="ident">SentPayment</span> {
                     <span class="ident">amount</span>: <span class="ident">amount_view</span>,
                     <span class="ident">receiver</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">sent_event</span>.<span class="ident">receiver</span>().<span class="ident">as_ref</span>()),
+                    <span class="ident">sender</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="kw-2">&amp;</span><span class="ident">event</span>.<span class="ident">key</span>().<span class="ident">get_creator_address</span>().<span class="ident">to_vec</span>()),
                     <span class="ident">metadata</span>: <span class="ident">BytesView</span>::<span class="ident">from</span>(<span class="ident">sent_event</span>.<span class="ident">metadata</span>()),
                 })
             } <span class="kw">else</span> {
