@@ -60,15 +60,39 @@ address 0x1 {
             user_public_key: vector<u8>,
         }
 
+        public fun money_order_descriptor(
+            _sender: &signer,
+            amount: u64,
+            issuer: address,
+            batch_index: u64,
+            order_index: u64,
+            user_public_key: vector<u8>,
+        ): MoneyOrderDescriptor {
+            MoneyOrderDescriptor {
+                amount: amount,
+                issuer: issuer,
+                batch_index: batch_index,
+                order_index: order_index,
+                user_public_key: user_public_key
+            }
+        }
+
+        fun mint_money_order_coin(amount: u64,
+        ): MoneyOrderCoin {
+            MoneyOrderCoin {
+                amount: amount,
+            }
+        }
+        
         // Initialize the capability to issue money orders by publishing a MoneyOrders.
         public fun initialize_money_orders(issuer: &signer,
                                            public_key: vector<u8>,
-                                           starting_balance: MoneyOrderCoin,
+                                           starting_balance: u64,
         ) {
             move_to(issuer, MoneyOrders {
                 batches: Vector::empty(),
                 public_key: public_key,
-                balance: starting_balance,
+                balance: mint_money_order_coin(starting_balance),
             });
         }
 
@@ -162,10 +186,10 @@ address 0x1 {
             
             let was_expired =
                 LibraTimestamp::now_microseconds() > order_batch.expiration_time;
-            let prev_status =
-                test_and_set_order_status(&mut order_batch.order_status,
+            let was_set =
+                !test_and_set_order_status(&mut order_batch.order_status,
                                           money_order_descriptor.order_index);
-            !(was_expired || prev_status)
+            !(was_expired || was_set)
         }
         
         // Cancels a money described by MoneyOrderDescriptor order issued by the issuer.
