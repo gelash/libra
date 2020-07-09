@@ -96,6 +96,18 @@ address 0x1 {
             });
         }
 
+        public fun publish_money_order_coin(sender: &signer,
+        ) {
+            move_to(sender, mint_money_order_coin(0));
+        }
+
+        public fun money_order_coin_balance(sender: &signer,
+        ) : u64 acquires MoneyOrderCoin {
+            let coins = borrow_global<MoneyOrderCoin>(
+                Signer::address_of(sender));
+            coins.amount
+        }
+
         // TODO: get rid when standard supports.
         fun div_ceil(a: u64, b: u64,
         ): u64 {
@@ -149,9 +161,10 @@ address 0x1 {
         fun verify_user_signature(receiver: &signer,
                                   money_order_descriptor: MoneyOrderDescriptor,
                                   user_signature: vector<u8>,
+                                  domain_authenticator: vector<u8>,
         ) {
             let message = Vector::empty();
-            Vector::append(&mut message, b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
+            Vector::append(&mut message, domain_authenticator);
             Vector::append(&mut message, LCS::to_bytes(&Signer::address_of(receiver)));
             Vector::append(&mut message, LCS::to_bytes(&money_order_descriptor));
             assert(Signature::ed25519_verify(user_signature,
@@ -170,7 +183,7 @@ address 0x1 {
             let bitmask = (1 << (bit_index as u8));
             let target_byte = Vector::borrow_mut(status_array, byte_index);
 
-            let test_status: bool = (*target_byte & bitmask) == 0;
+            let test_status: bool = (*target_byte & bitmask) == bitmask;
             *target_byte = *target_byte | bitmask;
             test_status
         }
@@ -187,7 +200,7 @@ address 0x1 {
             let was_expired =
                 LibraTimestamp::now_microseconds() > order_batch.expiration_time;
             let was_set =
-                !test_and_set_order_status(&mut order_batch.order_status,
+                test_and_set_order_status(&mut order_batch.order_status,
                                           money_order_descriptor.order_index);
             !(was_expired || was_set)
         }
@@ -222,7 +235,10 @@ address 0x1 {
                                       issuer_signature: vector<u8>,
                                       user_signature: vector<u8>,
         ): MoneyOrderCoin acquires MoneyOrders {
-            verify_user_signature(receiver, *&money_order_descriptor, user_signature);
+            verify_user_signature(receiver,
+                                  *&money_order_descriptor,
+                                  user_signature,
+                                  b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
             verify_issuer_signature(*&money_order_descriptor, issuer_signature);
             
             let orders = borrow_global_mut<MoneyOrders>(money_order_descriptor.issuer);
@@ -269,7 +285,10 @@ address 0x1 {
                                       issuer_signature: vector<u8>,
                                       user_signature: vector<u8>,
         ): bool acquires MoneyOrders {
-            verify_user_signature(receiver, *&money_order_descriptor, user_signature);
+            verify_user_signature(receiver,
+                                  *&money_order_descriptor,
+                                  user_signature,
+                                  b"@@$$LIBRA_MONEY_ORDER_CANCEL$$@@");
             verify_issuer_signature(*&money_order_descriptor, issuer_signature);
 
             cancel_order_impl(&money_order_descriptor)

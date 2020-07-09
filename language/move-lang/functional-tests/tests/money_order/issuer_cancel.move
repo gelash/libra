@@ -1,4 +1,3 @@
-//! account: bob, 1000000, 0, validator
 //! account: alice
 
 //! new-transaction
