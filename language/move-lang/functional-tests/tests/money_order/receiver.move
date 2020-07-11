@@ -19,10 +19,7 @@ script {
 script {
     use 0x1::MoneyOrder;
     fun main(sender: &signer) {
-        MoneyOrder::issue_money_order_batch(
-            sender,
-            100,
-            3600000000);
+        MoneyOrder::issue_money_order_batch(sender, 100, 3600000000);
     }
 }
 // check: EXECUTED
