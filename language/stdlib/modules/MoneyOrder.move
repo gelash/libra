@@ -18,7 +18,7 @@ address 0x1 {
         }
 
         resource struct MoneyOrderBatch {
-            // bit-packed, 0: unused, 1: deposited.
+            // bit-packed, 0: redeemable, 1: deposited/canceled.
             order_status: vector<u8>,
             
             // Expiration time of these money orders.
@@ -26,14 +26,10 @@ address 0x1 {
         }
 
         resource struct MoneyOrders {
-            // We currently store money orders in batches. Instead of a single, ever-growing
-            // data-structure of money orders - instead, we want to be able to clean-up
-            // or at least not store/synchronize the status bits for money orders that are
-            // no longer relevant (e.g. expired, deposited). Batching is a simple mechanism
-            // that accomplishes this as every batch has an associated expiry time.
+            // Each batch has an expiry time and contains money order status bits.
             batches: vector<MoneyOrderBatch>,
 
-            // Public key associated with the money orders, the issuing VASPs will hold
+            // Public key associated with the money orders, the issuing VASP holds
             // the corresponding private key.
             public_key: vector<u8>,
 
@@ -87,9 +83,9 @@ address 0x1 {
             }
         }
         
-        // Initialize the capability to issue money orders by publishing a MoneyOrders.
-        // Takes the starting balance and mints the MoneyOrderCoin. Note: we could add
-        // temporary APIs for topping up the balance, but eventually we should just
+        // Initialize the capability to issue money orders by publishing a MoneyOrders
+        // resource. Mints starting_balance MoneyOrderCoin. Note: we could add
+        // temporary APIs for topping up the balance, but eventually should just
         // switch to using Libra<coin> types and not reimplement coin functionality.
         public fun initialize_money_orders(issuer: &signer,
                                            public_key: vector<u8>,
