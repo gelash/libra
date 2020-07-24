@@ -68,6 +68,28 @@ pub static EMPTY_SCRIPT: Lazy<Vec<u8>> = Lazy::new(|| {
         .expect("Failed to compile")
 });
 
+/// Returns a transaction to initialize money orders
+pub fn initialize_money_orders_txn(
+    sender: &Account,
+    public_key: Vec<u8>,
+    starting_balance: u64,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U8Vector(public_key));
+    args.push(TransactionArgument::U64(starting_balance));
+
+    sender.create_signed_txn_with_args(
+        StdlibScript::InitializeMoneyOrders.compiled_bytes().into_vec(),
+        vec![],
+        args,
+        seq_num,
+        gas_costs::TXN_RESERVED * 2,
+        0,
+        LBR_NAME.to_owned(),
+    )
+}
+
 /// Returns a transaction to add a new validator
 pub fn add_validator_txn(
     sender: &Account,

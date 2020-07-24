@@ -63,6 +63,7 @@ script {
             x"a92bb0afe7489f417a0431191594ae8ea484b4952844a2171af5049443fd94d768d70d759552504bf9ee1059984a405534d91997e954de2dc68013596c98e60f"), 8000);
     }
 }
+// check: CanceledMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -127,6 +128,7 @@ script {
         assert(MoneyOrder::money_order_coin_balance(sender) == 5, 8000);
     }
 }
+// check: RedeemedMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction

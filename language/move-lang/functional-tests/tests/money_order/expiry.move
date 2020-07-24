@@ -51,6 +51,7 @@ script {
         assert(MoneyOrder::issuer_cancel_money_order(sender, 1, 2), 8000);
     }
 }
+// check: CanceledMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -98,4 +99,5 @@ script {
         assert(MoneyOrder::issuer_cancel_money_order(sender, 1, 3), 8000);
     }
 }
+// check: CanceledMoneyOrderEvent
 // check: EXECUTED

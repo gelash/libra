@@ -5,11 +5,12 @@
 address 0x1 {
 
     module MoneyOrder {
-        use 0x1::Vector;
+        use 0x1::Event::{Self, EventHandle};
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
         use 0x1::Signature;
         use 0x1::Signer;
+        use 0x1::Vector;
 
         // TODO: decide exactly what should be a resource among these structs below.
         // TODO: switch to Libra<MoneyOrderCoin> when that's allowed.
@@ -35,6 +36,12 @@ address 0x1 {
 
             // Money orders will be fulfilled from this balance.
             balance: MoneyOrderCoin,
+
+            // Event handle for cancel event.
+            canceled_events: EventHandle<CanceledMoneyOrderEvent>,
+
+            // Event handle for redeem event.
+            redeemed_events: EventHandle<RedeemedMoneyOrderEvent>,
         }
 
         // Describes a money order: amount, issuer, where to find the status bit
@@ -53,6 +60,19 @@ address 0x1 {
 
             // Issuer creates corresponding private key for the user.
             user_public_key: vector<u8>,
+        }
+
+        // Message for canceled events.
+        struct CanceledMoneyOrderEvent {
+            batch_index: u64,
+            order_index: u64,
+        }
+
+        // Message for redeemed events.
+        struct RedeemedMoneyOrderEvent {
+            amount: u64,
+            batch_index: u64,
+            order_index: u64,
         }
 
         // The only way to create a MoneyOrderDescriptor.
@@ -95,6 +115,8 @@ address 0x1 {
                 batches: Vector::empty(),
                 public_key: public_key,
                 balance: mint_money_order_coin(starting_balance),
+                canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
+                redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
             });
         }
 
@@ -216,10 +238,25 @@ address 0x1 {
             
             let was_expired = time_expired(order_batch.expiration_time);
 
-            // If expired or the bit was 0, return false. Note: If expired, don't
-            // try setting the bit since the order_status array may be cleared.
-            !(was_expired || test_and_set_order_status(&mut order_batch.order_status,
-                                                       order_index))
+            // The money order was canceled now if it wasn't expired, and if the 
+            // status bit wasn't 1 (e.g. already canceled or redeemed). Note: If
+            // expired, don't set the bit since the order_status array may be cleared.
+            let canceled_now = !(was_expired ||
+                                 test_and_set_order_status(&mut order_batch.order_status,
+                                                           order_index));
+
+            if (canceled_now) {
+                // Log a canceled event.
+                Event::emit_event<CanceledMoneyOrderEvent>(
+                    &mut orders.canceled_events,
+                    CanceledMoneyOrderEvent {
+                        batch_index: batch_index,
+                        order_index: order_index,
+                    }
+                );
+            };
+            
+            canceled_now            
         }
         
         // Cancels a money order issued by the signer based on the batch index and
@@ -283,6 +320,17 @@ address 0x1 {
             let issuer_coin_value = &mut orders.balance.amount;
             assert(*issuer_coin_value >= money_order_descriptor.amount, 8004);
             *issuer_coin_value = *issuer_coin_value - money_order_descriptor.amount;
+
+            // Log a redeemed event. 
+            Event::emit_event<RedeemedMoneyOrderEvent>(
+                &mut orders.redeemed_events,
+                RedeemedMoneyOrderEvent {
+                    amount: money_order_descriptor.amount,
+                    batch_index: money_order_descriptor.batch_index,
+                    order_index: money_order_descriptor.order_index,
+                }
+            );
+            
             MoneyOrderCoin {
                 amount: money_order_descriptor.amount,
             }

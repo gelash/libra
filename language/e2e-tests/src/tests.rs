@@ -17,6 +17,7 @@ mod failed_transaction_tests;
 mod genesis;
 mod mint;
 mod module_publishing;
+mod money_orders;
 mod on_chain_configs;
 mod peer_to_peer;
 mod rotate_key;
