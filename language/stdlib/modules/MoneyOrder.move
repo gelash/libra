@@ -1,6 +1,6 @@
 // 8001 - money order expired
 // 8002 - signature did not verify
-// 8003 - money order already deposited
+// 8003 - money order already deposited or canceled
 // 8004 - insufficient balance on issuer's account
 address 0x1 {
 
@@ -37,6 +37,9 @@ address 0x1 {
             // Money orders will be fulfilled from this balance.
             balance: MoneyOrderCoin,
 
+            // Event handle for issue event.
+            issued_events: EventHandle<IssuedMoneyOrderEvent>,
+            
             // Event handle for cancel event.
             canceled_events: EventHandle<CanceledMoneyOrderEvent>,
 
@@ -62,6 +65,12 @@ address 0x1 {
             user_public_key: vector<u8>,
         }
 
+        // Message for issued events.
+        struct IssuedMoneyOrderEvent {
+            batch_index: u64,
+            num_orders: u64,
+        }
+        
         // Message for canceled events.
         struct CanceledMoneyOrderEvent {
             batch_index: u64,
@@ -115,6 +124,7 @@ address 0x1 {
                 batches: Vector::empty(),
                 public_key: public_key,
                 balance: mint_money_order_coin(starting_balance),
+                issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
                 redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
             });
@@ -170,7 +180,17 @@ address 0x1 {
                 expiration_time: LibraTimestamp::now_microseconds() + validity_microseconds,
             });
 
-            Vector::length(&orders.batches)
+            let batch_id = Vector::length(&orders.batches);
+            
+            Event::emit_event<IssuedMoneyOrderEvent>(
+                &mut orders.issued_events,
+                IssuedMoneyOrderEvent {
+                    batch_index: batch_id,
+                    num_orders: batch_size,
+                }
+            );
+
+            batch_id
         }
 
         // Note: more complex general MO batching logic can be totally issuer-side.

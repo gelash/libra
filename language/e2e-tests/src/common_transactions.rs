@@ -90,6 +90,89 @@ pub fn initialize_money_orders_txn(
     )
 }
 
+/// Returns a transaction to issue a money order batch of 100,
+/// with duration 1 hr.
+pub fn issue_money_order_batch_txn(
+    sender: &Account,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(100));
+    args.push(TransactionArgument::U64(3600000000));
+
+    sender.create_signed_txn_with_args(
+        StdlibScript::IssueMoneyOrderBatch.compiled_bytes().into_vec(),
+        vec![],
+        args,
+        seq_num,
+        gas_costs::TXN_RESERVED * 2,
+        0,
+        LBR_NAME.to_owned(),
+    )
+}
+
+pub fn deposit_money_order_txn(
+    receiver: &Account,
+    amount: u64,
+    issuer: &Account,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(amount));
+    args.push(TransactionArgument::Address(*issuer.address()));
+    args.push(TransactionArgument::U64(batch_index));
+    args.push(TransactionArgument::U64(order_index));
+    args.push(TransactionArgument::U8Vector(user_public_key));
+    args.push(TransactionArgument::U8Vector(issuer_signature));
+    args.push(TransactionArgument::U8Vector(user_signature));
+
+    receiver.create_signed_txn_with_args(
+        StdlibScript::DepositMoneyOrder.compiled_bytes().into_vec(),
+        vec![],
+        args,
+        seq_num,
+        gas_costs::TXN_RESERVED * 3,
+        0,
+        LBR_NAME.to_owned(),
+    )
+}
+
+pub fn cancel_money_order_txn(
+    receiver: &Account,
+    amount: u64,
+    issuer: &Account,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(amount));
+    args.push(TransactionArgument::Address(*issuer.address()));
+    args.push(TransactionArgument::U64(batch_index));
+    args.push(TransactionArgument::U64(order_index));
+    args.push(TransactionArgument::U8Vector(user_public_key));
+    args.push(TransactionArgument::U8Vector(issuer_signature));
+    args.push(TransactionArgument::U8Vector(user_signature));
+
+    receiver.create_signed_txn_with_args(
+        StdlibScript::CancelMoneyOrder.compiled_bytes().into_vec(),
+        vec![],
+        args,
+        seq_num,
+        gas_costs::TXN_RESERVED * 3,
+        0,
+        LBR_NAME.to_owned(),
+    )
+}
+
 /// Returns a transaction to add a new validator
 pub fn add_validator_txn(
     sender: &Account,

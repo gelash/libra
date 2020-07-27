@@ -11,6 +11,7 @@ script {
             1000000);
     }
 }
+// not: IssuedMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -24,6 +25,8 @@ script {
         MoneyOrder::issue_money_order_batch(sender, 10, 3600000000);
     }
 }
+// not: CanceledMoneyOrderEvent
+// check: IssuedMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -35,6 +38,8 @@ script {
         MoneyOrder::issue_money_order_batch(sender, 20, 0);
     }
 }
+// not: CanceledMoneyOrderEvent
+// check: IssuedMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -51,6 +56,7 @@ script {
         assert(MoneyOrder::issuer_cancel_money_order(sender, 1, 2), 8000);
     }
 }
+// not: IssuedMoneyOrderEvent
 // check: CanceledMoneyOrderEvent
 // check: EXECUTED
 

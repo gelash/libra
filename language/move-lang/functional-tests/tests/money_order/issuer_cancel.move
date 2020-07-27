@@ -21,6 +21,7 @@ script {
         MoneyOrder::issue_money_order_batch(sender, 100, 3600000000);
     }
 }
+// check: IssuedMoneyOrderEvent
 // check: EXECUTED
 
 //! new-transaction
@@ -31,6 +32,7 @@ script {
         assert(MoneyOrder::issuer_cancel_money_order(sender, 0, 1), 8000);
     }
 }
+// not: IssuedMoneyOrderEvent
 // check: CanceledMoneyOrderEvent
 // check: EXECUTED
 
@@ -53,5 +55,6 @@ script {
         assert(!MoneyOrder::issuer_cancel_money_order(sender, 0, 5), 8000);
     }
 }
+// not: Canceledmoneyorderevent
 // check: EXECUTED
 

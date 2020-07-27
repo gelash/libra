@@ -677,7 +677,7 @@ impl AccountData {
             AccountRoleSpecifier::Unhosted,
         )
     }
-
+   
     /// Creates a new `AccountData` with the provided account.
     pub fn with_account(
         account: Account,
@@ -695,6 +695,30 @@ impl AccountData {
             0,
             account_specifier,
             false,
+        )
+    }
+
+    pub fn new_fixed_addr(balance: u64, sequence_number: u64) -> Self {
+        let (privkey, pubkey) = KeyGen::from_seed([9u8; 32]).generate_keypair();
+        Self::with_keypair(
+            privkey,
+            pubkey,
+            balance,
+            lbr_currency_code(),
+            sequence_number,
+            AccountRoleSpecifier::ParentVASP,
+        )
+    }
+
+    pub fn another_fixed_addr(balance: u64, sequence_number: u64) -> Self {
+        let (privkey, pubkey) = KeyGen::from_seed([7u8; 32]).generate_keypair();
+        Self::with_keypair(
+            privkey,
+            pubkey,
+            balance,
+            lbr_currency_code(),
+            sequence_number,
+            AccountRoleSpecifier::ParentVASP,
         )
     }
 
