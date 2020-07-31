@@ -13,14 +13,21 @@ use serde_json::Value;
 use std::{
     collections::HashSet,
     fmt,
+    process::Stdio,
     str::FromStr,
     time::{Duration, Instant},
 };
 use tokio::{process::Command, time};
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValidatorGroup {
+    pub index: u32,
+    pub twin_index: Option<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct InstanceConfig {
-    pub validator_group: u32,
+    pub validator_group: ValidatorGroup,
     pub application_config: ApplicationConfig,
 }
 
@@ -49,6 +56,8 @@ pub struct ValidatorConfig {
     pub enable_lsr: bool,
     pub image_tag: String,
     pub config_overrides: Vec<String>,
+    pub seed_peer_ip: String,
+    pub safety_rules_addr: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +67,7 @@ pub struct FullnodeConfig {
     pub num_validators: u32,
     pub image_tag: String,
     pub config_overrides: Vec<String>,
+    pub seed_peer_ip: String,
 }
 
 #[derive(Clone)]
@@ -83,6 +93,22 @@ struct K8sInstanceInfo {
     kube: ClusterSwarmKube,
 }
 
+impl ValidatorGroup {
+    pub fn new_for_index(index: u32) -> ValidatorGroup {
+        Self {
+            index,
+            twin_index: None,
+        }
+    }
+
+    pub fn index_only(&self) -> u32 {
+        match self.twin_index {
+            None => self.index,
+            _ => panic!("Only validator has twin index"),
+        }
+    }
+}
+
 impl InstanceConfig {
     pub fn replace_tag(&mut self, new_tag: String) -> Result<()> {
         match &mut self.application_config {
@@ -106,14 +132,24 @@ impl InstanceConfig {
 
     pub fn pod_name(&self) -> String {
         match &self.application_config {
-            ApplicationConfig::Validator(_) => format!("val-{}", self.validator_group),
-            ApplicationConfig::Fullnode(fullnode_config) => format!(
-                "fn-{}-{}",
-                self.validator_group, fullnode_config.fullnode_index
-            ),
-            ApplicationConfig::LSR(_) => format!("lsr-{}", self.validator_group),
-            ApplicationConfig::Vault(_) => format!("vault-{}", self.validator_group),
+            ApplicationConfig::Validator(_) => match self.validator_group.twin_index {
+                None => validator_pod_name(self.validator_group.index),
+                twin_index => format!(
+                    "val-{}-twin-{}",
+                    self.validator_group.index,
+                    twin_index.unwrap()
+                ),
+            },
+            ApplicationConfig::Fullnode(fullnode_config) => {
+                fullnode_pod_name(self.validator_group.index, fullnode_config.fullnode_index)
+            }
+            ApplicationConfig::LSR(_) => lsr_pod_name(self.validator_group.index),
+            ApplicationConfig::Vault(_) => vault_pod_name(self.validator_group.index),
         }
+    }
+
+    pub fn make_twin(&mut self, twin_index: u32) {
+        self.validator_group.twin_index = Some(twin_index);
     }
 }
 
@@ -205,9 +241,8 @@ impl Instance {
         &self.peer_name
     }
 
-    pub fn validator_group(&self) -> u32 {
-        let backend = self.k8s_backend();
-        backend.instance_config.validator_group
+    pub fn validator_group(&self) -> ValidatorGroup {
+        self.k8s_backend().instance_config.validator_group.clone()
     }
 
     pub fn ip(&self) -> &String {
@@ -219,7 +254,7 @@ impl Instance {
     }
 
     pub fn json_rpc_url(&self) -> Url {
-        Url::from_str(&format!("http://{}:{}", self.ip(), self.ac_port())).expect("Invalid URL.")
+        Url::from_str(&format!("http://{}:{}/v1", self.ip(), self.ac_port())).expect("Invalid URL.")
     }
 
     fn k8s_backend(&self) -> &K8sInstanceInfo {
@@ -243,13 +278,20 @@ impl Instance {
     }
 
     /// Node must be stopped first
-    pub async fn start(&self, delete_data: bool) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         let backend = self.k8s_backend();
         backend
             .kube
-            .upsert_node(backend.instance_config.clone(), delete_data)
+            .upsert_node(backend.instance_config.clone())
             .await
             .map(|_| ())
+    }
+
+    /// If deleting /opt/libra/data/* is required, call Instance::clean_date before calling
+    /// Instance::start.
+    pub async fn clean_data(&self) -> Result<()> {
+        self.util_cmd("rm -rf /opt/libra/data/*; ", "clean-data")
+            .await
     }
 
     pub fn instance_config(&self) -> &InstanceConfig {
@@ -272,9 +314,9 @@ impl Instance {
     }
 
     /// Unlike util_cmd, exec runs command inside the container
-    pub async fn exec(&self, command: &str) -> Result<()> {
-        let child = Command::new("kubectl")
-            .arg("exec")
+    pub async fn exec(&self, command: &str, mute: bool) -> Result<()> {
+        let mut cmd = Command::new("kubectl");
+        cmd.arg("exec")
             .arg(&self.peer_name)
             .arg("--container")
             .arg("main")
@@ -282,16 +324,18 @@ impl Instance {
             .arg("sh")
             .arg("-c")
             .arg(command)
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| {
-                format_err!(
-                    "Failed to spawn child process {} on {}: {}",
-                    command,
-                    self.peer_name(),
-                    e
-                )
-            })?;
+            .kill_on_drop(true);
+        if mute {
+            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+        let child = cmd.spawn().map_err(|e| {
+            format_err!(
+                "Failed to spawn child process {} on {}: {}",
+                command,
+                self.peer_name(),
+                e
+            )
+        })?;
         let status = child
             .await
             .map_err(|e| format_err!("Error running {} on {}: {}", command, self.peer_name(), e))?;
@@ -335,4 +379,20 @@ pub fn instancelist_to_set(instances: &[Instance]) -> HashSet<String> {
         r.insert(instance.peer_name().clone());
     }
     r
+}
+
+pub fn validator_pod_name(index: u32) -> String {
+    format!("val-{}", index)
+}
+
+pub fn vault_pod_name(index: u32) -> String {
+    format!("vault-{}", index)
+}
+
+pub fn lsr_pod_name(index: u32) -> String {
+    format!("lsr-{}", index)
+}
+
+pub fn fullnode_pod_name(validator_index: u32, fullnode_index: u32) -> String {
+    format!("fn-{}-{}", validator_index, fullnode_index)
 }

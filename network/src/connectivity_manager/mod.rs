@@ -28,7 +28,7 @@
 //! using a relay protocol.
 
 use crate::{
-    logging,
+    logging::*,
     peer_manager::{self, conn_notifs_channel, ConnectionRequestSender, PeerManagerError},
 };
 use futures::{
@@ -38,7 +38,7 @@ use futures::{
 };
 use libra_config::network_id::NetworkContext;
 use libra_crypto::x25519;
-use libra_logger::{prelude::*, StructuredLogEntry};
+use libra_logger::prelude::*;
 use libra_network_address::NetworkAddress;
 use libra_types::PeerId;
 use num_variants::NumVariants;
@@ -46,7 +46,7 @@ use rand::{
     prelude::{SeedableRng, SmallRng},
     seq::SliceRandom,
 };
-use serde::Serialize;
+use serde::{export::Formatter, Serialize};
 use std::{
     cmp::min,
     collections::{HashMap, HashSet},
@@ -101,11 +101,31 @@ pub struct ConnectivityManager<TTicker, TBackoff> {
 /// Different sources for peer addresses, ordered by priority (Onchain=highest,
 /// Config=lowest).
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, NumVariants, Serialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, NumVariants, Serialize)]
 pub enum DiscoverySource {
     OnChain,
     Gossip,
     Config,
+}
+
+impl fmt::Debug for DiscoverySource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for DiscoverySource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DiscoverySource::OnChain => "OnChain",
+                DiscoverySource::Gossip => "Gossip",
+                DiscoverySource::Config => "Config",
+            }
+        )
+    }
 }
 
 /// Requests received by the [`ConnectivityManager`] manager actor from upstream modules.
@@ -116,6 +136,9 @@ pub enum ConnectivityRequest {
     UpdateAddresses(DiscoverySource, HashMap<PeerId, Vec<NetworkAddress>>),
     /// Update set of nodes eligible to join the network.
     UpdateEligibleNodes(DiscoverySource, HashMap<PeerId, HashSet<x25519::PublicKey>>),
+    /// Gets current size of connected peers. This is useful in tests.
+    #[serde(skip)]
+    GetConnectedSize(oneshot::Sender<usize>),
     /// Gets current size of dial queue. This is useful in tests.
     #[serde(skip)]
     GetDialQueueSize(oneshot::Sender<usize>),
@@ -225,53 +248,48 @@ where
 
         // When we first startup, let's attempt to connect with our seed peers.
         self.check_connectivity(&mut pending_dials).await;
-        send_struct_log!(
-            StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                .data(logging::TYPE, logging::START)
-                .field(&logging::NETWORK_CONTEXT, &self.network_context)
-        );
+        send_struct_log!(network_log(
+            network_events::CONNECTIVITY_MANAGER_LOOP,
+            &self.network_context
+        )
+        .data(network_events::TYPE, network_events::START));
         loop {
             self.event_id = self.event_id.wrapping_add(1);
             ::futures::select! {
                 _ = self.ticker.select_next_some() => {
-                    send_struct_log!(StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                        .data(logging::TYPE, "tick")
-                        .field(&logging::NETWORK_CONTEXT, &self.network_context)
-                        .field(&logging::EVENT_ID, &self.event_id)
+                    send_struct_log!(network_log(network_events::CONNECTIVITY_MANAGER_LOOP, &self.network_context)
+                        .data(network_events::TYPE, "tick")
+                        .field(network_events::EVENT_ID, &self.event_id)
                     );
                     self.check_connectivity(&mut pending_dials).await;
                 },
                 req = self.requests_rx.select_next_some() => {
-                    send_struct_log!(StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                        .data(logging::TYPE, "connectivity_request")
-                        .field(&logging::NETWORK_CONTEXT, &self.network_context)
-                        .field(&logging::CONNECTIVITY_REQUEST, &req)
-                        .field(&logging::EVENT_ID, &self.event_id)
+                    send_struct_log!(network_log(network_events::CONNECTIVITY_MANAGER_LOOP, &self.network_context)
+                        .data(network_events::TYPE, "connectivity_request")
+                        .field(network_events::CONNECTIVITY_REQUEST, &req)
+                        .field(network_events::EVENT_ID, &self.event_id)
                     );
                     self.handle_request(req);
                 },
                 notif = self.connection_notifs_rx.select_next_some() => {
-                    send_struct_log!(StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                        .data(logging::TYPE, "connection_notification")
-                        .field(&logging::NETWORK_CONTEXT, &self.network_context)
-                        .field(&logging::EVENT_ID, &self.event_id)
-                        .field(&logging::CONNECTION_NOTIFICATION, &notif)
+                    send_struct_log!(network_log(network_events::CONNECTIVITY_MANAGER_LOOP, &self.network_context)
+                        .data(network_events::TYPE, "connection_notification")
+                        .field(network_events::EVENT_ID, &self.event_id)
+                        .field(network_events::CONNECTION_NOTIFICATION, &notif)
                     );
                     self.handle_control_notification(notif);
                 },
                 peer_id = pending_dials.select_next_some() => {
-                    send_struct_log!(StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                        .data(logging::TYPE, "dial_complete")
-                        .field(&logging::NETWORK_CONTEXT, &self.network_context)
-                        .field(&logging::EVENT_ID, &self.event_id)
-                        .field(&logging::REMOTE_PEER, &peer_id)
+                    send_struct_log!(network_log(network_events::CONNECTIVITY_MANAGER_LOOP, &self.network_context)
+                        .data(network_events::TYPE, "dial_complete")
+                        .field(network_events::EVENT_ID, &self.event_id)
+                        .field(network_events::REMOTE_PEER, &peer_id)
                     );
                     self.dial_queue.remove(&peer_id);
                 },
                 complete => {
-                    send_struct_log!(StructuredLogEntry::new_named(logging::CONNECTIVITY_MANAGER_LOOP)
-                        .data(logging::TYPE, logging::TERMINATION)
-                        .field(&logging::NETWORK_CONTEXT, &self.network_context)
+                    send_struct_log!(network_log(network_events::CONNECTIVITY_MANAGER_LOOP, &self.network_context)
+                        .data(network_events::TYPE, network_events::TERMINATION)
                         .critical()
                     );
                     crit!("{} Connectivity manager actor terminated", &self.network_context);
@@ -353,7 +371,7 @@ where
         // including in flight dials.
         let to_connect_size = if let Some(conn_limit) = self.connection_limit {
             min(
-                conn_limit - self.connected.len() - self.dial_queue.len(),
+                conn_limit.saturating_sub(self.connected.len() + self.dial_queue.len()),
                 to_connect.len(),
             )
         } else {
@@ -448,7 +466,7 @@ where
 
     fn reset_dial_state(&mut self, peer_id: &PeerId) {
         if let Some(dial_state) = self.dial_states.get_mut(peer_id) {
-            mem::replace(dial_state, DialState::new(self.backoff_strategy.clone()));
+            *dial_state = DialState::new(self.backoff_strategy.clone());
         }
     }
 
@@ -472,6 +490,9 @@ where
             }
             ConnectivityRequest::GetDialQueueSize(sender) => {
                 sender.send(self.dial_queue.len()).unwrap();
+            }
+            ConnectivityRequest::GetConnectedSize(sender) => {
+                sender.send(self.connected.len()).unwrap();
             }
         }
     }
@@ -523,7 +544,7 @@ where
         if have_any_changed {
             let peer_addrs = &self.peer_addrs;
             info!(
-                "{} current addresses: update src: {:?}, all peer addresses: {}",
+                "{} current addresses: update src: {}, all peer addresses: {}",
                 self.network_context, src, peer_addrs,
             );
         }
@@ -554,7 +575,7 @@ where
             if pubkeys.update(src, new_pubkeys) {
                 have_any_changed = true;
                 info!(
-                    "{} pubkey sets updated for peer: {}, update src: {:?}, pubkeys: {}",
+                    "{} pubkey sets updated for peer: {}, update src: {}, pubkeys: {}",
                     self.network_context,
                     peer_id.short_str(),
                     src,
@@ -575,7 +596,7 @@ where
 
             let peer_pubkeys = &self.peer_pubkeys;
             info!(
-                "{} current pubkeys: update src: {:?}, all peer pubkeys: {}, new eligible set: {:?}",
+                "{} current pubkeys: update src: {}, all peer pubkeys: {}, new eligible set: {:?}",
                 self.network_context, src, peer_pubkeys, new_eligible,
             );
 
@@ -593,26 +614,32 @@ where
 
     fn handle_control_notification(&mut self, notif: peer_manager::ConnectionNotification) {
         match notif {
-            peer_manager::ConnectionNotification::NewPeer(peer_id, addr, _context) => {
+            peer_manager::ConnectionNotification::NewPeer(peer_id, addr, _origin, _context) => {
+                // TODO(gnazario): Keep track of inbound and outbound separately?  Somehow handle limits between both
                 self.connected.insert(peer_id, addr);
+
                 // Cancel possible queued dial to this peer.
                 self.dial_states.remove(&peer_id);
                 self.dial_queue.remove(&peer_id);
             }
-            peer_manager::ConnectionNotification::LostPeer(peer_id, addr, _reason) => {
-                match self.connected.get(&peer_id) {
-                    Some(curr_addr) if *curr_addr == addr => {
-                        // Remove node from connected peers list.
-                        self.connected.remove(&peer_id);
-                    }
-                    _ => {
-                        debug!(
-                            "{} Ignoring stale lost peer event for peer: {}, addr: {}",
-                            self.network_context,
-                            peer_id.short_str(),
-                            addr
-                        );
-                    }
+            peer_manager::ConnectionNotification::LostPeer(peer_id, addr, _origin, _reason) => {
+                if let Some(stored_addr) = self.connected.get(&peer_id) {
+                    // Remove node from connected peers list.
+                    info!(
+                        "{} Removing peer '{}' addr: {}, vs event addr: {}",
+                        self.network_context,
+                        peer_id.short_str(),
+                        stored_addr,
+                        addr
+                    );
+                    self.connected.remove(&peer_id);
+                } else {
+                    debug!(
+                        "{} Ignoring stale lost peer event for peer: {}, addr: {}",
+                        self.network_context,
+                        peer_id.short_str(),
+                        addr
+                    );
                 }
             }
         }

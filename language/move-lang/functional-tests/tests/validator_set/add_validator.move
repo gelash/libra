@@ -16,14 +16,14 @@ script {
 // check: EXECUTED
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
 use 0x1::LibraAccount;
 fun main(creator: &signer) {
 //    LibraAccount::create_validator_account(
 //        creator, &r, 0xAA, x"00000000000000000000000000000000"
     LibraAccount::create_validator_account(
-        creator, 0xAA, x"00000000000000000000000000000000"
+        creator, 0xAA, x"00000000000000000000000000000000", b"owner_name"
     );
 
 }

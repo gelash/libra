@@ -84,10 +84,18 @@ fi
 export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Coverflow-checks=off"
 export RUSTC_BOOTSTRAP=1
 export CARGO_INCREMENTAL=0
+export RUST_MIN_STACK=8388608 # 8 * 1024 * 1024
 
 # Clean the project
 echo "Cleaning project..."
 (cd "$TEST_DIR"; cargo clean)
+
+export RUST_NIGHTLY=$(cat cargo-toolchain)
+export CARGO=$(rustup which --toolchain $RUST_NIGHTLY cargo)
+export CARGOFLAGS=$(cat cargo-flags)
+
+echo check ulimits
+ulimit -a
 
 #track failed crates
 FAILED_CRATES=""
@@ -102,7 +110,7 @@ while read -r line; do
         fi
         # Don't fail out of the loop here. We just want to run the test binary
         # to collect its profile data.  Also note which crates fail under coverage.
-        ( cd "$dirline" && pwd && RUST_BACKTRACE=1 cargo xtest ) || FAILED_CRATES="${FAILED_CRATES}:${subdir}"
+        ( cd "$dirline" && pwd && RUST_BACKTRACE=1 ${CARGO} ${CARGOFLAGS}  xtest ) || FAILED_CRATES="${FAILED_CRATES}:${subdir}"
 done < <(find "$TEST_DIR" -name 'Cargo.toml')
 
 # Make the coverage directory if it doesn't exist
@@ -110,16 +118,31 @@ if [ ! -d "$COVERAGE_DIR" ]; then
         mkdir "$COVERAGE_DIR";
 fi
 
+# Make the coverage directory if it doesn't exist
+if [ ! -d "$COVERAGE_DIR/grcovhtml" ]; then
+        mkdir "$COVERAGE_DIR/grcovhtml";
+fi
+
+# Make the coverage directory if it doesn't exist
+if [ ! -d "$COVERAGE_DIR/lcovhtml" ]; then
+        mkdir "$COVERAGE_DIR/lcovhtml";
+fi
+
 # Generate lcov report
 echo "Generating lcov report at ${COVERAGE_DIR}/lcov.info..."
 grcov target -t lcov  --llvm --branch --ignore "/*" --ignore "devtools/*/*" --ignore "testsuite/*" -o "$COVERAGE_DIR/lcov.info"
 
-# Generate HTML report
-echo "Generating report at ${COVERAGE_DIR}..."
-# Flag "--ignore-errors source" ignores missing source files
-genhtml -o "$COVERAGE_DIR" --show-details --highlight --ignore-errors source --legend "$COVERAGE_DIR/lcov.info"
 
-echo "Done. Please view report at ${COVERAGE_DIR}/index.html"
+# Generate grcov html report
+echo "Generating grcov html report at ${COVERAGE_DIR}/grcovhtml/..."
+grcov target -t html  --llvm --branch --ignore "/*" --ignore "devtools/*/*" --ignore "testsuite/*" -o "$COVERAGE_DIR/grcovhtml"
+
+# Generate lcov HTML report
+echo "Generating lcov report at ${COVERAGE_DIR}/lcovhtml/..."
+# Flag "--ignore-errors source" ignores missing source files
+genhtml -o "$COVERAGE_DIR/lcovhtml/" --show-details --highlight --ignore-errors source --legend "$COVERAGE_DIR/lcov.info"
+
+echo "Done. Please view report at ${COVERAGE_DIR}/lcovhtml/index.html"
 
 if [ -e ${FAILED_CRATE_FILE} ] && [ ${FAILED_CRATES} ]; then
         msg="Found crates that could not run under coverage:\n"$(echo ${FAILED_CRATES} | sed 's/:/\\n/g' )

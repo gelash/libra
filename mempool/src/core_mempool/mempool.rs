@@ -10,15 +10,15 @@ use crate::{
         transaction_store::TransactionStore,
         ttl_cache::TtlCache,
     },
-    OP_COUNTERS,
+    counters, OP_COUNTERS,
 };
-use debug_interface::prelude::*;
 use libra_config::config::NodeConfig;
 use libra_logger::prelude::*;
+use libra_trace::prelude::*;
 use libra_types::{
     account_address::AccountAddress,
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    transaction::SignedTransaction,
+    transaction::{GovernanceRole, SignedTransaction},
 };
 use std::{
     cmp::max,
@@ -65,7 +65,12 @@ impl Mempool {
             sequence_number,
             is_rejected
         );
-        self.log_latency(*sender, sequence_number, "e2e.latency");
+        let metric_label = if is_rejected {
+            counters::COMMIT_REJECTED_LABEL
+        } else {
+            counters::COMMIT_ACCEPTED_LABEL
+        };
+        self.log_latency(*sender, sequence_number, metric_label);
         self.metrics_cache.remove(&(*sender, sequence_number));
         OP_COUNTERS.inc(&format!("remove_transaction.{}", is_rejected));
 
@@ -95,7 +100,9 @@ impl Mempool {
     fn log_latency(&mut self, account: AccountAddress, sequence_number: u64, metric: &str) {
         if let Some(&creation_time) = self.metrics_cache.get(&(account, sequence_number)) {
             if let Ok(time_delta) = SystemTime::now().duration_since(creation_time) {
-                OP_COUNTERS.observe_duration(metric, time_delta);
+                counters::CORE_MEMPOOL_TXN_COMMIT_LATENCY
+                    .with_label_values(&[metric])
+                    .observe(time_delta.as_secs_f64());
             }
         }
     }
@@ -109,7 +116,7 @@ impl Mempool {
         rankin_score: u64,
         db_sequence_number: u64,
         timeline_state: TimelineState,
-        is_governance_txn: bool,
+        governance_role: GovernanceRole,
     ) -> MempoolStatus {
         trace_event!("mempool::add_txn", {"txn", txn.sender(), txn.sequence_number()});
         trace!(
@@ -148,7 +155,7 @@ impl Mempool {
             gas_amount,
             rankin_score,
             timeline_state,
-            is_governance_txn,
+            governance_role,
         );
 
         let status = self.transactions.insert(txn_info, sequence_number);
@@ -223,7 +230,7 @@ impl Mempool {
             self.log_latency(
                 transaction.sender(),
                 transaction.sequence_number(),
-                "txn_pre_consensus_s",
+                counters::GET_BLOCK_STAGE_LABEL,
             );
         }
         block
@@ -234,14 +241,15 @@ impl Mempool {
     /// clears expired entries in metrics cache and sequence number cache
     pub(crate) fn gc(&mut self) {
         let now = SystemTime::now();
-        self.transactions.gc_by_system_ttl();
+        self.transactions.gc_by_system_ttl(&self.metrics_cache);
         self.metrics_cache.gc(now);
         self.sequence_number_cache.gc(now);
     }
 
     /// Garbage collection based on client-specified expiration time
     pub(crate) fn gc_by_expiration_time(&mut self, block_time: Duration) {
-        self.transactions.gc_by_expiration_time(block_time);
+        self.transactions
+            .gc_by_expiration_time(block_time, &self.metrics_cache);
     }
 
     /// Read `count` transactions from timeline since `timeline_id`
@@ -261,5 +269,10 @@ impl Mempool {
         timeline_ids: Vec<u64>,
     ) -> Vec<(u64, SignedTransaction)> {
         self.transactions.filter_read_timeline(timeline_ids)
+    }
+
+    #[cfg(test)]
+    pub fn get_parking_lot_size(&self) -> usize {
+        self.transactions.get_parking_lot_size()
     }
 }

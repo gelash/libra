@@ -31,15 +31,18 @@ use vm::file_format::CodeOffset;
 use crate::{
     boogie_helpers::{
         boogie_byte_blob, boogie_field_name, boogie_function_name, boogie_local_type,
-        boogie_requires_well_formed, boogie_struct_name, boogie_struct_type_value,
-        boogie_type_value, boogie_type_values, boogie_well_formed_check, WellFormedMode,
+        boogie_requires_well_formed, boogie_resource_memory_name,
+        boogie_saved_resource_memory_name, boogie_struct_name, boogie_type_value,
+        boogie_type_value_array, boogie_type_values, boogie_well_formed_check, WellFormedMode,
     },
     cli::Options,
-    spec_translator::SpecTranslator,
+    spec_translator::{ConditionDistribution, FunctionEntryPoint, SpecEnv, SpecTranslator},
 };
 use spec_lang::env::{
     ADDITION_OVERFLOW_UNCHECKED_PRAGMA, ASSUME_NO_ABORT_FROM_HERE_PRAGMA, OPAQUE_PRAGMA,
+    SEED_PRAGMA, TIMEOUT_PRAGMA, VERIFY_DURATION_ESTIMATE_PRAGMA,
 };
+use std::cell::RefCell;
 
 pub struct BoogieTranslator<'env> {
     env: &'env GlobalEnv,
@@ -53,29 +56,7 @@ pub struct ModuleTranslator<'env> {
     options: &'env Options,
     module_env: ModuleEnv<'env>,
     targets: &'env FunctionTargetsHolder,
-}
-
-/// For each function, we generate multiple entry points.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FunctionEntryPoint {
-    /// Inlined variant without pre/post conditions. Used by the other two below.
-    Definition,
-    /// Inlined variant with pre conditions and free post conditions. Used by
-    /// callers.
-    Called,
-    /// Verified variant with full pre/post conditions.
-    Verified,
-}
-
-impl FunctionEntryPoint {
-    fn suffix(self) -> &'static str {
-        use FunctionEntryPoint::*;
-        match self {
-            Definition => "_def",
-            Called => "",
-            Verified => "_verify",
-        }
-    }
+    in_toplevel_verify: RefCell<bool>,
 }
 
 /// A struct encapsulating information which is threaded through translating the bytecodes of
@@ -237,7 +218,33 @@ impl<'env> ModuleTranslator<'env> {
             options: parent.options,
             module_env: module,
             targets: &parent.targets,
+            in_toplevel_verify: Default::default(),
         }
+    }
+
+    fn new_spec_translator_for_module(&self) -> SpecTranslator<'_> {
+        self.new_spec_translator(self.module_env.clone(), false)
+    }
+
+    fn new_spec_translator<'a, E>(&'a self, env: E, supports_native_old: bool) -> SpecTranslator<'a>
+    where
+        E: Into<SpecEnv<'env>>,
+    {
+        SpecTranslator::new(
+            self.writer,
+            env,
+            self.targets,
+            self.options,
+            supports_native_old,
+        )
+    }
+
+    fn set_top_level_verify(&self, value: bool) {
+        *self.in_toplevel_verify.borrow_mut() = value;
+    }
+
+    fn in_top_level_verify(&self) -> bool {
+        *self.in_toplevel_verify.borrow()
     }
 
     /// Translates this module.
@@ -255,8 +262,7 @@ impl<'env> ModuleTranslator<'env> {
         );
         self.writer
             .set_location(&self.module_env.env.internal_loc());
-        let spec_translator =
-            SpecTranslator::new(self.writer, self.module_env.clone(), self.options, false);
+        let spec_translator = self.new_spec_translator_for_module();
         spec_translator.translate_spec_vars();
         spec_translator.translate_spec_funs();
         self.translate_structs();
@@ -288,11 +294,7 @@ impl<'env> ModuleTranslator<'env> {
     fn translate_struct_type(&self, struct_env: &StructEnv<'_>) {
         // Emit TypeName
         let struct_name = boogie_struct_name(&struct_env);
-        // Special treatment of well-known resource LibraAccount_T. The type_name
-        // is forward-declared in the prelude.
-        if struct_name != "$LibraAccount_T" {
-            emitln!(self.writer, "const unique {}: $TypeName;", struct_name);
-        }
+        emitln!(self.writer, "const unique {}: $TypeName;", struct_name);
 
         // Emit FieldNames
         for (i, field_env) in struct_env.get_fields().enumerate() {
@@ -307,68 +309,40 @@ impl<'env> ModuleTranslator<'env> {
         }
 
         // Emit TypeValue constructor function.
-        let type_args = struct_env
+        let type_params = struct_env
             .get_type_parameters()
             .iter()
             .enumerate()
             .map(|(i, _)| format!("$tv{}: $TypeValue", i))
             .join(", ");
+        let type_args = struct_env
+            .get_type_parameters()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| Type::TypeParameter(i as u16))
+            .collect_vec();
+        let type_args_array = boogie_type_value_array(struct_env.module_env.env, &type_args);
+        let type_value = format!("$StructType({}, {})", struct_name, type_args_array);
+        emitln!(
+            self.writer,
+            "function {}_type_value({}): $TypeValue {{\n    {}\n}}",
+            struct_name,
+            type_params,
+            type_value
+        );
 
-        let mut param_types = String::from("$MapConstTypeValue($DefaultTypeValue())");
-        let type_param_count = struct_env.get_type_parameters().len();
-        for i in 0..type_param_count {
-            param_types = format!("{}[{} := $tv{}]", param_types, i, i);
-        }
-        let type_param_array = format!("$TypeValueArray({}, {})", param_types, type_param_count);
-        let mut field_types = String::from("$MapConstTypeValue($DefaultTypeValue())");
-        for field_env in struct_env.get_fields() {
-            field_types = format!(
-                "{}[{} := {}]",
-                field_types,
-                field_env.get_offset(),
-                boogie_type_value(self.module_env.env, &field_env.get_type())
-            );
-        }
-        let field_array = format!(
-            "$TypeValueArray({}, {})",
-            field_types,
-            struct_env.get_field_count()
+        // Emit memory variables.
+        let memory_name =
+            boogie_resource_memory_name(struct_env.module_env.env, struct_env.get_qualified_id());
+        emitln!(self.writer, "var {}: $Memory;", memory_name);
+        let saved_memory_name = boogie_saved_resource_memory_name(
+            struct_env.module_env.env,
+            struct_env.get_qualified_id(),
         );
-        let type_value = format!(
-            "$StructType({}, {}, {})",
-            struct_name, type_param_array, field_array
-        );
-        if struct_name == "$LibraAccount_T" {
-            // Special treatment of well-known resource LibraAccount_T. The type_value
-            // function is forward-declared in the prelude, here we only add an axiom for it.
-            emitln!(
-                self.writer,
-                "axiom {}_type_value() == {};",
-                struct_name,
-                type_value
-            );
-        } else if struct_name == "$LibraAccount_Balance" {
-            // Special treatment of well-known resource LibraAccount_Balance. The type_value
-            // function is forward-declared in the prelude, here we only add an axiom for it.
-            emitln!(
-                self.writer,
-                "axiom (forall $tv0: $TypeValue :: {}_type_value($tv0) == {});",
-                struct_name,
-                type_value
-            );
-        } else {
-            emitln!(
-                self.writer,
-                "function {}_type_value({}): $TypeValue {{\n    {}\n}}",
-                struct_name,
-                type_args,
-                type_value
-            );
-        }
+        emitln!(self.writer, "var {}: $Memory;", saved_memory_name);
 
         // Emit invariant functions.
-        let spec_translator =
-            SpecTranslator::new(self.writer, struct_env.clone(), self.options, false);
+        let spec_translator = self.new_spec_translator(struct_env.clone(), false);
         spec_translator.translate_invariant_functions();
     }
 
@@ -452,8 +426,7 @@ impl<'env> ModuleTranslator<'env> {
         );
 
         // Insert invariant code.
-        let spec_translator =
-            SpecTranslator::new(self.writer, struct_env.clone(), self.options, false);
+        let spec_translator = self.new_spec_translator(struct_env.clone(), false);
         spec_translator.emit_pack_invariants("$struct");
 
         self.writer.unindent();
@@ -486,8 +459,7 @@ impl<'env> ModuleTranslator<'env> {
         }
 
         // Insert invariant checking code.
-        let spec_translator =
-            SpecTranslator::new(self.writer, struct_env.clone(), self.options, false);
+        let spec_translator = self.new_spec_translator(struct_env.clone(), false);
         spec_translator.emit_unpack_invariants("$struct");
 
         self.writer.unindent();
@@ -532,45 +504,87 @@ impl<'env> ModuleTranslator<'env> {
 impl<'env> ModuleTranslator<'env> {
     /// Translates the given function.
     fn translate_function(&self, func_target: &FunctionTarget<'_>) {
+        use FunctionEntryPoint::*;
         if func_target.is_native() {
             if self.options.prover.native_stubs {
-                self.generate_function_sig(func_target, FunctionEntryPoint::Called);
+                self.generate_function_sig(func_target, Indirect);
                 emit!(self.writer, ";");
-                self.generate_function_spec(func_target, FunctionEntryPoint::Called);
+                let st = self.new_spec_translator(func_target.clone(), true);
+                self.generate_function_spec(&st, Indirect);
                 emitln!(self.writer);
             }
             return;
         }
 
-        // generate definition with function body
-        self.generate_function_sig(func_target, FunctionEntryPoint::Definition);
+        // generate definition entry
+        self.generate_function_sig(func_target, Definition);
         self.generate_inline_function_body(func_target);
+        emitln!(self.writer);
 
-        // generate called function with pre and free post conditions.
+        // generate direct and indirect application entries.
         let opaque = func_target.is_pragma_true(OPAQUE_PRAGMA, || false);
-        self.generate_function_sig(func_target, FunctionEntryPoint::Called);
-        if opaque {
-            emit!(self.writer, ";");
-        }
-        self.generate_function_args_requires_well_formed(func_target);
-        self.generate_function_spec(func_target, FunctionEntryPoint::Called);
-        if !opaque {
-            self.generate_function_forward_body(func_target, FunctionEntryPoint::Called);
+        let entries = if func_target.is_public() {
+            vec![DirectInterModule, DirectIntraModule, Indirect]
+        } else {
+            vec![DirectIntraModule, Indirect]
+        };
+        for entry_point in entries {
+            self.generate_function_sig(func_target, entry_point);
+            if opaque {
+                emit!(self.writer, ";");
+            }
+            let st = self.new_spec_translator(func_target.clone(), true);
+            let distribution = self.generate_function_spec(&st, entry_point);
+            if !opaque {
+                self.generate_function_stub(&st, entry_point, Definition, distribution);
+            }
+            emitln!(self.writer);
         }
 
-        // If the function should not have a `_verify` entry point, stop here.
+        // If the function is not verified, or the timeout is less than the estimated time,
+        // stop here.
         if !func_target
             .func_env
             .should_verify(self.options.prover.verify_scope)
         {
             return;
         }
+        if let Some(n) = func_target.module_env().env.get_num_property(
+            &func_target.get_spec().properties,
+            VERIFY_DURATION_ESTIMATE_PRAGMA,
+        ) {
+            if n > self.options.backend.vc_timeout {
+                info!(
+                    "`{}::{}` excluded from verification because it is estimated to take \
+                        longer ({}s) to verify than configured timeout ({}s)",
+                    func_target
+                        .module_env()
+                        .get_name()
+                        .display(func_target.symbol_pool()),
+                    func_target.get_name().display(func_target.symbol_pool()),
+                    n,
+                    self.options.backend.vc_timeout
+                );
+                return;
+            }
+        }
 
-        // generate the verified function with full pre/post conditions.
-        self.generate_function_sig(func_target, FunctionEntryPoint::Verified);
-        self.generate_function_args_requires_well_formed(func_target);
-        self.generate_function_spec(func_target, FunctionEntryPoint::Verified);
-        self.generate_function_forward_body(func_target, FunctionEntryPoint::Verified);
+        // generate the verify functions with full pre/post conditions.
+        self.generate_function_sig(func_target, FunctionEntryPoint::VerificationDefinition);
+        self.set_top_level_verify(true); // Ensure that DirectCall is used from this definition
+        self.generate_inline_function_body(func_target);
+        self.set_top_level_verify(false);
+        emitln!(self.writer);
+        self.generate_function_sig(func_target, FunctionEntryPoint::Verification);
+        let st = self.new_spec_translator(func_target.clone(), true);
+        let distribution = self.generate_function_spec(&st, FunctionEntryPoint::Verification);
+        self.generate_function_stub(
+            &st,
+            FunctionEntryPoint::Verification,
+            FunctionEntryPoint::VerificationDefinition,
+            distribution,
+        );
+        emitln!(self.writer);
     }
 
     /// Return a string for a boogie procedure header. Use inline attribute and name
@@ -581,15 +595,30 @@ impl<'env> ModuleTranslator<'env> {
         entry_point: FunctionEntryPoint,
     ) {
         let (args, rets) = self.generate_function_args_and_returns(func_target);
-        let inline = match entry_point {
-            FunctionEntryPoint::Definition | FunctionEntryPoint::Called => "{:inline 1}",
-            _ => "",
+        let attribs = match entry_point {
+            FunctionEntryPoint::Definition
+            | FunctionEntryPoint::VerificationDefinition
+            | FunctionEntryPoint::DirectIntraModule
+            | FunctionEntryPoint::Indirect
+            | FunctionEntryPoint::DirectInterModule => "{:inline 1} ".to_string(),
+            FunctionEntryPoint::Verification => {
+                let timeout = self.options.adjust_timeout(
+                    func_target
+                        .func_env
+                        .get_num_pragma(TIMEOUT_PRAGMA, || self.options.backend.vc_timeout),
+                );
+                let seed = func_target
+                    .func_env
+                    .get_num_pragma(SEED_PRAGMA, || self.options.backend.random_seed);
+                format!("{{:timeLimit {}}} {{:random_seed {}}} ", timeout, seed)
+            }
         };
         let suffix = entry_point.suffix();
-        emit!(
+        self.writer.set_location(&func_target.get_loc());
+        emitln!(
             self.writer,
-            "procedure {} {}{}({}) returns ({})",
-            inline,
+            "procedure {}{}{}({}) returns ({})",
+            attribs,
             boogie_function_name(func_target.func_env),
             suffix,
             args,
@@ -628,8 +657,7 @@ impl<'env> ModuleTranslator<'env> {
     }
 
     /// Generate preconditions to make sure procedure parameters are well formed
-    fn generate_function_args_requires_well_formed(&self, func_target: &FunctionTarget<'_>) {
-        emitln!(self.writer);
+    fn generate_function_args_well_formed(&self, func_target: &FunctionTarget<'_>) {
         let num_args = func_target.get_parameter_count();
         let mode = if func_target.is_public() {
             // For public functions, we always include invariants in type assumptions for parameters,
@@ -649,18 +677,19 @@ impl<'env> ModuleTranslator<'env> {
                 mode,
                 &self.options.backend.type_requires,
             );
-            emit!(self.writer, &type_check);
+            if !type_check.is_empty() {
+                emitln!(self.writer, &type_check);
+            }
         }
     }
 
     /// Emit code for the function specification.
-    fn generate_function_spec(
-        &self,
-        func_target: &FunctionTarget<'_>,
+    fn generate_function_spec<'a>(
+        &'a self,
+        st: &'a SpecTranslator<'a>,
         entry_point: FunctionEntryPoint,
-    ) {
-        SpecTranslator::new(self.writer, func_target.clone(), self.options, true)
-            .translate_conditions(entry_point == FunctionEntryPoint::Called);
+    ) -> ConditionDistribution<'a> {
+        st.translate_conditions(entry_point)
     }
 
     /// Emit code for spec inside function implementation.
@@ -669,59 +698,31 @@ impl<'env> ModuleTranslator<'env> {
         func_target: &FunctionTarget<'_>,
         block_id: SpecBlockId,
     ) {
-        SpecTranslator::new(self.writer, func_target.clone(), self.options, true)
+        self.new_spec_translator(func_target.clone(), true)
             .translate_conditions_inside_impl(block_id);
     }
 
-    /// Generate function body for verified or called entry point. This one just calls into the
-    /// defined entrypoint.
-    fn generate_function_forward_body(
-        &self,
-        func_target: &FunctionTarget<'_>,
+    /// Generate function stub depending on entry point type. This forwards to the
+    /// inlined function definition.
+    fn generate_function_stub<'a>(
+        &'a self,
+        st: &SpecTranslator<'a>,
         entry_point: FunctionEntryPoint,
+        def_entry_point: FunctionEntryPoint,
+        distribution: ConditionDistribution<'a>,
     ) {
+        let func_target = st.function_target();
         // Set the location to internal so it won't be counted for execution traces
         self.writer
             .set_location(&self.module_env.env.internal_loc());
         emitln!(self.writer, "{");
         self.writer.indent();
 
-        if entry_point == FunctionEntryPoint::Verified {
-            // Generate assumes for top-level verification entry
-            // (a) init prelude specific stuff.
-            emitln!(self.writer, "call $InitVerification();");
+        // Translate argument type requirements.
+        self.generate_function_args_well_formed(func_target);
 
-            // (b) assume implicit preconditions.
-            let spec_translator =
-                SpecTranslator::new(self.writer, func_target.clone(), self.options, false);
-            spec_translator.assume_preconditions();
-
-            // (c) assume reference parameters to be based on the Param(i) Location, ensuring
-            // they are disjoint from all other references. This prevents aliasing and is justified as
-            // follows:
-            // - for mutual references, by their exclusive access in Move.
-            // - for immutable references, by that mutation is not possible, and they are equivalent
-            //   to some given but arbitrary value.
-            for i in 0..func_target.get_parameter_count() {
-                let ty = func_target.get_local_type(i);
-                if ty.is_reference() {
-                    let name = func_target
-                        .symbol_pool()
-                        .string(func_target.get_local_name(i));
-                    emitln!(
-                        self.writer,
-                        "assume l#$Reference({}) == $Param({});",
-                        name,
-                        i
-                    );
-                    emitln!(
-                        self.writer,
-                        "assume size#Path(p#$Reference({})) == 0;",
-                        name
-                    );
-                }
-            }
-        }
+        // Translate assumptions specific to this entry point.
+        st.translate_entry_point_assumptions(entry_point, distribution);
 
         // Generate call to inlined function.
         let args = func_target
@@ -745,7 +746,7 @@ impl<'env> ModuleTranslator<'env> {
                 self.writer,
                 "call {}{}({});",
                 boogie_function_name(func_target.func_env),
-                FunctionEntryPoint::Definition.suffix(),
+                def_entry_point.suffix(),
                 args
             )
         } else {
@@ -754,7 +755,7 @@ impl<'env> ModuleTranslator<'env> {
                 "call {} := {}{}({});",
                 rets,
                 boogie_function_name(func_target.func_env),
-                FunctionEntryPoint::Definition.suffix(),
+                def_entry_point.suffix(),
                 args
             )
         }
@@ -792,11 +793,9 @@ impl<'env> ModuleTranslator<'env> {
             );
         }
         emitln!(self.writer, "var $tmp: $Value;");
-        emitln!(self.writer, "var $saved_m: $Memory;");
 
         emitln!(self.writer, "\n// initialize function execution");
         emitln!(self.writer, "assume !$abort_flag;");
-        emitln!(self.writer, "$saved_m := $m;");
 
         emitln!(self.writer, "\n// track values of parameters at entry time");
         for i in 0..func_target.get_parameter_count() {
@@ -823,11 +822,10 @@ impl<'env> ModuleTranslator<'env> {
         emitln!(self.writer, "Abort:");
         self.writer.indent();
         emitln!(self.writer, "$abort_flag := true;");
-        emitln!(self.writer, "$m := $saved_m;");
         for (i, ty) in func_target.get_return_types().iter().enumerate() {
             let ret_str = format!("$ret{}", i);
             if ty.is_reference() {
-                emitln!(self.writer, "{} := $DefaultReference;", &ret_str);
+                emitln!(self.writer, "{} := $DefaultMutation;", &ret_str);
             } else {
                 emitln!(self.writer, "{} := $DefaultValue();", &ret_str);
             }
@@ -902,7 +900,7 @@ impl<'env> ModuleTranslator<'env> {
 
         let propagate_abort = || {
             format!(
-                "if ($abort_flag) {{\n  assume $DebugTrackAbort({}, {});\n  goto Abort;\n}}",
+                "if ($abort_flag) {{\n  assume $DebugTrackAbort({}, {}, $abort_code);\n  goto Abort;\n}}",
                 func_target
                     .func_env
                     .module_env
@@ -910,6 +908,11 @@ impl<'env> ModuleTranslator<'env> {
                     .file_id_to_idx(loc.file_id()),
                 loc.span().start(),
             )
+        };
+        let propagate_abort_from_call = || {
+            // In case of a call, we do not track the abortion point, as we want to see the
+            // abort on the instruction which caused it.
+            "if ($abort_flag) {\n  goto Abort;\n}".to_string()
         };
 
         // Translate the bytecode instruction.
@@ -923,8 +926,23 @@ impl<'env> ModuleTranslator<'env> {
             WriteBack(_, dest, src) => {
                 use BorrowNode::*;
                 match dest {
-                    GlobalRoot(_) => {
-                        emitln!(self.writer, "call $WritebackToGlobal({});", str_local(*src));
+                    GlobalRoot(struct_decl) => {
+                        let memory = struct_decl.module_id.qualified(struct_decl.struct_id);
+                        let spec_translator = self.new_spec_translator_for_module();
+                        spec_translator.save_memory_for_update_invariants(memory);
+                        let memory_name =
+                            boogie_resource_memory_name(func_target.global_env(), memory);
+                        emitln!(
+                            self.writer,
+                            "call {} := $WritebackToGlobal({}, {});",
+                            memory_name,
+                            memory_name,
+                            str_local(*src),
+                        );
+                        spec_translator.emit_global_invariants_for_memory(
+                            false, // assert
+                            memory,
+                        );
                     }
                     LocalRoot(idx) => {
                         emitln!(
@@ -963,7 +981,7 @@ impl<'env> ModuleTranslator<'env> {
             SpecBlock(_, block_id) => {
                 self.generate_function_spec_inside_impl(func_target, *block_id);
             }
-            Label(_, label) => {
+            Bytecode::Label(_, label) => {
                 self.writer.unindent();
                 emitln!(self.writer, "L{}:", label.as_usize());
                 if ctx.loop_targets.contains_key(label) {
@@ -975,7 +993,7 @@ impl<'env> ModuleTranslator<'env> {
                                 let ref_proxy_var_name = str_local(*ref_proxy_idx);
                                 let proxy_idx = func_target.get_proxy_index(idx).unwrap();
                                 emitln!(self.writer,
-                            "assume l#$Reference({}) == $Local({}) && p#$Reference({}) == $EmptyPath;",
+                            "assume l#$Mutation({}) == $Local({}) && p#$Mutation({}) == $EmptyPath;",
                             ref_proxy_var_name,
                             proxy_idx,
                             ref_proxy_var_name);
@@ -1040,8 +1058,7 @@ impl<'env> ModuleTranslator<'env> {
                     Constant::U64(num) => format!("$Integer({})", num),
                     Constant::U128(num) => format!("$Integer({})", num),
                     Constant::Address(val) => format!("$Address({})", val),
-                    Constant::TxnSenderAddress => "$TxnSender($txn)".to_string(),
-                    Constant::ByteArray(val) => boogie_byte_blob(val),
+                    Constant::ByteArray(val) => boogie_byte_blob(self.options, val),
                 };
                 emitln!(self.writer, "$tmp := {};", value);
                 emitln!(self.writer, &update_and_track_local(*idx, "$tmp"));
@@ -1059,30 +1076,34 @@ impl<'env> ModuleTranslator<'env> {
                             src,
                             str_local(src)
                         );
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                str_local(dest).as_str(),
-                                &func_target.get_local_type(dest),
-                                // At the begining of a borrow, invariant holds.
-                                WellFormedMode::WithInvariant,
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    str_local(dest).as_str(),
+                                    &func_target.get_local_type(dest),
+                                    // At the begining of a borrow, invariant holds.
+                                    WellFormedMode::WithInvariant,
+                                )
+                            );
+                        }
                     }
                     ReadRef => {
                         let src = srcs[0];
                         let dest = dests[0];
                         emitln!(self.writer, "call $tmp := $ReadRef({});", str_local(src));
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                "$tmp",
-                                &func_target.get_local_type(dest),
-                                WellFormedMode::Default
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    "$tmp",
+                                    &func_target.get_local_type(dest),
+                                    WellFormedMode::Default
+                                )
+                            );
+                        }
                         emitln!(self.writer, &update_and_track_local(dest, "$tmp"));
                     }
                     WriteRef => {
@@ -1100,23 +1121,19 @@ impl<'env> ModuleTranslator<'env> {
                     FreezeRef => unreachable!(), // eliminated by eliminate_imm_refs
                     Function(mid, fid, type_actuals) => {
                         let callee_env = self.module_env.env.get_module(*mid).into_function(*fid);
-                        // If this is a call to a function from another module, assume the module invariants
-                        // if any. This is correct because module invariants are guaranteed to hold whenever
-                        // code outside of the module is executed.
-                        if callee_env.module_env.get_id()
-                            != func_target.func_env.module_env.get_id()
-                        {
-                            let callee_target = self.targets.get_target(&callee_env).clone();
-                            let spec_translator = SpecTranslator::new(
-                                self.writer,
-                                callee_target,
-                                self.options,
-                                false,
-                            )
-                            .set_type_args(type_actuals.clone());
-                            spec_translator.assume_module_preconditions();
-                        }
-
+                        let callee_target = self.targets.get_target(&callee_env).clone();
+                        let entry_point =
+                            if self.in_top_level_verify() && !callee_target.is_native() {
+                                let inter_module = callee_target.module_env().get_id()
+                                    != func_target.module_env().get_id();
+                                if inter_module {
+                                    FunctionEntryPoint::DirectInterModule
+                                } else {
+                                    FunctionEntryPoint::DirectIntraModule
+                                }
+                            } else {
+                                FunctionEntryPoint::Indirect
+                            };
                         let mut dest_str = String::new();
                         let mut args_str = String::new();
                         let mut dest_type_assumptions = vec![];
@@ -1138,13 +1155,15 @@ impl<'env> ModuleTranslator<'env> {
                                 .iter()
                                 .map(|dest_idx| {
                                     let dest = str_local(*dest_idx).to_string();
-                                    let dest_type = &func_target.get_local_type(*dest_idx);
-                                    dest_type_assumptions.push(boogie_well_formed_check(
-                                        self.module_env.env,
-                                        &dest,
-                                        dest_type,
-                                        WellFormedMode::Default,
-                                    ));
+                                    if self.options.prover.assume_wellformed_on_access {
+                                        let dest_type = &func_target.get_local_type(*dest_idx);
+                                        dest_type_assumptions.push(boogie_well_formed_check(
+                                            self.module_env.env,
+                                            &dest,
+                                            dest_type,
+                                            WellFormedMode::Default,
+                                        ));
+                                    }
                                     dest
                                 })
                                 .join(", "),
@@ -1152,16 +1171,18 @@ impl<'env> ModuleTranslator<'env> {
                         if dest_str == "" {
                             emitln!(
                                 self.writer,
-                                "call {}({});",
+                                "call {}{}({});",
                                 boogie_function_name(&callee_env),
+                                entry_point.suffix(),
                                 args_str
                             );
                         } else {
                             emitln!(
                                 self.writer,
-                                "call {} := {}({});",
+                                "call {} := {}{}({});",
                                 dest_str,
                                 boogie_function_name(&callee_env),
+                                entry_point.suffix(),
                                 args_str
                             );
                         }
@@ -1169,7 +1190,7 @@ impl<'env> ModuleTranslator<'env> {
                             // Assume that calls to this function do not abort
                             emitln!(self.writer, "assume $abort_flag == false;");
                         } else {
-                            emitln!(self.writer, &propagate_abort());
+                            emitln!(self.writer, &propagate_abort_from_call());
                         }
                         for s in &dest_type_assumptions {
                             emitln!(self.writer, s);
@@ -1269,15 +1290,17 @@ impl<'env> ModuleTranslator<'env> {
                             str_local(src),
                             boogie_field_name(field_env)
                         );
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                str_local(dest).as_str(),
-                                &func_target.get_local_type(dest),
-                                WellFormedMode::Default
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    str_local(dest).as_str(),
+                                    &func_target.get_local_type(dest),
+                                    WellFormedMode::Default
+                                )
+                            );
+                        }
                     }
                     GetField(mid, sid, _, field_offset) => {
                         let src = srcs[0];
@@ -1300,126 +1323,146 @@ impl<'env> ModuleTranslator<'env> {
                             str_local(src),
                             boogie_field_name(field_env)
                         );
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                "$tmp",
-                                &func_target.get_local_type(dest),
-                                WellFormedMode::Default
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    "$tmp",
+                                    &func_target.get_local_type(dest),
+                                    WellFormedMode::Default
+                                )
+                            );
+                        }
                         emitln!(self.writer, &update_and_track_local(dest, "$tmp"));
                     }
                     Exists(mid, sid, type_actuals) => {
                         let addr = srcs[0];
                         let dest = dests[0];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
+                        let type_args = boogie_type_value_array(self.module_env.env, type_actuals);
+                        let memory =
+                            boogie_resource_memory_name(self.module_env.env, mid.qualified(*sid));
                         emitln!(
                             self.writer,
-                            "call $tmp := $Exists({}, {});",
+                            "$tmp := $ResourceExists({}, {}, {});",
+                            memory,
+                            type_args,
                             str_local(addr),
-                            resource_type
                         );
                         emitln!(self.writer, &update_and_track_local(dest, "$tmp"));
                     }
                     BorrowGlobal(mid, sid, type_actuals) => {
                         let addr = srcs[0];
                         let dest = dests[0];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
+                        let type_args = boogie_type_value_array(self.module_env.env, type_actuals);
+                        let memory =
+                            boogie_resource_memory_name(self.module_env.env, mid.qualified(*sid));
                         emitln!(
                             self.writer,
-                            "call {} := $BorrowGlobal({}, {});",
+                            "call {} := $BorrowGlobal({}, {}, {});",
                             str_local(dest),
+                            memory,
                             str_local(addr),
-                            resource_type,
+                            type_args,
                         );
                         emitln!(self.writer, &propagate_abort());
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                str_local(dest).as_str(),
-                                &func_target.get_local_type(dest),
-                                // At the beginning of a borrow, invariants always hold
-                                WellFormedMode::WithInvariant,
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    str_local(dest).as_str(),
+                                    &func_target.get_local_type(dest),
+                                    // At the beginning of a borrow, invariants always hold
+                                    WellFormedMode::WithInvariant,
+                                )
+                            );
+                        }
                     }
                     GetGlobal(mid, sid, type_actuals) => {
                         let addr = srcs[0];
                         let dest = dests[0];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
+                        let type_args = boogie_type_value_array(self.module_env.env, type_actuals);
+                        let memory =
+                            boogie_resource_memory_name(self.module_env.env, mid.qualified(*sid));
                         emitln!(
                             self.writer,
-                            "call $tmp := $GetGlobal({}, {});",
+                            "call $tmp := $GetGlobal({}, {}, {});",
+                            memory,
                             str_local(addr),
-                            resource_type,
+                            type_args,
                         );
                         emitln!(self.writer, &propagate_abort());
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                "$tmp",
-                                &func_target.get_local_type(dest),
-                                // At the beginning of a borrow, invariants always hold
-                                WellFormedMode::WithInvariant,
-                            )
-                        );
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    "$tmp",
+                                    &func_target.get_local_type(dest),
+                                    // At the beginning of a borrow, invariants always hold
+                                    WellFormedMode::WithInvariant,
+                                )
+                            );
+                        }
                         emitln!(self.writer, &update_and_track_local(dest, "$tmp"));
                     }
                     MoveTo(mid, sid, type_actuals) => {
                         let value = srcs[0];
                         let signer = srcs[1];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
+                        let type_args = boogie_type_value_array(self.module_env.env, type_actuals);
+                        let memory = mid.qualified(*sid);
+                        let spec_translator = self.new_spec_translator_for_module();
+                        spec_translator.save_memory_for_update_invariants(memory);
+                        let memory_name = boogie_resource_memory_name(self.module_env.env, memory);
                         emitln!(
                             self.writer,
-                            "call $MoveTo({}, {}, {});",
-                            resource_type,
+                            "call {} := $MoveTo({}, {}, {}, {});",
+                            memory_name,
+                            memory_name,
+                            type_args,
                             str_local(value),
                             str_local(signer),
                         );
                         emitln!(self.writer, &propagate_abort());
-                    }
-                    MoveToSender(mid, sid, type_actuals) => {
-                        let value = srcs[0];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
-                        emitln!(
-                            self.writer,
-                            "call $MoveToSender({}, {});",
-                            resource_type,
-                            str_local(value),
+                        spec_translator.emit_global_invariants_for_memory(
+                            false, // assert
+                            memory,
                         );
-                        emitln!(self.writer, &propagate_abort());
                     }
                     MoveFrom(mid, sid, type_actuals) => {
                         let src = srcs[0];
                         let dest = dests[0];
-                        let resource_type =
-                            boogie_struct_type_value(self.module_env.env, *mid, *sid, type_actuals);
+                        let type_args = boogie_type_value_array(self.module_env.env, type_actuals);
+                        let memory = mid.qualified(*sid);
+                        let spec_translator = self.new_spec_translator_for_module();
+                        spec_translator.save_memory_for_update_invariants(memory);
+                        let memory_name = boogie_resource_memory_name(self.module_env.env, memory);
                         emitln!(
                             self.writer,
-                            "call $tmp := $MoveFrom({}, {});",
+                            "call {}, $tmp := $MoveFrom({}, {}, {});",
+                            memory_name,
+                            memory_name,
                             str_local(src),
-                            resource_type,
+                            type_args,
                         );
                         emitln!(self.writer, &propagate_abort());
-                        emit!(
-                            self.writer,
-                            &boogie_well_formed_check(
-                                self.module_env.env,
-                                "$tmp",
-                                &func_target.get_local_type(dest),
-                                WellFormedMode::Default
-                            )
-                        );
                         emitln!(self.writer, &update_and_track_local(dest, "$tmp"));
+                        if self.options.prover.assume_wellformed_on_access {
+                            emit!(
+                                self.writer,
+                                &boogie_well_formed_check(
+                                    self.module_env.env,
+                                    "$tmp",
+                                    &func_target.get_local_type(dest),
+                                    WellFormedMode::Default
+                                )
+                            );
+                        }
+                        spec_translator.emit_global_invariants_for_memory(
+                            false, // assert
+                            memory,
+                        );
                     }
                     CastU8 => {
                         let src = srcs[0];
@@ -1664,18 +1707,24 @@ impl<'env> ModuleTranslator<'env> {
                     Destroy => {}
                 }
             }
-            Abort(..) => {
+            Abort(_, src) => {
                 // Below we introduce a dummy `if` for $DebugTrackAbort to ensure boogie creates
                 // a execution trace entry for this statement.
                 emitln!(
                     self.writer,
-                    "if (true) {{ assume $DebugTrackAbort({}, {}); }}",
+                    "if (true) {{ assume $DebugTrackAbort({}, {}, i#$Integer({})); }}",
                     func_target
                         .func_env
                         .module_env
                         .env
                         .file_id_to_idx(loc.file_id()),
                     loc.span().start(),
+                    str_local(*src)
+                );
+                emitln!(
+                    self.writer,
+                    "$abort_code := i#$Integer({});",
+                    str_local(*src)
                 );
                 emitln!(self.writer, "goto Abort;")
             }

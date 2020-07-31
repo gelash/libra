@@ -9,13 +9,13 @@ use anyhow::{anyhow, ensure};
 use bytes::Bytes;
 use channel::{self, libra_channel, message_queues::QueueStyle};
 use consensus_types::{
-    block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
+    block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse, MAX_BLOCKS_PER_REQUEST},
     common::Author,
-    proposal_msg::ProposalMsg,
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
 use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt, TryStreamExt};
+use inject_error::inject_error;
 use libra_logger::prelude::*;
 use libra_metrics::monitor;
 use libra_types::{
@@ -77,6 +77,7 @@ impl NetworkSender {
 
     /// Tries to retrieve num of blocks backwards starting from id from the given peer: the function
     /// returns a future that is fulfilled with BlockRetrievalResponse.
+    #[inject_error(probability = 0.05)]
     pub async fn request_block(
         &mut self,
         retrieval_request: BlockRetrievalRequest,
@@ -102,28 +103,20 @@ impl NetworkSender {
             .map_err(|e| {
                 send_struct_log!(security_log(security_events::INVALID_RETRIEVED_BLOCK)
                     .data("request_block_reponse", &response)
-                    .data("error", format!("{}", e)));
+                    .data_display("error", &e));
                 e
             })?;
 
         Ok(response)
     }
 
-    /// Tries to send the given proposal (block and proposer metadata) to all the participants.
-    /// A validator on the receiving end is going to be notified about a new proposal in the
-    /// proposal queue.
+    /// Tries to send the given msg to all the participants.
     ///
     /// The future is fulfilled as soon as the message put into the mpsc channel to network
     /// internal(to provide back pressure), it does not indicate the message is delivered or sent
     /// out. It does not give indication about when the message is delivered to the recipients,
     /// as well as there is no indication about the network failures.
-    pub async fn broadcast_proposal(&mut self, proposal: ProposalMsg) {
-        let msg = ConsensusMsg::ProposalMsg(Box::new(proposal));
-        // counters::UNWRAPPED_PROPOSAL_SIZE_BYTES.observe(msg.message.len() as f64);
-        self.broadcast(msg).await
-    }
-
-    async fn broadcast(&mut self, msg: ConsensusMsg) {
+    pub async fn broadcast(&mut self, msg: ConsensusMsg) {
         // Directly send the message to ourself without going through network.
         let self_msg = Event::Message((self.author, msg.clone()));
         if let Err(err) = self.self_sender.send(Ok(self_msg)).await {
@@ -170,12 +163,6 @@ impl NetworkSender {
         }
     }
 
-    /// Broadcasts vote message to all validators
-    pub async fn broadcast_vote(&mut self, vote_msg: VoteMsg) {
-        let msg = ConsensusMsg::VoteMsg(Box::new(vote_msg));
-        self.broadcast(msg).await
-    }
-
     /// Sends the given sync info to the given author.
     /// The future is fulfilled as soon as the message is added to the internal network channel
     /// (does not indicate whether the message is delivered or sent out).
@@ -188,13 +175,6 @@ impl NetworkSender {
                 recipient, e
             );
         }
-    }
-
-    /// Broadcast about epoch changes with proof to the current validator set (including self)
-    /// when we commit the reconfiguration block
-    pub async fn broadcast_epoch_change(&mut self, proof: EpochChangeProof) {
-        let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        self.broadcast(msg).await
     }
 
     pub async fn notify_epoch_change(&mut self, proof: EpochChangeProof) {
@@ -263,6 +243,13 @@ impl NetworkTask {
                 Event::RpcRequest((peer_id, msg, callback)) => match msg {
                     ConsensusMsg::BlockRetrievalRequest(request) => {
                         debug!("Received block retrieval request {}", request);
+                        if request.num_blocks() > MAX_BLOCKS_PER_REQUEST {
+                            warn!(
+                                "Ignore block retrieval with too many blocks: {}",
+                                request.num_blocks()
+                            );
+                            continue;
+                        }
                         let req_with_callback = IncomingBlockRetrievalRequest {
                             req: *request,
                             response_sender: callback,
@@ -276,10 +263,10 @@ impl NetworkTask {
                         continue;
                     }
                 },
-                Event::NewPeer(peer_id) => {
+                Event::NewPeer(peer_id, _origin) => {
                     debug!("Peer {} connected", peer_id);
                 }
-                Event::LostPeer(peer_id) => {
+                Event::LostPeer(peer_id, _origin) => {
                     debug!("Peer {} disconnected", peer_id);
                 }
             }

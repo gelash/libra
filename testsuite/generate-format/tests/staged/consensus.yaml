@@ -83,6 +83,8 @@ BlockType:
       NilBlock: UNIT
     2:
       Genesis: UNIT
+ChainId:
+  NEWTYPESTRUCT: U8
 ChangeSet:
   STRUCT:
     - write_set:
@@ -210,7 +212,9 @@ RawTransaction:
     - max_gas_amount: U64
     - gas_unit_price: U64
     - gas_currency_code: STR
-    - expiration_time: U64
+    - expiration_timestamp_secs: U64
+    - chain_id:
+        TYPENAME: ChainId
 Script:
   STRUCT:
     - code: BYTES
@@ -268,9 +272,9 @@ Transaction:
         NEWTYPE:
           TYPENAME: SignedTransaction
     1:
-      WaypointWriteSet:
+      GenesisTransaction:
         NEWTYPE:
-          TYPENAME: ChangeSet
+          TYPENAME: WriteSetPayload
     2:
       BlockMetadata:
         NEWTYPE:
@@ -317,7 +321,7 @@ TransactionPayload:
     0:
       WriteSet:
         NEWTYPE:
-          TYPENAME: ChangeSet
+          TYPENAME: WriteSetPayload
     1:
       Script:
         NEWTYPE:
@@ -405,3 +409,16 @@ WriteSetMut:
           TUPLE:
             - TYPENAME: AccessPath
             - TYPENAME: WriteOp
+WriteSetPayload:
+  ENUM:
+    0:
+      Direct:
+        NEWTYPE:
+          TYPENAME: ChangeSet
+    1:
+      Script:
+        STRUCT:
+          - execute_as:
+              TYPENAME: AccountAddress
+          - script:
+              TYPENAME: Script

@@ -1,7 +1,7 @@
 //! account: ricky, 0
 
 // --------------------------------------------------------------------
-// BLESSED treasury compliant account initiate first tier
+// BLESSED treasury compliance acccount creates DD with tiers of one coin type
 
 //! new-transaction
 //! sender: blessed
@@ -10,8 +10,11 @@ script {
     use 0x1::LibraAccount;
     use 0x1::Coin1::Coin1;
     fun main(account: &signer) {
+        let pubkey = x"7013b6ed7dde3cfb1251db1b04ae9cd7853470284085693590a75def645a926d";
         let dummy_auth_key_prefix = x"00000000000000000000000000000001";
-        LibraAccount::create_designated_dealer<Coin1>(account, 0xDEADBEEF, dummy_auth_key_prefix);
+        LibraAccount::create_designated_dealer<Coin1>(
+            account, 0xDEADBEEF, dummy_auth_key_prefix, x"", x"", pubkey, false
+        );
         assert(DesignatedDealer::exists_at(0xDEADBEEF), 0);
     }
 }
@@ -26,17 +29,13 @@ script {
 //! new-transaction
 //! sender: blessed
 script {
-    use 0x1::DesignatedDealer;
     use 0x1::LibraAccount;
     use 0x1::Coin1::Coin1;
     fun main(tc_account: &signer) {
         let designated_dealer_address = 0xDEADBEEF;
-        DesignatedDealer::add_tier(tc_account, 0xDEADBEEF, 100); // first Tier, 0th index
         LibraAccount::tiered_mint<Coin1>(
-            tc_account, designated_dealer_address, 99, 0
+            tc_account, designated_dealer_address, 99*1000000, 0
         );
-        DesignatedDealer::add_tier(tc_account, 0xDEADBEEF, 1000); // second Tier
-        DesignatedDealer::add_tier(tc_account, 0xDEADBEEF, 10000); // third Tier
     }
 }
 
@@ -54,13 +53,67 @@ script {
     use 0x1::Coin1::Coin1;
     fun main(tc_account: &signer) {
         LibraAccount::tiered_mint<Coin1>(
-            tc_account, 0xDEADBEEF, 1001, 1
+            tc_account, 0xDEADBEEF, 5000001*1000000, 1
         );
     }
 }
 
 // check: ABORTED
-// check: 5
+// check: 6
+
+// --------------------------------------------------------------------
+// Mint initiated and is below 2nd tier upperbound
+
+//! new-transaction
+//! sender: blessed
+script {
+    use 0x1::LibraAccount;
+    use 0x1::Coin1::Coin1;
+    fun main(tc_account: &signer) {
+        LibraAccount::tiered_mint<Coin1>(
+            tc_account, 0xDEADBEEF, 5000001*1000000, 2
+        );
+    }
+}
+
+// check: EXECUTED
+
+// --------------------------------------------------------------------
+// Mint initiated and is below 3rd tier upperbound
+
+//! new-transaction
+//! sender: blessed
+script {
+    use 0x1::LibraAccount;
+    use 0x1::Coin1::Coin1;
+    fun main(tc_account: &signer) {
+        LibraAccount::tiered_mint<Coin1>(
+            tc_account, 0xDEADBEEF, 50000001*1000000, 3
+        );
+    }
+}
+
+// check: EXECUTED
+
+// --------------------------------------------------------------------
+// Too large
+
+//! new-transaction
+//! sender: blessed
+script {
+    use 0x1::LibraAccount;
+    use 0x1::Coin1::Coin1;
+    fun main(tc_account: &signer) {
+        LibraAccount::tiered_mint<Coin1>(
+            tc_account, 0xDEADBEEF, 500000001*1000000, 3
+        );
+    }
+}
+
+// TODO(status_migration) remove duplicate check
+// check: ABORTED
+// check: ABORTED
+// check: 6
 
 // --------------------------------------------------------------------
 
@@ -68,13 +121,15 @@ script {
 //! sender: blessed
 script {
     use 0x1::DesignatedDealer;
+    use 0x1::Coin1::Coin1;
     fun main(tc_account: &signer) {
         // DesignatedDealer::update_tier(&tc_capability, 0xDEADBEEF, 4, 1000000); // invalid tier index (max index 3)
-        DesignatedDealer::update_tier(tc_account, 0xDEADBEEF, 4, 1000000); // invalid tier index (max index 3)
+        DesignatedDealer::update_tier<Coin1>(tc_account, 0xDEADBEEF, 4, 1000000); // invalid tier index (max index 3)
     }
 }
 
-
+// TODO(status_migration) remove duplicate check
+// check: ABORTED
 // check: ABORTED
 // check: 3
 
@@ -93,23 +148,7 @@ script {
     }
 }
 
+// TODO(status_migration) remove duplicate check
+// check: ABORTED
 // check: ABORTED
 // check: 0
-
-// --------------------------------------------------------------------
-// Tier index is one more than number of tiers, indicating unlimited minting allowed
-
-//! new-transaction
-//! sender: blessed
-script {
-    use 0x1::LibraAccount;
-    use 0x1::Coin1::Coin1;
-    fun main(tc_account: &signer) {
-        LibraAccount::tiered_mint<Coin1>(
-            tc_account, 0xDEADBEEF, 99999999999, 3
-        );
-    }
-}
-// check: ReceivedMintEvent
-// check: MintEvent
-// check: EXECUTED

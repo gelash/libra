@@ -10,6 +10,7 @@
 //! benefit.
 
 mod account_universe;
+mod admin_script;
 mod create_account;
 mod data_store;
 mod execution_strategies;
@@ -24,6 +25,8 @@ mod rotate_key;
 mod scripts;
 mod transaction_builder;
 mod transaction_fees;
+mod transaction_fuzzer;
 mod validator_set_management;
+mod vasps;
 mod verify_txn;
 mod write_set;

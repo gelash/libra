@@ -13,7 +13,7 @@ pub use synchronizer::{StateSyncClient, StateSynchronizer};
 
 mod chunk_request;
 mod chunk_response;
-mod coordinator;
+pub mod coordinator;
 mod counters;
 mod executor_proxy;
 pub mod network;
@@ -64,5 +64,7 @@ impl SynchronizerState {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "fuzzing", test))]
 mod tests;
+#[cfg(any(feature = "fuzzing", test))]
+pub use tests::fuzzing;

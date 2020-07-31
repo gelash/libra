@@ -7,7 +7,6 @@ use crate::{
     account::{Account, AccountData},
     data_store::{FakeDataStore, GENESIS_CHANGE_SET, GENESIS_CHANGE_SET_FRESH},
 };
-use bytecode_verifier::VerifiedModule;
 use compiled_stdlib::{stdlib_modules, transaction_scripts::StdlibScript, StdLibOptions};
 use libra_config::generator;
 use libra_crypto::HashValue;
@@ -16,26 +15,30 @@ use libra_types::{
     access_path::AccessPath,
     account_config::{AccountResource, BalanceResource, CORE_CODE_ADDRESS},
     block_metadata::{new_block_event_key, BlockMetadata, NewBlockEvent},
-    on_chain_config::{OnChainConfig, VMPublishingOption, ValidatorSet},
+    chain_id::ChainId,
+    on_chain_config::{OnChainConfig, ScriptPublishingOption, VMPublishingOption, ValidatorSet},
     transaction::{
         SignedTransaction, Transaction, TransactionOutput, TransactionStatus, VMValidatorResult,
     },
-    vm_status::{StatusCode, VMStatus},
+    vm_status::{KeptVMStatus, VMStatus},
     write_set::WriteSet,
 };
-use libra_vm::{data_cache::RemoteStorage, LibraVM, VMExecutor, VMValidator};
+use libra_vm::{
+    data_cache::RemoteStorage, txn_effects_to_writeset_and_events, LibraVM, LibraVMValidator,
+    VMExecutor, VMValidator,
+};
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::{GasAlgebra, GasUnits},
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
 };
-use move_vm_runtime::{data_cache::TransactionDataCache, move_vm::MoveVM};
+use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{
     gas_schedule::{zero_cost_schedule, CostStrategy},
     values::Value,
 };
-use vm::CompiledModule;
+use vm::{errors::VMError, CompiledModule};
 use vm_genesis::GENESIS_KEYPAIR;
 
 /// Provides an environment to run a VM instance.
@@ -68,11 +71,11 @@ impl FakeExecutor {
         Self::from_genesis(GENESIS_CHANGE_SET_FRESH.clone().write_set())
     }
 
-    pub fn whitelist_genesis() -> Self {
+    pub fn allowlist_genesis() -> Self {
         Self::custom_genesis(
             stdlib_modules(StdLibOptions::Compiled).to_vec(),
             None,
-            VMPublishingOption::Locked(StdlibScript::whitelist()),
+            VMPublishingOption::locked(StdlibScript::allowlist()),
         )
     }
 
@@ -80,8 +83,8 @@ impl FakeExecutor {
     /// publishing options given by `publishing_options`. These can only be either `Open` or
     /// `CustomScript`.
     pub fn from_genesis_with_options(publishing_options: VMPublishingOption) -> Self {
-        if let VMPublishingOption::Locked(_) = publishing_options {
-            panic!("Whitelisted transactions are not supported as a publishing option")
+        if let ScriptPublishingOption::Locked(_) = publishing_options.script_option {
+            panic!("Allowlisted transactions are not supported as a publishing option")
         }
 
         Self::custom_genesis(
@@ -101,7 +104,7 @@ impl FakeExecutor {
 
     /// Creates fresh genesis from the stdlib modules passed in.
     pub fn custom_genesis(
-        genesis_modules: Vec<VerifiedModule>,
+        genesis_modules: Vec<CompiledModule>,
         validator_accounts: Option<usize>,
         publishing_options: VMPublishingOption,
     ) -> Self {
@@ -111,9 +114,11 @@ impl FakeExecutor {
 
             vm_genesis::encode_genesis_change_set(
                 &GENESIS_KEYPAIR.1,
-                &vm_genesis::validator_registrations(&swarm.nodes),
+                &vm_genesis::operator_assignments(&swarm.nodes),
+                &vm_genesis::operator_registrations(&swarm.nodes),
                 &genesis_modules,
                 publishing_options,
+                ChainId::test(),
             )
             .0
         };
@@ -190,6 +195,21 @@ impl FakeExecutor {
         )
     }
 
+    /// Alternate form of 'execute_block' that keeps the vm_status before it goes into the
+    /// `TransactionOutput`
+    pub fn execute_block_and_keep_vm_status(
+        &self,
+        txn_block: Vec<SignedTransaction>,
+    ) -> Result<Vec<(VMStatus, TransactionOutput)>, VMStatus> {
+        LibraVM::execute_block_and_keep_vm_status(
+            txn_block
+                .into_iter()
+                .map(Transaction::UserTransaction)
+                .collect(),
+            &self.data_store,
+        )
+    }
+
     /// Executes the transaction as a singleton block and applies the resulting write set to the
     /// data store. Panics if execution fails
     pub fn execute_and_apply(&mut self, transaction: SignedTransaction) -> TransactionOutput {
@@ -200,7 +220,7 @@ impl FakeExecutor {
             TransactionStatus::Keep(status) => {
                 self.apply_write_set(output.write_set());
                 assert!(
-                    status.major_status == StatusCode::EXECUTED,
+                    status == &KeptVMStatus::Executed,
                     "transaction failed with {:?}",
                     status
                 );
@@ -235,8 +255,7 @@ impl FakeExecutor {
 
     /// Verifies the given transaction by running it through the VM verifier.
     pub fn verify_transaction(&self, txn: SignedTransaction) -> VMValidatorResult {
-        let mut vm = LibraVM::new();
-        vm.load_configs(self.get_state_view());
+        let vm = LibraVMValidator::new(self.get_state_view());
         vm.validate_transaction(txn, &self.data_store)
     }
 
@@ -279,6 +298,10 @@ impl FakeExecutor {
         self.block_time = new_block_time;
     }
 
+    pub fn get_block_time(&mut self) -> u64 {
+        self.block_time
+    }
+
     pub fn exec(
         &mut self,
         module_name: &str,
@@ -292,19 +315,51 @@ impl FakeExecutor {
             let mut cost_strategy = CostStrategy::system(&cost_table, GasUnits::new(100_000_000));
             let vm = MoveVM::new();
             let remote_view = RemoteStorage::new(&self.data_store);
-            let mut cache = TransactionDataCache::new(&remote_view);
-            vm.execute_function(
-                &Self::module(module_name),
-                &Self::name(function_name),
-                type_params,
-                args,
-                *sender,
-                &mut cache,
-                &mut cost_strategy,
-            )
-            .unwrap_or_else(|e| panic!("Error calling {}.{}: {}", module_name, function_name, e));
-            cache.make_write_set().expect("Failed to generate writeset")
+            let mut session = vm.new_session(&remote_view);
+            session
+                .execute_function(
+                    &Self::module(module_name),
+                    &Self::name(function_name),
+                    type_params,
+                    args,
+                    *sender,
+                    &mut cost_strategy,
+                )
+                .unwrap_or_else(|e| {
+                    panic!("Error calling {}.{}: {}", module_name, function_name, e)
+                });
+            let effects = session.finish().expect("Failed to generate txn effects");
+            let (writeset, _events) =
+                txn_effects_to_writeset_and_events(effects).expect("Failed to generate writeset");
+            writeset
         };
         self.data_store.add_write_set(&write_set);
+    }
+
+    pub fn try_exec(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        type_params: Vec<TypeTag>,
+        args: Vec<Value>,
+        sender: &AccountAddress,
+    ) -> Result<WriteSet, VMError> {
+        let cost_table = zero_cost_schedule();
+        let mut cost_strategy = CostStrategy::system(&cost_table, GasUnits::new(100_000_000));
+        let vm = MoveVM::new();
+        let remote_view = RemoteStorage::new(&self.data_store);
+        let mut session = vm.new_session(&remote_view);
+        session.execute_function(
+            &Self::module(module_name),
+            &Self::name(function_name),
+            type_params,
+            args,
+            *sender,
+            &mut cost_strategy,
+        )?;
+        let effects = session.finish().expect("Failed to generate txn effects");
+        let (writeset, _events) =
+            txn_effects_to_writeset_and_events(effects).expect("Failed to generate writeset");
+        Ok(writeset)
     }
 }

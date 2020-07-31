@@ -10,17 +10,26 @@ use 0x1::Libra;
 
 // register dd(1|2) as a preburner
 fun main(account: &signer) {
+    let pubkey = x"7013b6ed7dde3cfb1251db1b04ae9cd7853470284085693590a75def645a926d";
     let prev_mcap1 = Libra::market_cap<Coin1>();
     let prev_mcap2 = Libra::market_cap<Coin2>();
     LibraAccount::create_designated_dealer<Coin1>(
         account,
         {{dd1}},
         {{dd1::auth_key}},
+        x"",
+        x"",
+        copy pubkey,
+        false,
     );
     LibraAccount::create_designated_dealer<Coin2>(
         account,
         {{dd2}},
         {{dd2::auth_key}},
+        x"",
+        x"",
+        pubkey,
+        false,
     );
     LibraAccount::tiered_mint<Coin1>(
         account,
@@ -104,4 +113,4 @@ fun main(account: &signer) {
 }
 }
 // check: ABORTED
-// check: 4
+// check: 3

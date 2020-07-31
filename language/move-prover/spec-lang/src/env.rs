@@ -5,7 +5,7 @@
 //! to interpret metadata about the translation target.
 
 #[allow(unused_imports)]
-use log::info;
+use log::{info, warn};
 
 use std::cell::RefCell;
 
@@ -15,7 +15,7 @@ use codespan_reporting::{
     term::{emit, termcolor::WriteColor, Config},
 };
 use itertools::Itertools;
-use num::{BigUint, Num};
+use num::{BigUint, Num, ToPrimitive};
 
 use bytecode_source_map::source_map::SourceMap;
 use move_core_types::{account_address::AccountAddress, language_storage, value::MoveValue};
@@ -34,7 +34,10 @@ use vm::{
 };
 
 use crate::{
-    ast::{ModuleName, PropertyBag, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value},
+    ast::{
+        GlobalInvariant, ModuleName, PropertyBag, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl,
+        Value,
+    },
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type},
 };
@@ -55,6 +58,16 @@ pub const SCRIPT_BYTECODE_FUN_NAME: &str = "<SELF>";
 
 /// Pragma indicating whether verification should be performed for a function.
 pub const VERIFY_PRAGMA: &str = "verify";
+
+/// Pragma defining a timeout.
+pub const TIMEOUT_PRAGMA: &str = "timeout";
+
+/// Pragma defining a random seed.
+pub const SEED_PRAGMA: &str = "seed";
+
+/// Pragma indicating an estimate how long verification takes. Verification
+/// is skipped if the timeout is smaller than this.
+pub const VERIFY_DURATION_ESTIMATE_PRAGMA: &str = "verify_duration_estimate";
 
 /// Pragma indicating whether implementation of function should be ignored and
 /// instead treated to be like a native function.
@@ -83,6 +96,41 @@ pub const ADDITION_OVERFLOW_UNCHECKED_PRAGMA: &str = "addition_overflow_unchecke
 
 /// Pragma indicating that aborts from this function shall be ignored.
 pub const ASSUME_NO_ABORT_FROM_HERE_PRAGMA: &str = "assume_no_abort_from_here";
+
+/// Internal property attached to conditions if they are injected via an apply or a module
+/// invariant.
+pub const CONDITION_INJECTED_PROP: &str = "$injected";
+
+/// Property which can be attached to conditions to make them exported into the VC context
+/// even if they are injected.
+pub const CONDITION_EXPORT_PROP: &str = "export";
+
+/// Property which can be attached to a module invariant to make it global.
+pub const CONDITION_GLOBAL_PROP: &str = "global";
+
+/// Abstract property which can be used together with an opaque specification. An abstract
+/// property is not verified against the implementation, but will be used for the
+/// function's behavior in the application context. This allows to "override" the specification
+/// with a more abstract version. In general we would need to prover the abstraction is
+/// subsumed by the implementation, but this is currently not done.
+pub const CONDITION_ABSTRACT_PROP: &str = "abstract";
+
+/// Opposite to the abstract property.
+pub const CONDITION_CONCRETE_PROP: &str = "concrete";
+
+/// Property which indicates that an aborts_if should be assumed.
+/// For callers of a function with such an aborts_if, the negation of the condition becomes
+/// an assumption.
+pub const CONDITION_ABORT_ASSUME_PROP: &str = "assume";
+
+/// Property which indicates that an aborts_if should be asserted.
+/// For callers of a function with such an aborts_if, the negation of the condition becomes
+/// an assertion.
+pub const CONDITION_ABORT_ASSERT_PROP: &str = "assert";
+
+/// Pragma which indicates that the functions aborts and ensure conditions shall be exported
+/// to the verification context even if the implementation of the function is inlined.
+pub const EXPORT_ENSURES_PRAGMA: &str = "export_ensures";
 
 // =================================================================================================
 /// # Locations
@@ -125,6 +173,20 @@ impl Loc {
             self.file_id,
             Span::new(self.span.start(), self.span.start() + ByteOffset(1)),
         )
+    }
+
+    /// Creates a location which encloses all the locations in the provided slice,
+    /// which must not be empty. All locations are expected to be in the same file.
+    pub fn enclosing(locs: &[&Loc]) -> Loc {
+        assert!(!locs.is_empty());
+        let loc = locs[0];
+        let mut start = loc.span.start();
+        let mut end = loc.span.end();
+        for l in locs.iter().skip(1) {
+            start = std::cmp::min(start, l.span().start());
+            end = std::cmp::max(end, l.span().end());
+        }
+        Loc::new(loc.file_id(), Span::new(start, end))
     }
 }
 
@@ -184,6 +246,13 @@ pub struct NodeId(RawIndex);
 /// A global id. Instances of this type represent unique identifiers relative to `GlobalEnv`.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct GlobalId(usize);
+
+// Some identifier qualified by a module.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub struct QualifiedId<Id> {
+    pub module_id: ModuleId,
+    pub id: Id,
+}
 
 impl FunId {
     pub fn new(sym: Symbol) -> Self {
@@ -275,6 +344,15 @@ impl GlobalId {
     }
 }
 
+impl ModuleId {
+    pub fn qualified<Id>(self, id: Id) -> QualifiedId<Id> {
+        QualifiedId {
+            module_id: self,
+            id,
+        }
+    }
+}
+
 // =================================================================================================
 /// # Verification Scope
 
@@ -308,7 +386,7 @@ pub struct GlobalEnv {
     /// start position of the associated language item in the source.
     doc_comments: BTreeMap<FileId, BTreeMap<ByteIndex, String>>,
     /// A map of locations to information about verification conditions at the location.
-    condition_infos: RefCell<BTreeMap<Loc, ConditionInfo>>,
+    condition_infos: RefCell<BTreeMap<(Loc, ConditionTag), ConditionInfo>>,
     /// A mapping from file names to associated FileId. Though this information is
     /// already in `source_files`, we can't get it out of there so need to book keep here.
     file_name_map: BTreeMap<String, FileId>,
@@ -336,6 +414,14 @@ pub struct GlobalEnv {
     module_data: Vec<ModuleData>,
     /// A counter for issuing global ids.
     global_id_counter: RefCell<usize>,
+    /// A map of global invariants.
+    global_invariants: BTreeMap<GlobalId, GlobalInvariant>,
+    /// A map from spec vars to global invariants which refer to them.
+    global_invariants_for_spec_var: BTreeMap<QualifiedId<SpecVarId>, BTreeSet<GlobalId>>,
+    /// A map from global memories to global invariants which refer to them.
+    global_invariants_for_memory: BTreeMap<QualifiedId<StructId>, BTreeSet<GlobalId>>,
+    /// A set containing spec functions which are called/used in specs.
+    used_spec_funs: BTreeSet<QualifiedId<SpecFunId>>,
 }
 
 /// Information about a verification condition stored in the environment.
@@ -343,21 +429,25 @@ pub struct GlobalEnv {
 pub struct ConditionInfo {
     /// The message to print when the condition fails.
     pub message: String,
-    /// An alternative message to print if this condition fails in the context of a pre-condition.
-    /// This is used to distinguishes the case where the same condition is being used as pre and
-    /// post condition.
-    pub message_if_requires: Option<String>,
     /// Whether execution traces shall be printed if this condition fails.
     pub omit_trace: bool,
     /// Whether passing this condition is actually a failure.
     pub negative_cond: bool,
 }
 
+/// A tag used to be associated with a condition info. Condition infos are
+/// identified in the environment by a pair of Loc and this type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ConditionTag {
+    Requires,
+    Ensures,
+    NegativeTest,
+}
+
 impl ConditionInfo {
-    pub fn for_message(message: String, message_if_requires: Option<String>) -> Self {
+    pub fn for_message<S: Into<String>>(message: S) -> Self {
         Self {
-            message,
-            message_if_requires,
+            message: message.into(),
             omit_trace: false,
             negative_cond: false,
         }
@@ -400,6 +490,10 @@ impl GlobalEnv {
             symbol_pool: SymbolPool::new(),
             module_data: vec![],
             global_id_counter: RefCell::new(0),
+            global_invariants: Default::default(),
+            global_invariants_for_memory: Default::default(),
+            global_invariants_for_spec_var: Default::default(),
+            used_spec_funs: BTreeSet::new(),
         }
     }
 
@@ -568,6 +662,42 @@ impl GlobalEnv {
         {
             emit(writer, &Config::default(), &self.source_files, diag).expect("emit must not fail");
         }
+    }
+
+    /// Adds a global invariant to this environment.
+    pub fn add_global_invariant(&mut self, inv: GlobalInvariant) {
+        let id = inv.id;
+        for spec_var in &inv.spec_var_usage {
+            self.global_invariants_for_spec_var
+                .entry(*spec_var)
+                .or_insert_with(BTreeSet::new)
+                .insert(id);
+        }
+        for memory in &inv.mem_usage {
+            self.global_invariants_for_memory
+                .entry(*memory)
+                .or_insert_with(BTreeSet::new)
+                .insert(id);
+        }
+        self.global_invariants.insert(id, inv);
+    }
+
+    /// Get global invariant by id.
+    pub fn get_global_invariant(&self, id: GlobalId) -> Option<&GlobalInvariant> {
+        self.global_invariants.get(&id)
+    }
+
+    /// Return the global invariants which refer to the given memory.
+    pub fn get_global_invariants_for_memory(&self, memory: QualifiedId<StructId>) -> Vec<GlobalId> {
+        self.global_invariants_for_memory
+            .get(&memory)
+            .map(|ids| ids.iter().cloned().collect_vec())
+            .unwrap_or_else(Default::default)
+    }
+
+    /// Adds a spec function to used_spec_funs set.
+    pub fn add_used_spec_fun(&mut self, module_id: ModuleId, spec_fun_id: SpecFunId) {
+        self.used_spec_funs.insert(module_id.qualified(spec_fun_id));
     }
 
     /// Adds a new module to the environment. StructData and FunctionData need to be provided
@@ -838,24 +968,45 @@ impl GlobalEnv {
     }
 
     /// Get verification condition info associated with location.
-    pub fn get_condition_info(&self, loc: &Loc) -> Option<ConditionInfo> {
-        self.condition_infos.borrow().get(loc).cloned()
+    pub fn get_condition_info(&self, loc: &Loc, tag: ConditionTag) -> Option<ConditionInfo> {
+        self.condition_infos
+            .borrow()
+            .get(&(loc.clone(), tag))
+            .cloned()
     }
 
     /// Set verification condition info.
-    pub fn set_condition_info(&self, loc: Loc, info: ConditionInfo) {
-        self.condition_infos.borrow_mut().insert(loc, info);
+    pub fn set_condition_info(&self, loc: Loc, tag: ConditionTag, info: ConditionInfo) {
+        self.condition_infos.borrow_mut().insert((loc, tag), info);
     }
 
     /// Execute function on each condition info.
     pub fn with_condition_infos<F>(&self, mut f: F)
     where
-        F: FnMut(&Loc, &ConditionInfo),
+        F: FnMut(&(Loc, ConditionTag), &ConditionInfo),
     {
         self.condition_infos
             .borrow()
             .iter()
             .for_each(|(l, i)| f(l, i))
+    }
+
+    /// Returns true if the boolean property is true.
+    pub fn is_property_true(&self, properties: &PropertyBag, name: &str) -> Option<bool> {
+        let sym = &self.symbol_pool().make(name);
+        if let Some(Value::Bool(b)) = properties.get(sym) {
+            return Some(*b);
+        }
+        None
+    }
+
+    /// Returns the value of a number property.
+    pub fn get_num_property(&self, properties: &PropertyBag, name: &str) -> Option<usize> {
+        let sym = &self.symbol_pool().make(name);
+        if let Some(Value::Number(n)) = properties.get(sym) {
+            return n.to_usize();
+        }
+        None
     }
 }
 
@@ -1234,6 +1385,13 @@ impl<'env> ModuleEnv<'env> {
         &self.data.module_spec
     }
 
+    /// Returns whether a spec fun is ever called or not.
+    pub fn spec_fun_is_used(&self, spec_fun_id: SpecFunId) -> bool {
+        self.env
+            .used_spec_funs
+            .contains(&self.get_id().qualified(spec_fun_id))
+    }
+
     /// Get all spec fun overloads with the given name.
     pub fn get_spec_funs_of_name(
         &self,
@@ -1349,9 +1507,14 @@ impl<'env> StructEnv<'env> {
         &self.data.spec.properties
     }
 
-    /// Gets the definition index associated with this struct.
+    /// Gets the id associated with this struct.
     pub fn get_id(&self) -> StructId {
         StructId(self.data.name)
+    }
+
+    /// Gets the qualified id of this struct.
+    pub fn get_qualified_id(&self) -> QualifiedId<StructId> {
+        self.module_env.get_id().qualified(self.get_id())
     }
 
     /// Determines whether this struct is native.
@@ -1637,6 +1800,11 @@ impl<'env> FunctionEnv<'env> {
         FunId(self.data.name)
     }
 
+    /// Gets the qualified id of this function.
+    pub fn get_qualified_id(&self) -> QualifiedId<FunId> {
+        self.module_env.get_id().qualified(self.get_id())
+    }
+
     /// Get documentation associated with this function.
     pub fn get_doc(&self) -> &str {
         self.module_env.env.get_doc(&self.data.loc)
@@ -1691,12 +1859,26 @@ impl<'env> FunctionEnv<'env> {
     /// pragma in this function, then the enclosing module, and finally uses the provided default.
     /// value
     pub fn is_pragma_true(&self, name: &str, default: impl FnOnce() -> bool) -> bool {
-        let name = &self.symbol_pool().make(name);
-        if let Some(Value::Bool(b)) = self.get_spec().properties.get(name) {
-            return *b;
+        let env = self.module_env.env;
+        if let Some(b) = env.is_property_true(&self.get_spec().properties, name) {
+            return b;
         }
-        if let Some(Value::Bool(b)) = self.module_env.get_spec().properties.get(name) {
-            return *b;
+        if let Some(b) = env.is_property_true(&self.module_env.get_spec().properties, name) {
+            return b;
+        }
+        default()
+    }
+
+    /// Returns the value of a numeric pragma for this function. This first looks up a
+    /// pragma in this function, then the enclosing module, and finally uses the provided default.
+    /// value
+    pub fn get_num_pragma(&self, name: &str, default: impl FnOnce() -> usize) -> usize {
+        let env = self.module_env.env;
+        if let Some(n) = env.get_num_property(&self.get_spec().properties, name) {
+            return n;
+        }
+        if let Some(n) = env.get_num_property(&self.module_env.get_spec().properties, name) {
+            return n;
         }
         default()
     }

@@ -1,3 +1,4 @@
+
 # CONTENT
 
 **Note**: The Libra Client API is currently under development and may be updated in the future.
@@ -184,7 +185,7 @@ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","metho
             ],
             "gas_used":0,
             "transaction":{
-                "expiration_time":1590680747,
+                "expiration_timestamp_secs":1590680747,
                 "gas_unit_price":0,
                 "max_gas_amount":1000000,
                 "public_key":"500a9002995e1af93bbdaf977385ed507b174bb3dc6936efd72612d56198a19d",
@@ -219,11 +220,11 @@ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","metho
 
 
 
-## **get_account_state** - method
+## **get_account** - method
 
 **Description**
 
-Get the latest account state for a given account.
+Get the latest account information for a given account address.
 
 
 ### Parameters
@@ -261,7 +262,7 @@ Null - If account does not exist
 
 ```
 // Request: fetches account state for account address "0xc1fda0ec67c1b87bfb9e883e2080e530"
-curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"get_account_state","params":["c1fda0ec67c1b87bfb9e883e2080e530"],"id":1}'
+curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"get_account","params":["c1fda0ec67c1b87bfb9e883e2080e530"],"id":1}'
 
 
 // Response
@@ -370,7 +371,7 @@ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","metho
         ],
         "gas_used":0,
         "transaction":{
-            "expiration_time":1590680747,
+            "expiration_timestamp_secs":1590680747,
             "gas_unit_price":0,
             "max_gas_amount":1000000,
             "public_key":"500a9002995e1af93bbdaf977385ed507b174bb3dc6936efd72612d56198a19d",
@@ -406,16 +407,33 @@ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","metho
 
 **Description**
 
-Get the current blockchain metadata (e.g., current state of a Libra full node). All Read operations can be batched with get_metadata rpc to obtain synced metadata information with the request.
+Get the blockchain metadata (e.g., state as known to the current full node). All Read operations can be batched with get_metadata rpc to obtain synced metadata information with the request.
 
 You can use this endpoint to verify liveness / status of nodes in the network:
 
-get_metadata returns the latest transaction version and the block timestamp. If the timestamp or version is old (from the past), it means that the full node is not not up-to-date.
+get_metadata returns the transaction version and the block timestamp. If the timestamp or version is old (from the past), it means that the full node is not up-to-date.
 
 
 ### Parameters
 
-None
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+   <td><strong>version</strong>
+   </td>
+   <td>u64
+   </td>
+   <td>The transaction version, this parameter is optional, default is server's latest transaction version.
+   </td>
+  </tr>
+</table>
 
 
 ### Returns
@@ -501,7 +519,7 @@ Fetch the events for a given event stream.
    </td>
    <td>Globally unique identifier of an event stream.
 <p>
-Note: For sent and received events, a client can use <a href="#get_account_state---method">get_account_state</a> to get the event key of the event streams for a given user.
+Note: For sent and received events, a client can use <a href="#get_account---method">get_account</a> to get the event key of the event streams for a given user.
    </td>
   </tr>
   <tr>
@@ -776,8 +794,186 @@ A Libra account.
    <td>Unique key for the received events stream of this account
    </td>
   </tr>
+  <tr>
+   <td>is_frozen
+   </td>
+   <td>bool
+   </td>
+   <td>Whether this account is frozen or not
+   </td>
+  </tr>
+  <tr>
+   <td>role
+   </td>
+   <td> Object
+   </td>
+   <td>Role of this account. Possible types are <a href="#designateddealerrole---type">DesignatedDealerRole</a>, <a href="#parentvasprole---type">ParentVASPRole</a>, <a href="#childvasprole---type">ChildVASPRole</a>, UnknownRole. You should use the "type" field to distinguish the type of the Object. (e.g., if "type" field is "child_vasp", this is a ChildVaspRole object)
+   </td>
+  </tr>
+
 </table>
 
+##
+
+---
+
+
+
+## DesignatedDealerRole - type
+
+### Attributes
+
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+   <td>human_name
+   </td>
+   <td>string
+   </td>
+   <td>
+    human-readable name of this designated dealer
+   </td>
+  </tr>
+  <tr>
+   <td>base_url
+   </td>
+   <td>string
+   </td>
+   <td>base URL for this designated dealer
+   </td>
+  </tr>
+  <tr>
+   <td>expiration_time
+   </td>
+   <td>u64
+   </td>
+   <td>expiration time for this designated dealer
+   </td>
+  </tr>
+  <tr>
+   <td>compliance_key
+   </td>
+   <td>string
+   </td>
+   <td>compliance key for this designated dealer
+   </td>
+  </tr>
+  <tr>
+   <td>preburn_balances
+   </td>
+   <td>Vector of <a href="#amount---type">Amount</a>
+   </td>
+   <td>preburn balances of this designated dealer
+   </td>
+  </tr>
+  <tr>
+   <td>received_mint_events_key
+   </td>
+   <td>string
+   </td>
+   <td>key of received mint events for this designated dealer
+   </td>
+  </tr>
+</table>
+
+##
+
+---
+
+
+
+## ParentVASPRole - type
+
+### Attributes
+
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+   <td>human_name
+   </td>
+   <td>string
+   </td>
+   <td>
+    human-readable name of this parent VASP
+   </td>
+  </tr>
+  <tr>
+   <td>base_url
+   </td>
+   <td>string
+   </td>
+   <td>base URL for this parent VASP
+   </td>
+  </tr>
+  <tr>
+   <td>expiration_time
+   </td>
+   <td>u64
+   </td>
+   <td>expiration time of this parent VASP
+   </td>
+  </tr>
+  <tr>
+   <td>compliance_key
+   </td>
+   <td>string
+   </td>
+   <td>compliance key for this parent VASP
+   </td>
+  </tr>
+  <tr>
+   <td>num_children
+   </td>
+   <td>u64
+   </td>
+   <td>number of children of this parent VASP
+   </td>
+  </tr>
+</table>
+
+##
+
+---
+
+
+
+## ChildVASPRole - type
+
+### Attributes
+
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+   <td>parent_vasp_address
+   </td>
+   <td>string
+   </td>
+   <td>
+    address of this child VASP's parent VASP
+   </td>
+  </tr>
+</table>
 
 ##
 
@@ -822,6 +1018,66 @@ A Libra account.
 ---
 
 
+## MoveAbort - type
+
+**Description**
+
+Object representing the abort condition raised by Move code via `abort` or `assert` during execution of a transaction by the VM on the blockchain.
+
+### Attributes
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+  <td>location</td>
+  <td>String</td><td>String of the form "address::moduleName" where the abort condition was triggered. "Script" if the abort was raised in the transaction script</td>
+  </tr>
+  <tr>
+  <td>abort_code</td><td>u64</td><td>Abort code raised by the Move module</td>
+  </tr>
+</table>
+
+##
+
+---
+
+## ExecutionFailure - type
+
+**Description**
+
+Object representing execution failure while executing Move code, but not raised via a Move abort (e.g. division by zero) during execution of a transaction by the VM on the blockchain.
+
+### Attributes
+<table>
+  <tr>
+   <td><strong>Name</strong>
+   </td>
+   <td><strong>Type</strong>
+   </td>
+   <td><strong>Description</strong>
+   </td>
+  </tr>
+  <tr>
+  <td>location</td>
+  <td>String</td><td>String of the form "address::moduleName" where the execution error occurred. "Script" if the execution error occurred while execution code that was part of the transaction script.</td>
+  </tr>
+  <tr>
+  <td>function_index</td><td>u16</td><td>The function index in the `location` where the error occurred.</td>
+  </tr>
+  <tr>
+  <td>code_offset</td><td>u16</td><td>The code offset in the function at `function_index` where the execution failure happened.</td>
+  </tr>
+</table>
+
+##
+
+---
 
 ## Transaction - type
 
@@ -869,9 +1125,9 @@ A transaction on the blockchain.
   <tr>
    <td>vm_status
    </td>
-   <td>u64
+   <td>Object
    </td>
-   <td>S<a href="https://github.com/libra/libra/blob/master/types/src/vm_error.rs#L256">tatus code</a> representing the result of the VM processing this transaction.
+   <td> The returned status of the transaction after being processed by the VM. One of Executed, OutOfGas, <a href ="#moveabort---type">MoveAbort</a>, <a href="#executionfailure--type">ExecutionFailure</a>, VerificationFailure, DeserializationError, or PublishingFailure.
    </td>
   </tr>
   <tr>
@@ -896,7 +1152,7 @@ A transaction on the blockchain.
          "sequence_number": 0,
          "max_gas_amount": 7000,
          "gas_unit_price": 3,
-         "expiration_time": 1582007787665718,
+         "expiration_timestamp_secs": 1582007787665718,
       },
       "events": [] // empty because include_events is set to false
     }
@@ -1059,6 +1315,14 @@ User submitted transaction.
    </td>
   </tr>
   <tr>
+   <td>chain_id
+   </td>
+   <td>u8
+   </td>
+   <td>Chain ID of the Libra network this transaction is intended for
+   </td>
+  </tr>
+  <tr>
    <td>max_gas_amount
    </td>
    <td>u64
@@ -1075,7 +1339,7 @@ User submitted transaction.
    </td>
   </tr>
   <tr>
-   <td>expiration_time
+   <td>expiration_timestamp_secs
    </td>
    <td>u64
    </td>
@@ -1362,7 +1626,7 @@ An event emitted during a transaction
 
 **Description**
 
-Event emitted when an account received a payment.
+Event emitted when an account receives a payment.
 
 
 ### Attributes
@@ -1398,7 +1662,15 @@ Event emitted when an account received a payment.
    </td>
    <td>Hex string
    </td>
-   <td>Hex-encoded address of the sender of the transaction that emitted the given event
+   <td>Hex-encoded address of the account whose balance was debited to perform this deposit. If the deposited funds came from a mint, the sender address will be 0x0...0.
+   </td>
+  </tr>
+  <tr>
+   <td><strong>receiver</strong>
+   </td>
+   <td>Hex string
+   </td>
+   <td>Hex-encoded address of the account whose balance was credited by this deposit.
    </td>
   </tr>
   <tr>
@@ -1459,8 +1731,14 @@ Event emitted when an account sends a payment.
    <td><strong>receiver</strong>
    </td>
    <td>string
+    <td>Hex-encoded address of the account whose balance was credited to by this withdrawal. If the withdrawn funds were burned, the received address will be 0x0...0.
    </td>
-   <td>Hex-encoded address of the receiver of an associated transaction
+  </tr>
+ <tr>
+   <td><strong>sender</strong>
+   </td>
+   <td>string
+    <td>Hex-encoded address of the account whose balance was debited by this withdrawal.
    </td>
   </tr>
   <tr>

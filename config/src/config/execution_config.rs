@@ -22,6 +22,7 @@ pub struct ExecutionConfig {
     pub genesis_file_location: PathBuf,
     pub service: ExecutionCorrectnessService,
     pub backend: SecureBackend,
+    pub network_timeout_ms: u64,
 }
 
 impl std::fmt::Debug for ExecutionConfig {
@@ -54,6 +55,8 @@ impl Default for ExecutionConfig {
             service: ExecutionCorrectnessService::Thread,
             backend: SecureBackend::InMemoryStorage,
             sign_vote_proposal: true,
+            // Default value of 30 seconds for the network timeout.
+            network_timeout_ms: 30_000,
         }
     }
 }
@@ -123,7 +126,7 @@ mod test {
     use super::*;
     use libra_temppath::TempPath;
     use libra_types::{
-        transaction::{ChangeSet, Transaction},
+        transaction::{ChangeSet, Transaction, WriteSetPayload},
         write_set::WriteSetMut,
     };
 
@@ -139,9 +142,8 @@ mod test {
 
     #[test]
     fn test_some_and_load_genesis() {
-        let fake_genesis = Transaction::WaypointWriteSet(ChangeSet::new(
-            WriteSetMut::new(vec![]).freeze().unwrap(),
-            vec![],
+        let fake_genesis = Transaction::GenesisTransaction(WriteSetPayload::Direct(
+            ChangeSet::new(WriteSetMut::new(vec![]).freeze().unwrap(), vec![]),
         ));
         let (mut config, path) = generate_config();
         config.genesis = Some(fake_genesis.clone());

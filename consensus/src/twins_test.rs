@@ -13,10 +13,7 @@ use crate::{
     util::time_service::ClockTimeService,
 };
 use channel::{self, libra_channel, message_queues::QueueStyle};
-use consensus_types::{
-    block::Block,
-    common::{Author, Payload},
-};
+use consensus_types::{block::Block, common::Author};
 use futures::channel::mpsc;
 use libra_config::{
     config::{
@@ -41,19 +38,16 @@ use tokio::runtime::{Builder, Runtime};
 
 /// Auxiliary struct that is preparing SMR for the test
 struct SMRNode {
-    config: NodeConfig,
-    smr_id: usize,
-    runtime: Runtime,
+    _runtime: Runtime,
     commit_cb_receiver: mpsc::UnboundedReceiver<LedgerInfoWithSignatures>,
     storage: Arc<MockStorage>,
-    state_sync: mpsc::UnboundedReceiver<Payload>,
-    shared_mempool: MockSharedMempool,
+    _shared_mempool: MockSharedMempool,
 }
 
 impl SMRNode {
     fn start(
         playground: &mut NetworkPlayground,
-        mut config: NodeConfig,
+        config: NodeConfig,
         smr_id: usize,
         storage: Arc<MockStorage>,
         twin_id: TwinId,
@@ -74,7 +68,7 @@ impl SMRNode {
 
         playground.add_node(twin_id, consensus_tx, network_reqs_rx, conn_mgr_reqs_rx);
 
-        let (state_sync_client, state_sync) = mpsc::unbounded();
+        let (state_sync_client, _state_sync) = mpsc::unbounded();
         let (commit_cb_sender, commit_cb_receiver) = mpsc::unbounded::<LedgerInfoWithSignatures>();
         let shared_mempool = MockSharedMempool::new(None);
         let consensus_to_mempool_sender = shared_mempool.consensus_sender.clone();
@@ -110,7 +104,7 @@ impl SMRNode {
         let (self_sender, self_receiver) = channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
 
         let epoch_mgr = EpochManager::new(
-            &mut config,
+            &config,
             time_service,
             self_sender,
             network_sender,
@@ -124,13 +118,10 @@ impl SMRNode {
         runtime.spawn(network_task.start());
         runtime.spawn(epoch_mgr.start(timeout_receiver, network_receiver, reconfig_events));
         Self {
-            config,
-            smr_id,
-            runtime,
+            _runtime: runtime,
             commit_cb_receiver,
             storage,
-            state_sync,
-            shared_mempool,
+            _shared_mempool: shared_mempool,
         }
     }
 
@@ -152,11 +143,7 @@ impl SMRNode {
                     let sr_test_config = config.consensus.safety_rules.test.as_ref().unwrap();
                     ValidatorInfo::new_with_test_network_keys(
                         sr_test_config.author,
-                        sr_test_config
-                            .consensus_keypair
-                            .as_ref()
-                            .unwrap()
-                            .public_key(),
+                        sr_test_config.consensus_key.as_ref().unwrap().public_key(),
                         1,
                     )
                 })
@@ -186,7 +173,7 @@ impl SMRNode {
                 .unwrap()
                 .waypoint = Some(waypoint);
             config.base.waypoint = WaypointConfig::FromConfig(waypoint);
-            config.consensus.proposer_type = proposer_type;
+            config.consensus.proposer_type = proposer_type.clone();
             config.consensus.safety_rules.verify_vote_proposal_signature = false;
 
             let author = config.validator_network.as_ref().unwrap().peer_id();
@@ -261,6 +248,8 @@ fn basic_start_test() {
 /// Run the test:
 /// cargo xtest -p consensus drop_config_test -- --nocapture
 #[test]
+#[ignore]
+/// See https://github.com/libra/libra/issues/4899
 fn drop_config_test() {
     let mut runtime = consensus_runtime();
     let mut playground = NetworkPlayground::new(runtime.handle().clone());

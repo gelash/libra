@@ -2,6 +2,7 @@
 //! account: bob, 100000000Coin1, 0, unhosted
 //! account: alice, 100000000Coin1, 0, unhosted
 //! account: otherblessed, 0Coin1, 0, unhosted
+//! account: otherbob, 0Coin1, 0, address
 
 //! account: moneybags, 1000000000000Coin1
 
@@ -35,25 +36,16 @@ fun main(account: &signer) {
 // chec: ABORTED
 // chec: 10047
 
-//! new-transaction
-//! sender: bob
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::publish_unrestricted_limits(account)
-    }
-}
-// check: EXECUTED
-
 // ----- Blessed updates max_inflow for unhosted wallet
 
 //! new-transaction
 //! sender: blessed
 script {
     use 0x1::AccountLimits;
+    use 0x1::CoreAddresses;
+    use 0x1::LBR::LBR;
     fun main(tc_account: &signer) {
-        let new_max_total_flow = 2;
-        AccountLimits::update_limits_definition(tc_account, new_max_total_flow, 0);
+        AccountLimits::update_limits_definition<LBR>(tc_account, CoreAddresses::LIBRA_ROOT_ADDRESS(), 2, 2, 0, 0);
     }
 }
 
@@ -83,50 +75,12 @@ script {
 //! sender: blessed
 script {
     use 0x1::AccountLimits;
+    use 0x1::CoreAddresses;
+    use 0x1::LBR::LBR;
     fun main(tc_account: &signer) {
-        let new_max_total_flow = 1000;
-        AccountLimits::update_limits_definition(tc_account, new_max_total_flow, 1000);
+        AccountLimits::update_limits_definition<LBR>(tc_account, CoreAddresses::LIBRA_ROOT_ADDRESS(), 1000, 1000, 1000, 0);
     }
 }
-
-//! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::certify_limits_definition(account, {{bob}});
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::decertify_limits_definition(account, {{bob}});
-    }
-}
-// check: ABORTED
-
-//! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::decertify_limits_definition(account, {{blessed}});
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::unpublish_limits_definition(account);
-    }
-}
-// check: EXECUTED
 
 //! new-transaction
 //! sender: bob
@@ -171,19 +125,6 @@ script {
 // check: EXECUTED
 
 //! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    // Publish our own limits definition for testing! Make sure we are
-    // exercising the unrestricted limits check.
-    fun main(account: &signer) {
-        AccountLimits::publish_unrestricted_limits(account);
-        AccountLimits::certify_limits_definition(account, {{blessed}});
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
 //! sender: moneybags
 script {
 use 0x1::Coin1::Coin1;
@@ -210,16 +151,6 @@ script {
 // check: EXECUTED
 
 //! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::decertify_limits_definition(account, {{blessed}});
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
 //! sender: bob
 script {
     use 0x1::LibraAccount;
@@ -233,24 +164,6 @@ script {
 // TODO: fix
 // chec: ABORTED
 // chec: 1
-
-//! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    // Publish our own limits definition for testing!
-    fun main(account: &signer) {
-        AccountLimits::unpublish_limits_definition(account);
-        AccountLimits::publish_limits_definition(
-            account,
-            100,
-            200,
-            40000,
-        );
-        AccountLimits::certify_limits_definition(account, {{blessed}});
-    }
-}
-// check: EXECUTED
 
 //! block-prologue
 //! proposer: validatorvivian
@@ -299,16 +212,6 @@ script {
 // check: 11
 
 //! new-transaction
-//! sender: blessed
-script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        AccountLimits::decertify_limits_definition(account, {{blessed}});
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
 //! sender: bob
 script {
     use 0x1::LibraAccount;
@@ -339,17 +242,94 @@ script {
 // chec: 1
 
 //! new-transaction
-//! sender: blessed
+//! sender: libraroot
+//! type-args: 0x1::Coin1::Coin1
+//! args: {{otherbob}}, {{otherbob::auth_key}}, b"bob", b"boburl", x"7013b6ed7dde3cfb1251db1b04ae9cd7853470284085693590a75def645a926d", true
+stdlib_script::create_parent_vasp_account
+//! check: EXECUTED
+
+//! new-transaction
+//! sender: otherbob
 script {
-    use 0x1::AccountLimits;
-    fun main(account: &signer) {
-        // AccountLimits::update_limits_definition(
-        AccountLimits::update_limits_definition(
-            account,
-            100,
-            200,
-        );
-        AccountLimits::certify_limits_definition(account, {{blessed}});
-    }
+use 0x1::VASP;
+use 0x1::Coin1::Coin1;
+fun main(account: &signer)  {
+    VASP::add_account_limits<Coin1>(account);
+}
+}
+// check: ABORTED
+// check: "code: 5"
+
+//! new-transaction
+//! sender: libraroot
+//! type-args: 0x1::Coin1::Coin1
+//! args: {{libraroot}}, 1, 1, 1, 1, 1
+stdlib_script::update_account_limit_definition
+// check: ABORTED
+// check: "code: 3"
+
+//! new-transaction
+//! sender: blessed
+//! type-args: 0x1::Coin1::Coin1
+//! args: {{libraroot}}, 1, 1, 1, 1, 1
+stdlib_script::update_account_limit_definition
+// check: EXECUTED
+
+//! new-transaction
+//! sender: libraroot
+//! type-args: 0x1::Coin1::Coin1
+//! args: {{otherbob}}, 10, {{libraroot}}
+stdlib_script::update_account_limit_window_info
+// check: ABORTED
+// check: "code: 3"
+
+//! new-transaction
+//! sender: blessed
+//! type-args: 0x1::Coin1::Coin1
+//! args: {{otherbob}}, 10, {{otherbob}}
+stdlib_script::update_account_limit_window_info
+// check: ABORTED
+// check: "code: 4"
+
+//! new-transaction
+//! sender: otherbob
+script {
+use 0x1::AccountLimits;
+use 0x1::Coin1::Coin1;
+fun main()  {
+    assert(AccountLimits::limits_definition_address<Coin1>({{otherbob}}) == {{libraroot}}, 1);
+}
 }
 // check: EXECUTED
+
+//! new-transaction
+//! sender: otherbob
+script {
+use 0x1::AccountLimits;
+use 0x1::Coin1::Coin1;
+fun main()  {
+    assert(AccountLimits::has_limits_published<Coin1>({{libraroot}}), 2);
+    assert(!AccountLimits::has_limits_published<Coin1>({{otherbob}}), 3);
+}
+}
+// check: EXECUTED
+
+//! new-transaction
+module Holder {
+    resource struct Hold<T> { x: T}
+    public fun hold<T>(account: &signer, x: T) {
+        move_to(account, Hold<T> { x})
+    }
+}
+
+//! new-transaction
+//! sender: libraroot
+script {
+use 0x1::AccountLimits;
+use {{default}}::Holder;
+fun main(account: &signer)  {
+    Holder::hold(account, AccountLimits::grant_mutation_capability(account));
+}
+}
+// check: ABORTED
+// check: "code: 0"

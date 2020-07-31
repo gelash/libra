@@ -21,6 +21,7 @@ use libra_logger::*;
 use libra_types::{
     account_address::AccountAddress,
     account_config::{self, testnet_dd_account_address, COIN1_NAME},
+    chain_id::ChainId,
     transaction::{
         authenticator::AuthenticationKey, helpers::create_user_txn, Script, TransactionPayload,
     },
@@ -268,7 +269,7 @@ impl TxEmitter {
 
     pub async fn load_libra_root_account(&self, instance: &Instance) -> Result<AccountData> {
         let client = instance.json_rpc_client();
-        let address = account_config::association_address();
+        let address = account_config::libra_root_address();
         let sequence_number = query_sequence_numbers(&client, &[address])
             .await
             .map_err(|e| {
@@ -404,9 +405,9 @@ impl TxEmitter {
     ) -> Result<u64> {
         let client = instance.json_rpc_client();
         let resp = client
-            .get_accounts_state(slice::from_ref(address))
+            .get_accounts(slice::from_ref(address))
             .await
-            .map_err(|e| format_err!("[{:?}] get_accounts_state failed: {:?} ", client, e))?;
+            .map_err(|e| format_err!("[{:?}] get_accounts failed: {:?} ", client, e))?;
         Ok(resp[0]
             .as_ref()
             .ok_or_else(|| format_err!("account does not exist"))?
@@ -570,9 +571,9 @@ async fn query_sequence_numbers(
     let mut result = vec![];
     for addresses_batch in addresses.chunks(20) {
         let resp = client
-            .get_accounts_state(addresses_batch)
+            .get_accounts(addresses_batch)
             .await
-            .map_err(|e| format_err!("[{:?}] get_accounts_state failed: {:?} ", client, e))?;
+            .map_err(|e| format_err!("[{:?}] get_accounts failed: {:?} ", client, e))?;
 
         for item in resp.into_iter() {
             result.push(
@@ -604,6 +605,7 @@ fn gen_submit_transaction_request(
         GAS_UNIT_PRICE,
         GAS_CURRENCY_CODE.to_owned(),
         TXN_EXPIRATION_SECONDS,
+        ChainId::test(),
     )
     .expect("Failed to create signed transaction");
     sender_account.sequence_number += 1;
@@ -628,7 +630,7 @@ fn gen_transfer_txn_request(
     num_coins: u64,
 ) -> SignedTransaction {
     gen_submit_transaction_request(
-        transaction_builder::encode_transfer_with_metadata_script(
+        transaction_builder::encode_peer_to_peer_with_metadata_script(
             account_config::coin1_tag(),
             *receiver,
             num_coins,
@@ -895,7 +897,11 @@ impl TxStats {
             submitted: self.submitted / window.as_secs(),
             committed: self.committed / window.as_secs(),
             expired: self.expired / window.as_secs(),
-            latency: self.latency / self.committed,
+            latency: if self.committed == 0 {
+                0u64
+            } else {
+                self.latency / self.committed
+            },
             p99_latency: self.latency_buckets.percentile(99, 100),
         }
     }

@@ -241,9 +241,12 @@ pub type SpecApplyFragment = Spanned<SpecApplyFragment_>;
 pub enum SpecBlockMember_ {
     Condition {
         kind: SpecConditionKind,
+        properties: Vec<PragmaProperty>,
         exp: Exp,
+        abort_codes: Vec<Exp>,
     },
     Function {
+        uninterpreted: bool,
         name: FunctionName,
         signature: FunctionSignature,
         body: FunctionBody,
@@ -253,6 +256,10 @@ pub enum SpecBlockMember_ {
         name: Name,
         type_parameters: Vec<(Name, Kind)>,
         type_: Type,
+    },
+    Let {
+        name: Name,
+        def: Exp,
     },
     Include {
         exp: Exp,
@@ -276,6 +283,7 @@ pub enum SpecConditionKind {
     Assume,
     Decreases,
     AbortsIf,
+    AbortsWith,
     SucceedsIf,
     Ensures,
     Requires,
@@ -287,7 +295,7 @@ pub enum SpecConditionKind {
     InvariantModule,
 }
 
-// Specification invaiant kind.
+// Specification invariant kind.
 #[derive(Debug, PartialEq)]
 pub enum InvariantKind {
     Data,
@@ -894,7 +902,8 @@ impl AstDebug for SpecConditionKind {
             Assume => w.write("assume "),
             Decreases => w.write("decreases "),
             AbortsIf => w.write("aborts_if "),
-            SucceedsIf => w.write("succeeds_if"),
+            AbortsWith => w.write("aborts_with "),
+            SucceedsIf => w.write("succeeds_if "),
             Ensures => w.write("ensures "),
             Requires => w.write("requires "),
             RequiresModule => w.write("requires module "),
@@ -910,16 +919,28 @@ impl AstDebug for SpecConditionKind {
 impl AstDebug for SpecBlockMember_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            SpecBlockMember_::Condition { kind, exp } => {
+            SpecBlockMember_::Condition {
+                kind,
+                properties: _,
+                exp,
+                abort_codes: aborts_if_with,
+            } => {
                 kind.ast_debug(w);
                 exp.ast_debug(w);
+                w.list(aborts_if_with, ",", |w, e| {
+                    e.ast_debug(w);
+                    true
+                });
             }
             SpecBlockMember_::Function {
+                uninterpreted,
                 signature,
                 name,
                 body,
             } => {
-                if let FunctionBody_::Native = &body.value {
+                if *uninterpreted {
+                    w.write("uninterpreted ");
+                } else if let FunctionBody_::Native = &body.value {
                     w.write("native ");
                 }
                 w.write("fun ");
@@ -945,6 +966,10 @@ impl AstDebug for SpecBlockMember_ {
                 type_parameters.ast_debug(w);
                 w.write(": ");
                 type_.ast_debug(w);
+            }
+            SpecBlockMember_::Let { name, def } => {
+                w.write(&format!("let {} = ", name));
+                def.ast_debug(w);
             }
             SpecBlockMember_::Include { exp } => {
                 w.write("include ");

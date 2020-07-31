@@ -22,7 +22,7 @@ use libra_types::{
     access_path::AccessPath,
     account_address::AccountAddress,
     account_config::{
-        association_address, coin1_tag, from_currency_code_string, testnet_dd_account_address,
+        coin1_tag, from_currency_code_string, libra_root_address, testnet_dd_account_address,
         BalanceResource, COIN1_NAME,
     },
     account_state::AccountState,
@@ -32,7 +32,8 @@ use libra_types::{
     on_chain_config::{config_address, ConfigurationResource, OnChainConfig, ValidatorSet},
     proof::SparseMerkleRangeProof,
     transaction::{
-        authenticator::AuthenticationKey, ChangeSet, Transaction, Version, PRE_GENESIS_VERSION,
+        authenticator::AuthenticationKey, ChangeSet, Transaction, Version, WriteSetPayload,
+        PRE_GENESIS_VERSION,
     },
     trusted_state::TrustedState,
     validator_signer::ValidatorSigner,
@@ -40,14 +41,14 @@ use libra_types::{
     write_set::{WriteOp, WriteSetMut},
 };
 use libra_vm::LibraVM;
-use libradb::LibraDB;
+use libradb::{GetRestoreHandler, LibraDB};
 use move_core_types::move_resource::MoveResource;
 use rand::SeedableRng;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, sync::Arc};
 use storage_interface::{DbReader, DbReaderWriter};
 use transaction_builder::{
-    encode_create_testing_account_script, encode_testnet_mint_script,
-    encode_transfer_with_metadata_script,
+    encode_create_testing_account_script, encode_peer_to_peer_with_metadata_script,
+    encode_testnet_mint_script,
 };
 
 #[test]
@@ -129,32 +130,32 @@ fn get_demo_accounts() -> (
 }
 
 fn get_mint_transaction(
-    association_key: &Ed25519PrivateKey,
-    association_seq_num: u64,
+    libra_root_key: &Ed25519PrivateKey,
+    libra_root_seq_num: u64,
     account: &AccountAddress,
     amount: u64,
 ) -> Transaction {
     get_test_signed_transaction(
         testnet_dd_account_address(),
-        /* sequence_number = */ association_seq_num,
-        association_key.clone(),
-        association_key.public_key(),
+        /* sequence_number = */ libra_root_seq_num,
+        libra_root_key.clone(),
+        libra_root_key.public_key(),
         Some(encode_testnet_mint_script(coin1_tag(), *account, amount)),
     )
 }
 
 fn get_account_transaction(
-    association_key: &Ed25519PrivateKey,
-    association_seq_num: u64,
+    libra_root_key: &Ed25519PrivateKey,
+    libra_root_seq_num: u64,
     account: &AccountAddress,
     account_key: &Ed25519PrivateKey,
 ) -> Transaction {
     let account_auth_key = AuthenticationKey::ed25519(&account_key.public_key());
     get_test_signed_transaction(
-        association_address(),
-        /* sequence_number = */ association_seq_num,
-        association_key.clone(),
-        association_key.public_key(),
+        libra_root_address(),
+        /* sequence_number = */ libra_root_seq_num,
+        libra_root_key.clone(),
+        libra_root_key.public_key(),
         Some(encode_create_testing_account_script(
             coin1_tag(),
             *account,
@@ -176,7 +177,7 @@ fn get_transfer_transaction(
         sender_seq_number,
         sender_key.clone(),
         sender_key.public_key(),
-        Some(encode_transfer_with_metadata_script(
+        Some(encode_peer_to_peer_with_metadata_script(
             coin1_tag(),
             recipient,
             amount,
@@ -233,14 +234,18 @@ fn get_state_backup(
 }
 
 fn restore_state_to_db(
-    db: &LibraDB,
+    db: &Arc<LibraDB>,
     accounts: Vec<(HashValue, AccountStateBlob)>,
     proof: SparseMerkleRangeProof,
     root_hash: HashValue,
     version: Version,
 ) {
-    db.restore_account_state(vec![(accounts, proof)].into_iter(), version, root_hash)
-        .unwrap();
+    let rh = db.get_restore_handler();
+    let mut receiver = rh.get_state_restore_receiver(version, root_hash).unwrap();
+    for (chunk, proof) in vec![(accounts, proof)].into_iter() {
+        receiver.add_chunk(chunk, proof).unwrap();
+    }
+    receiver.finish().unwrap();
 }
 
 #[test]
@@ -279,7 +284,7 @@ fn test_pre_genesis() {
     assert!(db_rw.reader.get_startup_info().unwrap().is_none());
 
     // New genesis transaction: set validator set and overwrite account1 balance
-    let genesis_txn = Transaction::WaypointWriteSet(ChangeSet::new(
+    let genesis_txn = Transaction::GenesisTransaction(WriteSetPayload::Direct(ChangeSet::new(
         WriteSetMut::new(vec![
             (
                 ValidatorSet::CONFIG_ID.access_path(),
@@ -298,7 +303,7 @@ fn test_pre_genesis() {
             coin1_tag(),
             vec![],
         )],
-    ));
+    )));
 
     // Bootstrap DB on top of pre-genesis state.
     let tree_state = db_rw.reader.get_latest_tree_state().unwrap();
@@ -348,7 +353,7 @@ fn test_new_genesis() {
 
     // New genesis transaction: set validator set, bump epoch and overwrite account1 balance.
     let configuration = get_configuration(&db);
-    let genesis_txn = Transaction::WaypointWriteSet(ChangeSet::new(
+    let genesis_txn = Transaction::GenesisTransaction(WriteSetPayload::Direct(ChangeSet::new(
         WriteSetMut::new(vec![
             (
                 ValidatorSet::CONFIG_ID.access_path(),
@@ -371,7 +376,7 @@ fn test_new_genesis() {
             coin1_tag(),
             vec![],
         )],
-    ));
+    )));
 
     // Bootstrap DB into new genesis.
     let tree_state = db.reader.get_latest_tree_state().unwrap();

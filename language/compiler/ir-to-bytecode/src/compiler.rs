@@ -23,6 +23,7 @@ use std::{
 };
 use vm::{
     access::ModuleAccess,
+    errors::Location as VMErrorLocation,
     file_format::{
         Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledModuleMut, CompiledScript,
         CompiledScriptMut, Constant, FieldDefinition, FunctionDefinition, FunctionSignature, Kind,
@@ -78,6 +79,9 @@ macro_rules! record_src_loc {
         $context
             .source_map
             .add_top_level_struct_mapping($context.current_struct_definition_index(), $location)?;
+    };
+    (const_decl: $context:expr, $const_index:expr, $name:expr) => {
+        $context.source_map.add_const_mapping($const_index, $name)?;
     };
 }
 
@@ -416,7 +420,9 @@ pub fn compile_script<'a, T: 'a + ModuleAccess>(
     )?;
     for ir_constant in script.constants {
         let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
-        context.declare_constant(ir_constant.name, constant)?
+        context.declare_constant(ir_constant.name.clone(), constant.clone())?;
+        let const_idx = context.constant_index(constant)?;
+        record_src_loc!(const_decl: context, const_idx, ir_constant.name);
     }
 
     let function = script.main;
@@ -461,7 +467,9 @@ pub fn compile_script<'a, T: 'a + ModuleAccess>(
     };
     compiled_script
         .freeze()
-        .map_err(|err| InternalCompilerError::BoundsCheckErrors(err).into())
+        .map_err(|e| {
+            InternalCompilerError::BoundsCheckErrors(e.finish(VMErrorLocation::Undefined)).into()
+        })
         .map(|frozen_script| (frozen_script, source_map))
 }
 
@@ -499,7 +507,9 @@ pub fn compile_module<'a, T: 'a + ModuleAccess>(
 
     for ir_constant in module.constants {
         let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
-        context.declare_constant(ir_constant.name, constant)?
+        context.declare_constant(ir_constant.name.clone(), constant.clone())?;
+        let const_idx = context.constant_index(constant)?;
+        record_src_loc!(const_decl: context, const_idx, ir_constant.name);
     }
 
     for (name, function) in &module.functions {
@@ -546,7 +556,9 @@ pub fn compile_module<'a, T: 'a + ModuleAccess>(
     };
     compiled_module
         .freeze()
-        .map_err(|err| InternalCompilerError::BoundsCheckErrors(err).into())
+        .map_err(|e| {
+            InternalCompilerError::BoundsCheckErrors(e.finish(VMErrorLocation::Undefined)).into()
+        })
         .map(|frozen_module| (frozen_module, source_map))
 }
 

@@ -37,8 +37,10 @@ fun main(account: &signer) {
     LibraBlock::block_prologue(account, 1, 10, Vector::empty<address>(), {{vivian}});
 }
 }
+// TODO(status_migration) remove duplicate check
 // check: ABORTED
-// check: 33
+// check: ABORTED
+// check: 2
 
 //! new-transaction
 //! sender: vivian
@@ -49,5 +51,7 @@ fun main(account: &signer) {
     LibraTimestamp::update_global_time(account, {{vivian}}, 20);
 }
 }
+// TODO(status_migration) remove duplicate check
 // check: ABORTED
-// check: 33
+// check: ABORTED
+// check: 2

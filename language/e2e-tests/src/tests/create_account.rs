@@ -6,17 +6,13 @@ use crate::{
     common_transactions::create_account_txn,
     executor::FakeExecutor,
 };
-use libra_types::{
-    account_config,
-    transaction::TransactionStatus,
-    vm_status::{StatusCode, VMStatus},
-};
+use libra_types::{account_config, transaction::TransactionStatus, vm_status::KeptVMStatus};
 
 #[test]
 fn create_account() {
     let mut executor = FakeExecutor::from_genesis_file();
     // create and publish a sender with 1_000_000 coins
-    let sender = Account::new_association();
+    let sender = Account::new_libra_root();
     let new_account = Account::new();
 
     // define the arguments to the create account transaction
@@ -33,7 +29,7 @@ fn create_account() {
     let output = executor.execute_transaction(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed)
     );
     executor.apply_write_set(output.write_set());
 

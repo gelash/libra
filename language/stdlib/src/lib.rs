@@ -3,15 +3,17 @@
 
 #![forbid(unsafe_code)]
 
-use bytecode_verifier::{batch_verify_modules, VerifiedModule};
+use bytecode_verifier::{verify_module, DependencyChecker};
 use log::LevelFilter;
 use move_lang::{compiled_unit::CompiledUnit, move_compile, shared::Address};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+use vm::CompiledModule;
 
 pub const STD_LIB_DIR: &str = "modules";
 pub const MOVE_EXTENSION: &str = "move";
@@ -20,7 +22,7 @@ pub const TRANSACTION_SCRIPTS: &str = "transaction_scripts";
 /// The output path under which compiled files will be put
 pub const COMPILED_OUTPUT_PATH: &str = "compiled";
 /// The file name for the compiled stdlib
-pub const COMPILED_STDLIB_NAME: &str = "stdlib";
+pub const COMPILED_STDLIB_DIR: &str = "stdlib";
 /// The extension for compiled files
 pub const COMPILED_EXTENSION: &str = "mv";
 /// The file name of the debug module
@@ -38,7 +40,7 @@ pub const COMPILED_TRANSACTION_SCRIPTS_ABI_DIR: &str = "compiled/transaction_scr
 
 /// Where to write generated transaction builders.
 pub const TRANSACTION_BUILDERS_GENERATED_SOURCE_PATH: &str =
-    "../transaction-builder/src/generated.rs";
+    "../transaction-builder/generated/src/stdlib.rs";
 
 pub fn filter_move_files(dir_iter: impl Iterator<Item = PathBuf>) -> impl Iterator<Item = PathBuf> {
     dir_iter.flat_map(|path| {
@@ -59,18 +61,25 @@ pub fn stdlib_files() -> Vec<String> {
         .collect()
 }
 
-pub fn build_stdlib() -> Vec<VerifiedModule> {
+pub fn build_stdlib() -> BTreeMap<String, CompiledModule> {
     let (_, compiled_units) =
         move_compile(&stdlib_files(), &[], Some(Address::LIBRA_CORE)).unwrap();
-    batch_verify_modules(
-        compiled_units
-            .into_iter()
-            .map(|compiled_unit| match compiled_unit {
-                CompiledUnit::Module { module, .. } => module,
-                CompiledUnit::Script { .. } => panic!("Unexpected Script in stdlib"),
-            })
-            .collect(),
-    )
+    let mut modules = BTreeMap::new();
+    for (i, compiled_unit) in compiled_units.into_iter().enumerate() {
+        let name = compiled_unit.name();
+        match compiled_unit {
+            CompiledUnit::Module { module, .. } => {
+                verify_module(&module).expect("stdlib module failed to verify");
+                DependencyChecker::verify_module(&module, modules.values())
+                    .expect("stdlib module dependency failed to verify");
+                // Tag each module with its index in the module dependency order. Needed for
+                // when they are deserialized and verified later on.
+                modules.insert(format!("{}_{}", i, name), module);
+            }
+            CompiledUnit::Script { .. } => panic!("Unexpected Script in stdlib"),
+        }
+    }
+    modules
 }
 
 pub fn compile_script(source_file_str: String) -> Vec<u8> {
@@ -156,13 +165,34 @@ fn build_abi(output_path: &str, sources: &[String], dep_path: &str, compiled_scr
     move_prover::run_move_prover_errors_to_stderr(options).unwrap();
 }
 
+// TODO: remove once https://github.com/facebookincubator/serde-reflection/issues/32 is closed
+fn post_process_add_proptest_derivations(buffer: &[u8]) {
+    let contents = std::str::from_utf8(buffer).unwrap();
+    let mut file = std::fs::File::create(TRANSACTION_BUILDERS_GENERATED_SOURCE_PATH)
+        .expect("Failed to open file for Rust script build generation");
+    write!(
+        file,
+        "{}",
+        contents.replacen(
+            "pub enum ScriptCall",
+            r#"
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+pub enum ScriptCall"#,
+            1
+        )
+    )
+    .expect("Unable to write generated Rust script builders");
+}
+
 pub fn generate_rust_transaction_builders() {
     let abis = transaction_builder_generator::read_abis(COMPILED_TRANSACTION_SCRIPTS_ABI_DIR)
         .expect("Failed to read generated ABIs");
-    let mut f = std::fs::File::create(TRANSACTION_BUILDERS_GENERATED_SOURCE_PATH)
-        .expect("Failed to open file for Rust script build generation");
-    transaction_builder_generator::rust::output(&mut f, &abis, /* local types */ true)
+    let mut buf = vec![];
+    transaction_builder_generator::rust::output(&mut buf, &abis, /* local types */ true)
         .expect("Failed to generate Rust builders for Libra");
+
+    post_process_add_proptest_derivations(&buf);
 
     std::process::Command::new("rustfmt")
         .arg("--config")

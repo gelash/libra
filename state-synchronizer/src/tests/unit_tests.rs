@@ -3,6 +3,7 @@
 
 use crate::peer_manager::{PeerManager, PeerScoreUpdateType};
 use libra_config::config::{PeerNetworkId, UpstreamConfig};
+use netcore::transport::ConnectionOrigin;
 use std::collections::HashMap;
 
 #[test]
@@ -15,7 +16,7 @@ fn test_peer_manager() {
     ];
     let mut peer_manager = PeerManager::new(UpstreamConfig::default());
     for peer_id in peers.clone() {
-        peer_manager.enable_peer(peer_id);
+        peer_manager.enable_peer(peer_id, ConnectionOrigin::Outbound);
     }
 
     for _ in 0..50 {
@@ -44,7 +45,7 @@ fn test_remove_requests() {
     ];
     let mut peer_manager = PeerManager::new(UpstreamConfig::default());
     for peer in peers.iter() {
-        peer_manager.enable_peer(peer.clone());
+        peer_manager.enable_peer(peer.clone(), ConnectionOrigin::Outbound);
     }
 
     peer_manager.process_request(1, peers[0].clone());
@@ -70,11 +71,11 @@ fn test_peer_manager_request_metadata() {
     ];
     let mut peer_manager = PeerManager::new(UpstreamConfig::default());
     for peer in peers.iter() {
-        peer_manager.enable_peer(peer.clone());
+        peer_manager.enable_peer(peer.clone(), ConnectionOrigin::Outbound);
     }
     assert!(peer_manager.get_first_request_time(1).is_none());
     peer_manager.process_request(1, peers[0].clone());
-    peer_manager.process_timeout(1, true);
+    peer_manager.process_timeout(1);
     peer_manager.process_request(1, peers[1].clone());
     assert!(peer_manager.peer_score(&peers[0]).unwrap() < 99.0);
     assert!(peer_manager.peer_score(&peers[1]).unwrap() > 99.0);

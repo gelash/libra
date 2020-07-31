@@ -64,7 +64,8 @@ fn in_memory(n: u64) {
         signer.private_key().clone(),
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
-    );
+    )
+    .into_cached();
     let safety_rules_manager = SafetyRulesManager::new_local(storage, false);
     lsr(safety_rules_manager.client(), signer, n);
 }
@@ -79,7 +80,8 @@ fn on_disk(n: u64) {
         signer.private_key().clone(),
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
-    );
+    )
+    .into_cached();
     let safety_rules_manager = SafetyRulesManager::new_local(storage, false);
     lsr(safety_rules_manager.client(), signer, n);
 }
@@ -94,7 +96,8 @@ fn serializer(n: u64) {
         signer.private_key().clone(),
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
-    );
+    )
+    .into_cached();
     let safety_rules_manager = SafetyRulesManager::new_serializer(storage, false);
     lsr(safety_rules_manager.client(), signer, n);
 }
@@ -109,8 +112,11 @@ fn thread(n: u64) {
         signer.private_key().clone(),
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
-    );
-    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false);
+    )
+    .into_cached();
+    // Test value, in milliseconds
+    let timeout_ms = 5_000;
+    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false, timeout_ms);
     lsr(safety_rules_manager.client(), signer, n);
 }
 
@@ -128,8 +134,11 @@ fn vault(n: u64) {
         signer.private_key().clone(),
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
-    );
-    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false);
+    )
+    .into_cached();
+    // Test value in milliseconds.
+    let timeout_ms = 5_000;
+    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false, timeout_ms);
     lsr(safety_rules_manager.client(), signer, n);
 }
 

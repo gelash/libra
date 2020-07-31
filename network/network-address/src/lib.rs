@@ -1,10 +1,12 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::encrypted::{EncNetworkAddress, Key, KeyVersion};
 use libra_crypto::{
     traits::{CryptoMaterialError, ValidCryptoMaterialStringExt},
     x25519,
 };
+use move_core_types::account_address::AccountAddress;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{collection::vec, prelude::*};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -20,6 +22,8 @@ use std::{
     string::ToString,
 };
 use thiserror::Error;
+
+pub mod encrypted;
 
 const MAX_DNS_NAME_SIZE: usize = 255;
 
@@ -207,6 +211,24 @@ pub struct EmptyError;
 impl RawNetworkAddress {
     pub fn new(bytes: Vec<u8>) -> Self {
         Self(bytes)
+    }
+
+    pub fn encrypt(
+        self,
+        shared_val_netaddr_key: &Key,
+        key_version: KeyVersion,
+        account: &AccountAddress,
+        seq_num: u64,
+        addr_idx: u32,
+    ) -> EncNetworkAddress {
+        EncNetworkAddress::encrypt(
+            self,
+            shared_val_netaddr_key,
+            key_version,
+            account,
+            seq_num,
+            addr_idx,
+        )
     }
 }
 

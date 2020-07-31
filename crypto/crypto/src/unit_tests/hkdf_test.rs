@@ -1,9 +1,8 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::hkdf::*;
+use crate::{compat::Sha3_256, hkdf::*};
 use sha2::{Sha256, Sha512};
-use sha3::Sha3_256;
 
 // Testing against sha256 test vectors. Unfortunately the rfc does not provide test vectors for
 // sha3 and sha512.
@@ -154,13 +153,9 @@ fn test_sha512_output_length() {
 }
 
 #[test]
-fn test_unsupported_hash_functions() {
-    // Test for ripemd160, output_length < 256
-    let ripemd160_hkdf = Hkdf::<ripemd160::Ripemd160>::extract(None, &[]);
-    assert_eq!(
-        ripemd160_hkdf.unwrap_err(),
-        HkdfError::NotSupportedHashFunctionError
-    );
+fn unsupported_digest() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("src/unit_tests/compilation/small_kdf.rs");
 }
 
 // Test Vectors for sha256 from https://tools.ietf.org/html/rfc5869.

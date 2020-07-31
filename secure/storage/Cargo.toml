@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 base64 = "0.12.3"
-chrono = "0.4.12"
+chrono = "0.4.13"
 enum_dispatch = "0.3.1"
 rand = "0.7.3"
 serde = { version = "1.0.114", features = ["rc"], default-features = false }
@@ -29,6 +29,8 @@ libra-github-client = { path = "github", version = "0.1.0" }
 libra-workspace-hack = { path = "../../common/workspace-hack", version = "0.1.0" }
 
 [dev-dependencies]
+libra-crypto = { path = "../../crypto/crypto", version = "0.1.0", features = ["fuzzing"] }
+libra-crypto-derive = { path = "../../crypto/crypto-derive", version = "0.1.0" }
 rand = "0.7.3"
 
 [features]

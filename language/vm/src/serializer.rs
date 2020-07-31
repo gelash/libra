@@ -588,46 +588,69 @@ fn serialize_signature_tokens(binary: &mut BinaryData, tokens: &[SignatureToken]
     Ok(())
 }
 
+fn serialize_signature_token_single_node_impl(
+    binary: &mut BinaryData,
+    token: &SignatureToken,
+) -> Result<()> {
+    match token {
+        SignatureToken::Bool => binary.push(SerializedType::BOOL as u8)?,
+        SignatureToken::U8 => binary.push(SerializedType::U8 as u8)?,
+        SignatureToken::U64 => binary.push(SerializedType::U64 as u8)?,
+        SignatureToken::U128 => binary.push(SerializedType::U128 as u8)?,
+        SignatureToken::Address => binary.push(SerializedType::ADDRESS as u8)?,
+        SignatureToken::Signer => binary.push(SerializedType::SIGNER as u8)?,
+        SignatureToken::Vector(_) => {
+            binary.push(SerializedType::VECTOR as u8)?;
+        }
+        SignatureToken::Struct(idx) => {
+            binary.push(SerializedType::STRUCT as u8)?;
+            serialize_struct_handle_index(binary, idx)?;
+        }
+        SignatureToken::StructInstantiation(idx, type_params) => {
+            binary.push(SerializedType::STRUCT_INST as u8)?;
+            serialize_struct_handle_index(binary, idx)?;
+            serialize_signature_size(binary, type_params.len())?;
+        }
+        SignatureToken::Reference(_) => {
+            binary.push(SerializedType::REFERENCE as u8)?;
+        }
+        SignatureToken::MutableReference(_) => {
+            binary.push(SerializedType::MUTABLE_REFERENCE as u8)?;
+        }
+        SignatureToken::TypeParameter(idx) => {
+            binary.push(SerializedType::TYPE_PARAMETER as u8)?;
+            serialize_type_parameter_index(binary, *idx)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn serialize_signature_token_unchecked(
+    binary: &mut BinaryData,
+    token: &SignatureToken,
+) -> Result<()> {
+    for token in token.preorder_traversal() {
+        serialize_signature_token_single_node_impl(binary, token)?;
+    }
+    Ok(())
+}
+
 /// Serializes a `SignatureToken`.
 ///
 /// A `SignatureToken` gets serialized as a variable size blob depending on composition.
 /// Values for types are defined in `SerializedType`.
-fn serialize_signature_token(binary: &mut BinaryData, token: &SignatureToken) -> Result<()> {
+pub(crate) fn serialize_signature_token(
+    binary: &mut BinaryData,
+    token: &SignatureToken,
+) -> Result<()> {
     // Non-recursive implementation to avoid overflowing the stack.
-
-    for token in token.preorder_traversal() {
-        match token {
-            SignatureToken::Bool => binary.push(SerializedType::BOOL as u8)?,
-            SignatureToken::U8 => binary.push(SerializedType::U8 as u8)?,
-            SignatureToken::U64 => binary.push(SerializedType::U64 as u8)?,
-            SignatureToken::U128 => binary.push(SerializedType::U128 as u8)?,
-            SignatureToken::Address => binary.push(SerializedType::ADDRESS as u8)?,
-            SignatureToken::Signer => binary.push(SerializedType::SIGNER as u8)?,
-            SignatureToken::Vector(_) => {
-                binary.push(SerializedType::VECTOR as u8)?;
-            }
-            SignatureToken::Struct(idx) => {
-                binary.push(SerializedType::STRUCT as u8)?;
-                serialize_struct_handle_index(binary, idx)?;
-            }
-            SignatureToken::StructInstantiation(idx, type_params) => {
-                binary.push(SerializedType::STRUCT_INST as u8)?;
-                serialize_struct_handle_index(binary, idx)?;
-                serialize_signature_size(binary, type_params.len())?;
-            }
-            SignatureToken::Reference(_) => {
-                binary.push(SerializedType::REFERENCE as u8)?;
-            }
-            SignatureToken::MutableReference(_) => {
-                binary.push(SerializedType::MUTABLE_REFERENCE as u8)?;
-            }
-            SignatureToken::TypeParameter(idx) => {
-                binary.push(SerializedType::TYPE_PARAMETER as u8)?;
-                serialize_type_parameter_index(binary, *idx)?;
-            }
+    for (token, depth) in token.preorder_traversal_with_depth() {
+        if depth > SIGNATURE_TOKEN_DEPTH_MAX {
+            bail!("max recursion depth reached")
         }
+        serialize_signature_token_single_node_impl(binary, token)?;
     }
-
     Ok(())
 }
 
@@ -793,7 +816,7 @@ fn serialize_instruction_inner(binary: &mut BinaryData, opcode: &Bytecode) -> Re
         Bytecode::Le => binary.push(Opcodes::LE as u8),
         Bytecode::Ge => binary.push(Opcodes::GE as u8),
         Bytecode::Abort => binary.push(Opcodes::ABORT as u8),
-        Bytecode::GetTxnSenderAddress => binary.push(Opcodes::GET_TXN_SENDER as u8),
+        Bytecode::Nop => binary.push(Opcodes::NOP as u8),
         Bytecode::Exists(class_idx) => {
             binary.push(Opcodes::EXISTS as u8)?;
             serialize_struct_def_index(binary, class_idx)
@@ -808,10 +831,6 @@ fn serialize_instruction_inner(binary: &mut BinaryData, opcode: &Bytecode) -> Re
         }
         Bytecode::MoveFrom(class_idx) => {
             binary.push(Opcodes::MOVE_FROM as u8)?;
-            serialize_struct_def_index(binary, class_idx)
-        }
-        Bytecode::MoveToSender(class_idx) => {
-            binary.push(Opcodes::MOVE_TO_SENDER as u8)?;
             serialize_struct_def_index(binary, class_idx)
         }
         Bytecode::MoveTo(class_idx) => {
@@ -834,15 +853,10 @@ fn serialize_instruction_inner(binary: &mut BinaryData, opcode: &Bytecode) -> Re
             binary.push(Opcodes::MOVE_FROM_GENERIC as u8)?;
             serialize_struct_def_inst_index(binary, class_idx)
         }
-        Bytecode::MoveToSenderGeneric(class_idx) => {
-            binary.push(Opcodes::MOVE_TO_SENDER_GENERIC as u8)?;
-            serialize_struct_def_inst_index(binary, class_idx)
-        }
         Bytecode::MoveToGeneric(class_idx) => {
             binary.push(Opcodes::MOVE_TO_GENERIC as u8)?;
             serialize_struct_def_inst_index(binary, class_idx)
         }
-        Bytecode::Nop => binary.push(Opcodes::NOP as u8),
     };
     res?;
     Ok(())

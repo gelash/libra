@@ -47,9 +47,9 @@
 //! }
 //!
 //! // Usage:
-//! send_struct_log!(StructuredLogEntry::new_named("Committed")
+//! send_struct_log!(StructuredLogEntry::new_named("category", "Committed")
 //!    .data("block", &block)
-//!    .data("autor", &author))
+//!    .data("author", &author))
 //! ```
 //!
 //! Arguments passed to .data will be serialized into json, and as such should implement Serialize.
@@ -117,11 +117,12 @@ pub use log;
 
 pub mod prelude {
     pub use crate::{
-        crit, debug, error, info,
+        crit, debug, error, event, info,
         security::{security_events, security_log},
-        send_struct_log, trace, warn,
+        send_struct_log, trace, warn, StructuredLogEntry,
     };
 }
+pub mod json_log;
 
 mod security;
 mod struct_log;
@@ -134,6 +135,7 @@ pub use struct_log::{
 mod text_log;
 pub use log::Level;
 pub use text_log::{Logger, CHANNEL_SIZE, DEFAULT_TARGET};
+pub mod counters;
 
 /// Define crit macro that specify libra as the target
 // TODO Remove historical crit from code base since it isn't supported in Rust Log.
@@ -228,6 +230,7 @@ macro_rules! send_struct_log {
             entry.location($crate::location!());
             entry.git_rev($crate::git_rev!());
             entry.send();
+            $crate::counters::STRUCT_LOG_COUNT.inc();
         }
     };
 }

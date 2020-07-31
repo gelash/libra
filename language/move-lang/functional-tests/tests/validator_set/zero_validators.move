@@ -5,7 +5,7 @@
 //! block-time: 3
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main() {
@@ -15,7 +15,7 @@ script {
 // check: EXECUTED
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -32,19 +32,7 @@ script {
 // check: EXECUTED
 
 //! new-transaction
-//! sender: association
-script {
-    use 0x1::LibraSystem;
-    fun main(account: &signer) {
-        LibraSystem::update_and_reconfigure(account);
-        let num_validators = LibraSystem::validator_set_size();
-        assert(num_validators == 0, 98);
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main() {
@@ -52,4 +40,4 @@ script {
     }
 }
 // check: ABORTED
-// check: 33
+// check: 5

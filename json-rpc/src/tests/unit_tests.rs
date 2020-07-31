@@ -2,24 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    errors::{JsonRpcError, ServerCode},
-    tests::utils::{test_bootstrap, MockLibraDB},
+    errors::{InvalidArguments, JsonRpcError, ServerCode},
+    tests::{
+        genesis::generate_genesis_state,
+        utils::{test_bootstrap, MockLibraDB},
+    },
 };
 use futures::{channel::mpsc::channel, StreamExt};
 use libra_config::utils;
 use libra_crypto::{ed25519::Ed25519PrivateKey, hash::CryptoHash, HashValue, PrivateKey, Uniform};
 use libra_json_rpc_client::{
     views::{
-        AccountStateWithProofView, BlockMetadata, BytesView, EventView, StateProofView,
-        TransactionDataView, TransactionView,
+        AccountStateWithProofView, AccountView, BlockMetadata, BytesView, EventView,
+        StateProofView, TransactionDataView, TransactionView, VMStatusView,
     },
     JsonRpcAsyncClient, JsonRpcBatch, JsonRpcResponse, ResponseAsView,
 };
+use libra_json_rpc_types::{
+    response::JsonRpcErrorResponse,
+    views::{
+        JSONRPC_LIBRA_CHAIN_ID, JSONRPC_LIBRA_LEDGER_TIMESTAMPUSECS, JSONRPC_LIBRA_LEDGER_VERSION,
+    },
+};
+
 use libra_proptest_helpers::ValueGenerator;
 use libra_types::{
     account_address::AccountAddress,
-    account_config::AccountResource,
+    account_config::{from_currency_code_string, AccountResource, FreezingBit, LBR_NAME},
+    account_state::AccountState,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    chain_id::ChainId,
     contract_event::ContractEvent,
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
@@ -27,17 +39,17 @@ use libra_types::{
     proof::{SparseMerkleProof, TransactionAccumulatorProof, TransactionInfoWithProof},
     test_helpers::transaction_test_helpers::get_test_signed_txn,
     transaction::{Transaction, TransactionInfo, TransactionPayload},
-    vm_status::{StatusCode, VMStatus},
+    vm_status::StatusCode,
 };
 use libradb::test_helper::arb_blocks_to_commit;
-use move_core_types::language_storage::TypeTag;
-use proptest::prelude::*;
-use std::{
-    collections::{BTreeMap, HashMap},
-    convert::TryFrom,
-    str::FromStr,
-    sync::Arc,
+use move_core_types::{
+    language_storage::TypeTag,
+    move_resource::MoveResource,
+    value::{MoveStructLayout, MoveTypeLayout},
 };
+use move_vm_types::values::{Struct, Value};
+use proptest::prelude::*;
+use std::{collections::HashMap, convert::TryFrom, str::FromStr, sync::Arc};
 use storage_interface::DbReader;
 use tokio::runtime::Runtime;
 use vm_validator::{
@@ -53,7 +65,7 @@ fn mock_db() -> MockLibraDB {
     let mut account_state_with_proof = gen.generate(any::<AccountStateWithProof>());
 
     let mut version = 1;
-    let mut all_accounts = BTreeMap::new();
+    let mut all_accounts = HashMap::new();
     let mut all_txns = vec![];
     let mut events = vec![];
     let mut timestamps = vec![0 as u64];
@@ -76,14 +88,21 @@ fn mock_db() -> MockLibraDB {
 
         // Record all account states.
         for (address, blob) in account_states.into_iter() {
-            all_accounts.insert(address, blob.clone());
+            let mut state = AccountState::try_from(&blob).unwrap();
+            let freezing_bit = Value::struct_(Struct::pack(vec![Value::bool(false)], true))
+                .value_as::<Struct>()
+                .unwrap()
+                .simple_serialize(&MoveStructLayout::new(vec![MoveTypeLayout::Bool]))
+                .unwrap();
+            state.insert(FreezingBit::resource_path(), freezing_bit);
+            all_accounts.insert(address, AccountStateBlob::try_from(&state).unwrap());
         }
 
         // Record all transactions.
         all_txns.extend(txns_to_commit.iter().map(|txn_to_commit| {
             (
                 txn_to_commit.transaction().clone(),
-                txn_to_commit.major_status(),
+                txn_to_commit.status().clone(),
             )
         }));
     }
@@ -92,6 +111,7 @@ fn mock_db() -> MockLibraDB {
         let (_, blob) = all_accounts.iter().next().unwrap();
         account_state_with_proof.blob = Some(blob.clone());
     }
+
     let account_state_with_proof = vec![account_state_with_proof];
 
     if events.is_empty() {
@@ -105,8 +125,10 @@ fn mock_db() -> MockLibraDB {
         events.push((version as u64, mock_event));
     }
 
+    let (genesis, _) = generate_genesis_state();
     MockLibraDB {
         version: version as u64,
+        genesis,
         all_accounts,
         all_txns,
         events,
@@ -129,13 +151,24 @@ fn test_json_rpc_protocol() {
     assert_eq!(resp.status(), 404);
 
     // only post method is allowed
-    let url = format!("http://{}", address);
+    let url = format!("http://{}/v1", address);
     let resp = client.get(&url).send().unwrap();
     assert_eq!(resp.status(), 405);
 
     // empty payload is not allowed
     let resp = client.post(&url).send().unwrap();
     assert_eq!(resp.status(), 400);
+
+    // For now /v1 and / are both supported
+    {
+        let url_v1 = format!("http://{}", address);
+        let resp = client.post(&url_v1).send().unwrap();
+        assert_eq!(resp.status(), 400);
+
+        let url_v2 = format!("http://{}/v2", address);
+        let resp = client.post(&url_v2).send().unwrap();
+        assert_eq!(resp.status(), 404);
+    }
 
     // non json payload
     let resp = client.post(&url).body("non json").send().unwrap();
@@ -145,26 +178,69 @@ fn test_json_rpc_protocol() {
     let request = serde_json::json!({"jsonrpc": "1.0", "method": "add", "params": [1, 2], "id": 1});
     let resp = client.post(&url).json(&request).send().unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(fetch_error(resp), -32600);
+    assert_eq!(error_code(resp), -32600);
 
     // invalid request id
     let request =
         serde_json::json!({"jsonrpc": "2.0", "method": "add", "params": [1, 2], "id": true});
     let resp = client.post(&url).json(&request).send().unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(fetch_error(resp), -32600);
+    assert_eq!(error_code(resp), -32600);
 
     // invalid rpc method
     let request = serde_json::json!({"jsonrpc": "2.0", "method": "add", "params": [1, 2], "id": 1});
     let resp = client.post(&url).json(&request).send().unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(fetch_error(resp), -32601);
+    assert_eq!(error_code(resp), -32601);
 
-    // invalid arguments
-    let request = serde_json::json!({"jsonrpc": "2.0", "method": "get_account_state", "params": [1, 2], "id": 1});
+    // invalid arguments: too many arguments
+    let request =
+        serde_json::json!({"jsonrpc": "2.0", "method": "get_account", "params": [1, 2], "id": 1});
     let resp = client.post(&url).json(&request).send().unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(fetch_error(resp), -32000);
+    let error_resp: JsonRpcErrorResponse = resp.json().unwrap();
+    assert_eq!(error_resp.error.code, -32602);
+    assert_eq!(error_resp.error.message, "Invalid params");
+
+    let invalid_args: InvalidArguments = error_resp.error.as_invalid_arguments().unwrap();
+    assert_eq!(invalid_args.required, 1);
+    assert_eq!(invalid_args.optional, 0);
+    assert_eq!(invalid_args.given, 2);
+
+    // invalid arguments: not enough arguments
+    let request =
+        serde_json::json!({"jsonrpc": "2.0", "method": "get_account", "params": [], "id": 1});
+    let resp = client.post(&url).json(&request).send().unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(error_code(resp), -32602);
+
+    // invalid arguments: too many arguments for a method has optional arguments
+    let request =
+        serde_json::json!({"jsonrpc": "2.0", "method": "get_metadata", "params": [1, 2], "id": 1});
+    let resp = client.post(&url).json(&request).send().unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let error_resp: JsonRpcErrorResponse = resp.json().unwrap();
+    assert_eq!(error_resp.error.code, -32602);
+    assert_eq!(error_resp.error.message, "Invalid params");
+
+    let invalid_args: InvalidArguments = error_resp.error.as_invalid_arguments().unwrap();
+    assert_eq!(invalid_args.required, 0);
+    assert_eq!(invalid_args.optional, 1);
+    assert_eq!(invalid_args.given, 2);
+
+    // Response includes two mandatory field, regardless of errors
+    let request =
+        serde_json::json!({"jsonrpc": "2.0", "method": "get_account", "params": [1, 2], "id": 1});
+    let resp = client.post(&url).json(&request).send().unwrap();
+    assert_eq!(resp.status(), 200);
+    let data: JsonMap = resp.json().unwrap();
+    assert!(data.get(JSONRPC_LIBRA_LEDGER_VERSION).is_some());
+    assert!(data.get(JSONRPC_LIBRA_LEDGER_TIMESTAMPUSECS).is_some());
+    assert_eq!(
+        data.get(JSONRPC_LIBRA_CHAIN_ID).expect("must have"),
+        ChainId::test().id()
+    );
 }
 
 #[test]
@@ -175,7 +251,7 @@ fn test_transaction_submission() {
     let address = format!("0.0.0.0:{}", port);
     let mut runtime = test_bootstrap(address.parse().unwrap(), Arc::new(mock_db), mp_sender);
     let client = JsonRpcAsyncClient::new(
-        reqwest::Url::from_str(format!("http://{}:{}", "127.0.0.1", port).as_str())
+        reqwest::Url::from_str(format!("http://{}:{}/v1", "127.0.0.1", port).as_str())
             .expect("invalid url"),
     );
 
@@ -213,12 +289,8 @@ fn test_transaction_submission() {
     if let Err(e) = response {
         if let Some(error) = e.downcast_ref::<JsonRpcError>() {
             assert_eq!(error.code, ServerCode::VmValidationError as i16);
-            let vm_status: VMStatus =
-                serde_json::from_value(error.data.as_ref().unwrap().clone()).unwrap();
-            assert_eq!(
-                vm_status.major_status,
-                StatusCode::SENDING_ACCOUNT_DOES_NOT_EXIST
-            );
+            let status_code: StatusCode = error.as_status_code().unwrap();
+            assert_eq!(status_code, StatusCode::SENDING_ACCOUNT_DOES_NOT_EXIST);
         } else {
             panic!("unexpected error format");
         }
@@ -227,75 +299,74 @@ fn test_transaction_submission() {
     }
 }
 
-// TODO: Once account configs are published in the mock DB this test can be turned back on
-//#[test]
-//fn test_get_account_state() {
-//    let (mock_db, client, mut runtime) = create_database_client_and_runtime(1024);
-//
-//    // test case 1: single call
-//    let (first_account, blob) = mock_db.all_accounts.iter().next().unwrap();
-//    let expected_resource = AccountState::try_from(blob).unwrap();
-//
-//    let mut batch = JsonRpcBatch::default();
-//    batch.add_get_account_state_request(*first_account);
-//    let result = execute_batch_and_get_first_response(&client, &mut runtime, batch);
-//    let account = AccountView::optional_from_response(result)
-//        .unwrap()
-//        .expect("account does not exist");
-//    let account_balances: Vec<_> = account.balances.iter().map(|bal| bal.amount).collect();
-//    let expected_resource_balances: Vec<_> = expected_resource
-//        .get_balance_resources(&[from_currency_code_string(LBR_NAME).unwrap()])
-//        .unwrap()
-//        .iter()
-//        .map(|bal_resource| bal_resource.coin())
-//        .collect();
-//    assert_eq!(account_balances, expected_resource_balances);
-//    assert_eq!(
-//        account.sequence_number,
-//        expected_resource
-//            .get_account_resource()
-//            .unwrap()
-//            .unwrap()
-//            .sequence_number()
-//    );
-//
-//    // test case 2: batch call
-//    let mut batch = JsonRpcBatch::default();
-//    let mut states = vec![];
-//
-//    for (account, blob) in mock_db.all_accounts.iter() {
-//        if account == first_account {
-//            continue;
-//        }
-//        states.push(AccountState::try_from(blob).unwrap());
-//        batch.add_get_account_state_request(*account);
-//    }
-//
-//    let responses = runtime.block_on(client.execute(batch)).unwrap();
-//    assert_eq!(responses.len(), states.len());
-//
-//    for (idx, response) in responses.into_iter().enumerate() {
-//        let account = AccountView::optional_from_response(response.expect("error in response"))
-//            .unwrap()
-//            .expect("account does not exist");
-//        let account_balances: Vec<_> = account.balances.iter().map(|bal| bal.amount).collect();
-//        let expected_resource_balances: Vec<_> = states[idx]
-//            .get_balance_resources(&[from_currency_code_string(LBR_NAME).unwrap()])
-//            .unwrap()
-//            .iter()
-//            .map(|bal_resource| bal_resource.coin())
-//            .collect();
-//        assert_eq!(account_balances, expected_resource_balances);
-//        assert_eq!(
-//            account.sequence_number,
-//            states[idx]
-//                .get_account_resource()
-//                .unwrap()
-//                .unwrap()
-//                .sequence_number()
-//        );
-//    }
-//}
+#[test]
+fn test_get_account() {
+    let (mock_db, client, mut runtime) = create_database_client_and_runtime(1024);
+
+    // test case 1: single call
+    let (first_account, blob) = mock_db.all_accounts.iter().next().unwrap();
+    let expected_resource = AccountState::try_from(blob).unwrap();
+
+    let mut batch = JsonRpcBatch::default();
+    batch.add_get_account_request(*first_account);
+    let result = execute_batch_and_get_first_response(&client, &mut runtime, batch);
+    let account = AccountView::optional_from_response(result)
+        .unwrap()
+        .expect("account does not exist");
+    let account_balances: Vec<_> = account.balances.iter().map(|bal| bal.amount).collect();
+    let expected_resource_balances: Vec<_> = expected_resource
+        .get_balance_resources(&[from_currency_code_string(LBR_NAME).unwrap()])
+        .unwrap()
+        .iter()
+        .map(|(_, bal_resource)| bal_resource.coin())
+        .collect();
+    assert_eq!(account_balances, expected_resource_balances);
+    assert_eq!(
+        account.sequence_number,
+        expected_resource
+            .get_account_resource()
+            .unwrap()
+            .unwrap()
+            .sequence_number()
+    );
+
+    // test case 2: batch call
+    let mut batch = JsonRpcBatch::default();
+    let mut states = vec![];
+
+    for (account, blob) in mock_db.all_accounts.iter() {
+        if account == first_account {
+            continue;
+        }
+        states.push(AccountState::try_from(blob).unwrap());
+        batch.add_get_account_request(*account);
+    }
+
+    let responses = runtime.block_on(client.execute(batch)).unwrap();
+    assert_eq!(responses.len(), states.len());
+
+    for (idx, response) in responses.into_iter().enumerate() {
+        let account = AccountView::optional_from_response(response.expect("error in response"))
+            .unwrap()
+            .expect("account does not exist");
+        let account_balances: Vec<_> = account.balances.iter().map(|bal| bal.amount).collect();
+        let expected_resource_balances: Vec<_> = states[idx]
+            .get_balance_resources(&[from_currency_code_string(LBR_NAME).unwrap()])
+            .unwrap()
+            .iter()
+            .map(|(_, bal_resource)| bal_resource.coin())
+            .collect();
+        assert_eq!(account_balances, expected_resource_balances);
+        assert_eq!(
+            account.sequence_number,
+            states[idx]
+                .get_account_resource()
+                .unwrap()
+                .unwrap()
+                .sequence_number()
+        );
+    }
+}
 
 #[test]
 fn test_get_metadata_latest() {
@@ -324,6 +395,22 @@ fn test_get_metadata() {
     let result_view = BlockMetadata::from_response(result).unwrap();
     assert_eq!(result_view.version, 1);
     assert_eq!(result_view.timestamp, mock_db.timestamps[1]);
+}
+
+#[test]
+fn test_limit_batch_size() {
+    let (_, client, mut runtime) = create_database_client_and_runtime(1);
+
+    let mut batch = JsonRpcBatch::default();
+
+    for i in 0..21 {
+        batch.add_get_metadata_request(Some(i));
+    }
+
+    let ret = runtime.block_on(client.execute(batch));
+    assert!(ret.is_err());
+    let expected = "JsonRpcError JsonRpcError { code: -32600, message: \"Invalid Request\", data: Some(ExceedBatchSizeLimit(ExceedBatchSizeLimit { limit: 20, batch_request_size: 21 })) }";
+    assert_eq!(ret.unwrap_err().to_string(), expected)
 }
 
 #[test]
@@ -378,7 +465,7 @@ fn test_get_transactions() {
             let version = base_version + i as u64;
             assert_eq!(view.version, version);
             let (tx, status) = &mock_db.all_txns[version as usize];
-            assert_eq!(view.hash, tx.hash().to_string());
+            assert_eq!(view.hash, tx.hash().to_hex());
 
             // Check we returned correct events
             let expected_events = mock_db
@@ -389,7 +476,7 @@ fn test_get_transactions() {
                 .collect::<Vec<_>>();
 
             assert_eq!(expected_events.len(), view.events.len());
-            assert_eq!(status, &view.vm_status);
+            assert_eq!(VMStatusView::from(status), view.vm_status);
 
             for (i, event_view) in view.events.iter().enumerate() {
                 let expected_event = expected_events.get(i).expect("Expected event didn't find");
@@ -409,7 +496,7 @@ fn test_get_transactions() {
                     }
                     _ => panic!("Returned value doesn't match!"),
                 },
-                Transaction::WaypointWriteSet(_) => match view.transaction {
+                Transaction::GenesisTransaction(_) => match view.transaction {
                     TransactionDataView::WriteSet { .. } => {}
                     _ => panic!("Returned value doesn't match!"),
                 },
@@ -417,9 +504,11 @@ fn test_get_transactions() {
                     TransactionDataView::UserTransaction {
                         sender,
                         script_hash,
+                        chain_id,
                         ..
                     } => {
                         assert_eq!(&t.sender().to_string(), sender);
+                        assert_eq!(&t.chain_id().id(), chain_id);
                         // TODO: verify every field
                         if let TransactionPayload::Script(s) = t.payload() {
                             assert_eq!(script_hash, &HashValue::sha3_256_of(s.code()).to_hex());
@@ -453,7 +542,7 @@ fn test_get_account_transaction() {
                 .find_map(|(t, status)| {
                     if let Ok(x) = t.as_signed_user_txn() {
                         if x.sender() == *acc && x.sequence_number() == seq {
-                            assert_eq!(tx_view.hash, t.hash().to_string());
+                            assert_eq!(tx_view.hash, t.hash().to_hex());
                             return Some((x, status));
                         }
                     }
@@ -471,8 +560,8 @@ fn test_get_account_transaction() {
 
             assert_eq!(tx_view.events.len(), expected_events.len());
 
-            // check VM major status
-            assert_eq!(&tx_view.vm_status, expected_status);
+            // check VM status
+            assert_eq!(tx_view.vm_status, VMStatusView::from(expected_status));
 
             for (i, event_view) in tx_view.events.iter().enumerate() {
                 let expected_event = expected_events.get(i).expect("Expected event didn't find");
@@ -624,7 +713,8 @@ fn create_database_client_and_runtime(
         mp_sender,
     );
     let client = JsonRpcAsyncClient::new(
-        reqwest::Url::from_str(format!("http://127.0.0.1:{}", port).as_str()).expect("invalid url"),
+        reqwest::Url::from_str(format!("http://127.0.0.1:{}/v1", port).as_str())
+            .expect("invalid url"),
     );
 
     (mock_db, client, runtime)
@@ -662,12 +752,7 @@ fn execute_batch_and_get_first_response(
         .unwrap()
 }
 
-fn fetch_error(resp: reqwest::blocking::Response) -> i16 {
-    let data: JsonMap = resp.json().unwrap();
-    let error: JsonMap = serde_json::from_value(data.get("error").unwrap().clone()).unwrap();
-    assert_eq!(
-        data.get("jsonrpc").unwrap(),
-        &serde_json::Value::String("2.0".to_string())
-    );
-    serde_json::from_value(error.get("code").unwrap().clone()).unwrap()
+fn error_code(resp: reqwest::blocking::Response) -> i16 {
+    let err_resp: JsonRpcErrorResponse = resp.json().unwrap();
+    err_resp.error.code
 }

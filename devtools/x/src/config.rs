@@ -14,28 +14,24 @@ use std::{
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     /// Package exceptions which need to be run special
-    package_exceptions: HashMap<String, Package>,
+    system_tests: HashMap<String, Package>,
     /// Configuration for generating summaries
     summaries: SummariesConfig,
     /// Workspace configuration
     workspace: WorkspaceConfig,
     /// Clippy configureation
     clippy: Clippy,
+    /// Fix configureation
+    fix: Fix,
+    /// Cargo configuration
+    cargo: CargoConfig,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Package {
+    /// Path to the crate from root
     path: PathBuf,
-    #[serde(default = "default_as_true")]
-    pub all_features: bool,
-    #[serde(default)]
-    pub system: bool,
-}
-
-// Workaround for https://github.com/serde-rs/serde/issues/368
-fn default_as_true() -> bool {
-    true
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -54,8 +50,6 @@ pub struct WorkspaceConfig {
     pub enforced_attributes: EnforcedAttributesConfig,
     /// Banned dependencies
     pub banned_deps: BannedDepsConfig,
-    /// Overlay config in this workspace
-    pub overlay: OverlayConfig,
     /// Test-only config in this workspace
     pub test_only: TestOnlyConfig,
     /// Subsets of this workspace
@@ -82,13 +76,6 @@ pub struct BannedDepsConfig {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct OverlayConfig {
-    /// A list of overlay feature names
-    pub features: Vec<String>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
 pub struct TestOnlyConfig {
     /// A list of test-only members
     pub members: HashSet<PathBuf>,
@@ -107,6 +94,17 @@ pub struct Clippy {
     allowed: Vec<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Fix {}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct CargoConfig {
+    pub toolchain: String,
+    pub flags: Option<String>,
+}
+
 impl Config {
     pub fn from_file(f: impl AsRef<Path>) -> Result<Self> {
         let contents = fs::read(f)?;
@@ -121,12 +119,12 @@ impl Config {
         Self::from_file(project_root().join("x.toml"))
     }
 
-    pub fn is_exception(&self, p: &str) -> bool {
-        self.package_exceptions.get(p).is_some()
+    pub fn cargo_config(&self) -> &CargoConfig {
+        &self.cargo
     }
 
-    pub fn package_exceptions(&self) -> &HashMap<String, Package> {
-        &self.package_exceptions
+    pub fn system_tests(&self) -> &HashMap<String, Package> {
+        &self.system_tests
     }
 
     pub fn summaries_config(&self) -> &SummariesConfig {

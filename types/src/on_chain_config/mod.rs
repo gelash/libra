@@ -16,18 +16,16 @@ use move_core_types::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 
-mod dual_attestation_limit;
 mod libra_version;
 mod registered_currencies;
 mod validator_set;
 mod vm_config;
 
 pub use self::{
-    dual_attestation_limit::DualAttestationLimit,
     libra_version::LibraVersion,
     registered_currencies::RegisteredCurrencies,
     validator_set::ValidatorSet,
-    vm_config::{VMConfig, VMPublishingOption},
+    vm_config::{ModulePublishingOption, ScriptPublishingOption, VMConfig, VMPublishingOption},
 };
 
 /// To register an on-chain config in Rust:
@@ -58,7 +56,6 @@ pub const ON_CHAIN_CONFIG_REGISTRY: &[ConfigID] = &[
     LibraVersion::CONFIG_ID,
     ValidatorSet::CONFIG_ID,
     RegisteredCurrencies::CONFIG_ID,
-    DualAttestationLimit::CONFIG_ID,
 ];
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,7 +94,7 @@ pub trait ConfigStorage {
 /// Trait to be implemented by a Rust struct representation of an on-chain config
 /// that is stored in storage as a serialized byte array
 pub trait OnChainConfig: Send + Sync + DeserializeOwned {
-    // association_address
+    // libra_root_address
     const ADDRESS: &'static str = CONFIG_ADDRESS_STR;
     const IDENTIFIER: &'static str;
     const CONFIG_ID: ConfigID = ConfigID(Self::ADDRESS, Self::IDENTIFIER);
@@ -122,7 +119,7 @@ pub trait OnChainConfig: Send + Sync + DeserializeOwned {
         Self::deserialize_default_impl(bytes)
     }
 
-    fn fetch_config<T>(storage: T) -> Option<Self>
+    fn fetch_config<T>(storage: &T) -> Option<Self>
     where
         T: ConfigStorage,
     {
@@ -194,10 +191,7 @@ impl Default for ConfigurationResource {
         Self {
             epoch: 0,
             last_reconfiguration_time: 0,
-            events: EventHandle::new_from_address(
-                &crate::account_config::association_address(),
-                16,
-            ),
+            events: EventHandle::new_from_address(&crate::account_config::libra_root_address(), 16),
         }
     }
 }

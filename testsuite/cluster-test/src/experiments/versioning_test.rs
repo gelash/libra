@@ -5,29 +5,26 @@
 
 use crate::{
     cluster::Cluster,
-    experiments::{Context, Experiment, ExperimentParam},
+    experiments::{
+        compatibility_test::update_batch_instance, Context, Experiment, ExperimentParam,
+    },
     instance,
     instance::Instance,
     tx_emitter::{execute_and_wait_transactions, AccountData, EmitJobRequest},
 };
 use anyhow::format_err;
 use async_trait::async_trait;
-use futures::future::try_join_all;
 use libra_logger::prelude::*;
 use libra_types::{
     account_config::{lbr_type_tag, LBR_NAME},
+    chain_id::ChainId,
     on_chain_config::LibraVersion,
     transaction::{helpers::create_user_txn, TransactionPayload},
 };
-use std::{
-    collections::HashSet,
-    fmt,
-    time::{Duration, Instant},
-};
+use std::{collections::HashSet, fmt, time::Duration};
 use structopt::StructOpt;
-use tokio::time;
 use transaction_builder::{
-    encode_transfer_with_metadata_script, encode_update_libra_version_script,
+    encode_peer_to_peer_with_metadata_script, encode_update_libra_version_script,
 };
 
 #[derive(StructOpt, Debug)]
@@ -44,7 +41,9 @@ pub struct ValidatorVersioningParams {
 
 pub struct ValidatorVersioning {
     first_batch: Vec<Instance>,
+    first_batch_lsr: Vec<Instance>,
     second_batch: Vec<Instance>,
+    second_batch_lsr: Vec<Instance>,
     full_nodes: Vec<Instance>,
     updated_image_tag: String,
 }
@@ -60,52 +59,24 @@ impl ExperimentParam for ValidatorVersioningParams {
             );
         }
         let (first_batch, second_batch) = cluster.split_n_validators_random(self.count);
+        let first_batch = first_batch.into_validator_instances();
+        let second_batch = second_batch.into_validator_instances();
+        let mut first_batch_lsr = vec![];
+        let mut second_batch_lsr = vec![];
+        if !cluster.lsr_instances().is_empty() {
+            first_batch_lsr = cluster.lsr_instances_for_validators(&first_batch);
+            second_batch_lsr = cluster.lsr_instances_for_validators(&second_batch);
+        }
 
         Self::E {
-            first_batch: first_batch.into_validator_instances(),
-            second_batch: second_batch.into_validator_instances(),
+            first_batch,
+            first_batch_lsr,
+            second_batch,
+            second_batch_lsr,
             full_nodes: cluster.fullnode_instances().to_vec(),
             updated_image_tag: self.updated_image_tag,
         }
     }
-}
-
-// Reboot `updated_instance` with newer image tag
-async fn update_batch_instance(
-    context: &mut Context<'_>,
-    updated_instance: &[Instance],
-    updated_tag: String,
-) -> anyhow::Result<()> {
-    let deadline = Instant::now() + Duration::from_secs(2 * 60);
-
-    info!("Stop Existing instances.");
-    let futures: Vec<_> = updated_instance.iter().map(Instance::stop).collect();
-    try_join_all(futures).await?;
-
-    info!("Reinstantiate a set of new nodes.");
-    let futures: Vec<_> = updated_instance
-        .iter()
-        .map(|instance| {
-            let mut newer_config = instance.instance_config().clone();
-            newer_config.replace_tag(updated_tag.clone()).unwrap();
-            context
-                .cluster_swarm
-                .spawn_new_instance(newer_config, false)
-        })
-        .collect();
-    let instances = try_join_all(futures).await?;
-
-    info!("Wait for the instances to recover.");
-    let futures: Vec<_> = instances
-        .iter()
-        .map(|instance| instance.wait_json_rpc(deadline))
-        .collect();
-    try_join_all(futures).await?;
-
-    // Add a timeout to have wait for validators back to healthy mode.
-    // TODO: Replace this with a blocking health check.
-    time::delay_for(Duration::from_secs(20)).await;
-    Ok(())
 }
 
 #[async_trait]
@@ -131,15 +102,21 @@ impl Experiment for ValidatorVersioning {
             .await?;
 
         info!("1. Changing the images for the instances in the first batch");
-        update_batch_instance(context, &self.first_batch, self.updated_image_tag.clone()).await?;
+        update_batch_instance(
+            context,
+            &self.first_batch,
+            &self.first_batch_lsr,
+            self.updated_image_tag.clone(),
+        )
+        .await?;
 
         info!("2. Send a transaction to make sure it is not rejected nor cause any fork");
-        let full_node = context.cluster.random_full_node_instance();
+        let full_node = context.cluster.random_fullnode_instance();
         let mut full_node_client = full_node.json_rpc_client();
         let mut account_1 = context.tx_emitter.take_account();
         let account_2 = context.tx_emitter.take_account();
 
-        let txn_payload = TransactionPayload::Script(encode_transfer_with_metadata_script(
+        let txn_payload = TransactionPayload::Script(encode_peer_to_peer_with_metadata_script(
             lbr_type_tag(),
             account_2.address,
             1,
@@ -161,6 +138,7 @@ impl Experiment for ValidatorVersioning {
                 0,
                 LBR_NAME.to_owned(),
                 10,
+                ChainId::test(),
             )
             .map_err(|e| format_err!("Failed to create signed transaction: {}", e))
         };
@@ -171,7 +149,13 @@ impl Experiment for ValidatorVersioning {
             .await?;
 
         info!("3. Change the rest of the images in the second batch");
-        update_batch_instance(context, &self.second_batch, self.updated_image_tag.clone()).await?;
+        update_batch_instance(
+            context,
+            &self.second_batch,
+            &self.second_batch_lsr,
+            self.updated_image_tag.clone(),
+        )
+        .await?;
 
         info!("4. Send a transaction to make sure this feature is still not activated.");
         let txn2 = txn_gen(&mut account_1)?;
@@ -192,6 +176,7 @@ impl Experiment for ValidatorVersioning {
             0,
             LBR_NAME.to_owned(),
             10,
+            ChainId::test(),
         )
         .map_err(|e| format_err!("Failed to create signed transaction: {}", e))?;
         faucet_account.sequence_number += 1;
@@ -221,14 +206,17 @@ impl Experiment for ValidatorVersioning {
         };
 
         info!("7. Change the images for the full nodes");
-        update_batch_instance(context, &self.full_nodes, self.updated_image_tag.clone()).await?;
+        update_batch_instance(
+            context,
+            &self.full_nodes,
+            &[],
+            self.updated_image_tag.clone(),
+        )
+        .await?;
 
         info!("8. Send a transaction to make sure it gets dropped by the full node mempool.");
 
-        let updated_full_node = context
-            .cluster
-            .random_full_node_instance()
-            .json_rpc_client();
+        let updated_full_node = context.cluster.random_fullnode_instance().json_rpc_client();
         if updated_full_node.submit_transaction(txn3).await.is_ok() {
             return Err(format_err!(
                 "Transaction should not be accepted by the full node."

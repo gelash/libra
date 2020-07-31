@@ -1,5 +1,6 @@
 //! account: alice, 1000000, 0, validator
 //! account: bob, 1000000, 0, validator
+//! account: invalidvalidator
 
 //! block-prologue
 //! proposer: bob
@@ -8,7 +9,7 @@
 // check: EXECUTED
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script{
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -28,7 +29,7 @@ script{
 
 //! new-transaction
 //! sender: bob
-// bob cannot remove itself, only the association can remove validators from the set
+// bob cannot remove itself, only the libra root account can remove validators from the set
 script{
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -44,7 +45,26 @@ script{
 // check: EXECUTED
 
 //! new-transaction
-//! sender: association
+script{
+    use 0x1::LibraSystem;
+    fun main(account: &signer) {
+        LibraSystem::add_validator(account, {{alice}});
+    }
+}
+// check: "ABORTED { code: 1,"
+
+//! new-transaction
+//! sender: libraroot
+script{
+    use 0x1::LibraSystem;
+    fun main(account: &signer) {
+        LibraSystem::add_validator(account, {{invalidvalidator}});
+    }
+}
+// check: "ABORTED { code: 3,"
+
+//! new-transaction
+//! sender: libraroot
 script{
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -56,3 +76,13 @@ script{
 }
 // check: NewEpochEvent
 // check: EXECUTED
+
+//! new-transaction
+//! sender: libraroot
+script{
+    use 0x1::LibraSystem;
+    fun main(account: &signer) {
+        LibraSystem::add_validator(account, {{alice}});
+    }
+}
+// check: "ABORTED { code: 4,"

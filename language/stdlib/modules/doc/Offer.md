@@ -98,8 +98,7 @@
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_Offer_redeem">redeem</a>&lt;Offered&gt;(account: &signer, offer_address: address): Offered <b>acquires</b> <a href="#0x1_Offer">Offer</a> {
   <b>let</b> <a href="#0x1_Offer">Offer</a>&lt;Offered&gt; { offered, for } = move_from&lt;<a href="#0x1_Offer">Offer</a>&lt;Offered&gt;&gt;(offer_address);
   <b>let</b> sender = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(account);
-  // fail with INSUFFICIENT_PRIVILEGES
-  <b>assert</b>(sender == for || sender == offer_address, 11);
+  <b>assert</b>(sender == for || sender == offer_address, EOFFER_DNE_FOR_ACCOUNT);
   offered
 }
 </code></pre>
@@ -193,12 +192,27 @@ Returns true if the recipient is allowed to redeem
 <code>offer_address</code>
 and false otherwise.
 
+TODO (dd): this is undefined if the offer does not exist. Should this be anded with
+"exists_at"?
+
 
 <a name="0x1_Offer_is_allowed_recipient"></a>
 
 
 <pre><code><b>define</b> <a href="#0x1_Offer_is_allowed_recipient">is_allowed_recipient</a>&lt;Offered&gt;(offer_addr: address, recipient: address): bool {
   recipient == <b>global</b>&lt;<a href="#0x1_Offer">Offer</a>&lt;Offered&gt;&gt;(offer_addr).for || recipient == offer_addr
+}
+</code></pre>
+
+
+Mirrors the Move function exists_at<Offered>, above.
+
+
+<a name="0x1_Offer_spec_exists_at"></a>
+
+
+<pre><code><b>define</b> <a href="#0x1_Offer_spec_exists_at">spec_exists_at</a>&lt;Offered&gt;(offer_addr: address): bool {
+    exists&lt;<a href="#0x1_Offer">Offer</a>&lt;Offered&gt;&gt;(offer_addr)
 }
 </code></pre>
 

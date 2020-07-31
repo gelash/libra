@@ -3,16 +3,24 @@
 
 #![forbid(unsafe_code)]
 
+mod compatibility_test;
 mod cpu_flamegraph;
 mod packet_loss_random_validators;
 mod performance_benchmark;
 mod performance_benchmark_three_region_simulation;
-mod reboot_random_validator;
+mod reboot_cluster;
+mod reboot_random_validators;
 mod recovery_time;
+mod twin_validator;
 mod versioning_test;
 
-use std::{collections::HashSet, fmt::Display, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    time::Duration,
+};
 
+pub use compatibility_test::{CompatibilityTest, CompatiblityTestParams};
 pub use packet_loss_random_validators::{
     PacketLossRandomValidators, PacketLossRandomValidatorsParams,
 };
@@ -20,12 +28,15 @@ pub use performance_benchmark::{PerformanceBenchmark, PerformanceBenchmarkParams
 pub use performance_benchmark_three_region_simulation::{
     PerformanceBenchmarkThreeRegionSimulation, PerformanceBenchmarkThreeRegionSimulationParams,
 };
-pub use reboot_random_validator::{RebootRandomValidators, RebootRandomValidatorsParams};
+pub use reboot_cluster::{RebootCluster, RebootClusterParams};
+pub use reboot_random_validators::{RebootRandomValidators, RebootRandomValidatorsParams};
 pub use recovery_time::{RecoveryTime, RecoveryTimeParams};
+pub use twin_validator::{TwinValidators, TwinValidatorsParams};
 pub use versioning_test::{ValidatorVersioning, ValidatorVersioningParams};
 
 use crate::{
     cluster::Cluster,
+    cluster_builder::{ClusterBuilder, ClusterBuilderParams},
     prometheus::Prometheus,
     report::SuiteReport,
     tx_emitter::{EmitJobRequest, TxEmitter},
@@ -37,7 +48,6 @@ use crate::{
 };
 use async_trait::async_trait;
 pub use cpu_flamegraph::{CpuFlamegraph, CpuFlamegraphParams};
-use std::collections::HashMap;
 use structopt::{clap::AppSettings, StructOpt};
 
 #[async_trait]
@@ -58,6 +68,8 @@ pub struct Context<'a> {
     pub tx_emitter: &'a mut TxEmitter,
     pub trace_tail: &'a mut TraceTail,
     pub prometheus: &'a Prometheus,
+    pub cluster_builder: &'a mut ClusterBuilder,
+    pub cluster_builder_params: &'a ClusterBuilderParams,
     pub cluster: &'a Cluster,
     pub report: &'a mut SuiteReport,
     pub global_emit_job_request: &'a mut Option<EmitJobRequest>,
@@ -72,6 +84,8 @@ impl<'a> Context<'a> {
         tx_emitter: &'a mut TxEmitter,
         trace_tail: &'a mut TraceTail,
         prometheus: &'a Prometheus,
+        cluster_builder: &'a mut ClusterBuilder,
+        cluster_builder_params: &'a ClusterBuilderParams,
         cluster: &'a Cluster,
         report: &'a mut SuiteReport,
         emit_job_request: &'a mut Option<EmitJobRequest>,
@@ -83,6 +97,8 @@ impl<'a> Context<'a> {
             tx_emitter,
             trace_tail,
             prometheus,
+            cluster_builder,
+            cluster_builder_params,
             cluster,
             report,
             global_emit_job_request: emit_job_request,
@@ -129,8 +145,11 @@ pub fn get_experiment(name: &str, args: &[String], cluster: &Cluster) -> Box<dyn
         "reboot_random_validators",
         f::<RebootRandomValidatorsParams>(),
     );
+    known_experiments.insert("twin", f::<TwinValidatorsParams>());
     known_experiments.insert("generate_cpu_flamegraph", f::<CpuFlamegraphParams>());
     known_experiments.insert("versioning_testing", f::<ValidatorVersioningParams>());
+    known_experiments.insert("compatibility_test", f::<CompatiblityTestParams>());
+    known_experiments.insert("reboot_cluster", f::<RebootClusterParams>());
 
     let builder = known_experiments.get(name).expect("Experiment not found");
     builder(args, cluster)

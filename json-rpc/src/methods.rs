@@ -3,7 +3,7 @@
 
 //! Module contains RPC method handlers for Full Node JSON-RPC interface
 use crate::{
-    errors::JsonRpcError,
+    errors::{ErrorData, InvalidArguments, JsonRpcError},
     views::{
         AccountStateWithProofView, AccountView, BlockMetadata, CurrencyInfoView, EventView,
         StateProofView, TransactionView,
@@ -11,25 +11,24 @@ use crate::{
 };
 use anyhow::{ensure, format_err, Error, Result};
 use core::future::Future;
-use debug_interface::prelude::*;
 use futures::{channel::oneshot, SinkExt};
 use libra_config::config::RoleType;
 use libra_crypto::hash::CryptoHash;
 use libra_mempool::MempoolClientSender;
+use libra_trace::prelude::*;
 use libra_types::{
     account_address::AccountAddress,
-    account_config::{from_currency_code_string, CurrencyInfoResource},
+    account_config::{from_currency_code_string, libra_root_address},
     account_state::AccountState,
+    chain_id::ChainId,
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     mempool_status::MempoolStatusCode,
-    move_resource::MoveStorage,
-    on_chain_config::{OnChainConfig, RegisteredCurrencies},
     transaction::SignedTransaction,
 };
 use network::counters;
 use serde_json::Value;
-use std::{collections::HashMap, convert::TryFrom, ops::Deref, pin::Pin, str::FromStr, sync::Arc};
+use std::{collections::HashMap, convert::TryFrom, pin::Pin, str::FromStr, sync::Arc};
 use storage_interface::DbReader;
 
 #[derive(Clone)]
@@ -37,19 +36,33 @@ pub(crate) struct JsonRpcService {
     db: Arc<dyn DbReader>,
     mempool_sender: MempoolClientSender,
     role: RoleType,
+    chain_id: ChainId,
+    pub batch_size_limit: u16,
 }
 
 impl JsonRpcService {
-    pub fn new(db: Arc<dyn DbReader>, mempool_sender: MempoolClientSender, role: RoleType) -> Self {
+    pub fn new(
+        db: Arc<dyn DbReader>,
+        mempool_sender: MempoolClientSender,
+        role: RoleType,
+        chain_id: ChainId,
+        batch_size_limit: u16,
+    ) -> Self {
         Self {
             db,
             mempool_sender,
             role,
+            chain_id,
+            batch_size_limit,
         }
     }
 
     pub fn get_latest_ledger_info(&self) -> Result<LedgerInfoWithSignatures> {
         self.db.get_latest_ledger_info()
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_id
     }
 }
 
@@ -64,10 +77,19 @@ pub(crate) struct JsonRpcRequest {
 }
 
 impl JsonRpcRequest {
-    /// Returns the request parameter at the given index. Note: this method should not panic with
-    /// an out of bounds error, as the number of request parameters has already been checked.
+    /// Returns the request parameter at the given index.
+    /// Returns Null if given index is out of bounds.
     fn get_param(&self, index: usize) -> Value {
-        self.params[index].clone()
+        self.get_param_with_default(index, Value::Null)
+    }
+
+    /// Returns the request parameter at the given index.
+    /// Returns default Value if given index is out of bounds.
+    fn get_param_with_default(&self, index: usize, default: Value) -> Value {
+        if self.params.len() > index {
+            return self.params[index].clone();
+        }
+        default
     }
 
     fn version(&self) -> u64 {
@@ -98,31 +120,48 @@ async fn submit(mut service: JsonRpcService, request: JsonRpcRequest) -> Result<
 }
 
 /// Returns account state (AccountView) by given address
-async fn get_account_state(
+async fn get_account(
     service: JsonRpcService,
     request: JsonRpcRequest,
 ) -> Result<Option<AccountView>> {
     let address: String = serde_json::from_value(request.get_param(0))?;
     let account_address = AccountAddress::from_str(&address)?;
-    let response = service
+    let account_state_blob = service
         .db
         .get_account_state_with_proof_by_version(account_address, request.version())?
         .0;
+
+    let blob = match account_state_blob {
+        Some(val) => val,
+        None => return Ok(None),
+    };
+
+    let account_state = AccountState::try_from(&blob)?;
+    let account_resource = account_state
+        .get_account_resource()?
+        .ok_or_else(|| format_err!("invalid account data: no account resource"))?;
+    let freezing_bit = account_state
+        .get_freezing_bit()?
+        .ok_or_else(|| format_err!("invalid account data: no freezing bit"))?;
+
     let currency_info = currencies_info(service, request).await?;
     let currencies: Vec<_> = currency_info
         .into_iter()
         .map(|info| from_currency_code_string(&info.code))
         .collect::<Result<_, _>>()?;
-    if let Some(blob) = response {
-        let account_state = AccountState::try_from(&blob)?;
-        if let Some(account) = account_state.get_account_resource()? {
-            let balances = account_state.get_balance_resources(&currencies)?;
-            if let Some(account_role) = account_state.get_account_role()? {
-                return Ok(Some(AccountView::new(&account, balances, account_role)));
-            }
-        }
-    }
-    Ok(None)
+
+    let account_role = account_state
+        .get_account_role(&currencies)?
+        .ok_or_else(|| format_err!("invalid account data: no account role"))?;
+
+    let balances = account_state.get_balance_resources(&currencies)?;
+
+    Ok(Some(AccountView::new(
+        &account_resource,
+        balances,
+        account_role,
+        freezing_bit,
+    )))
 }
 
 /// Returns the blockchain metadata for a specified version. If no version is specified, default to
@@ -189,10 +228,10 @@ async fn get_transactions(
 
         result.push(TransactionView {
             version: start_version + v as u64,
-            hash: tx.hash().to_string(),
+            hash: tx.hash().to_hex(),
             transaction: tx.into(),
             events,
-            vm_status: info.major_status(),
+            vm_status: info.status().into(),
             gas_used: info.gas_used(),
         });
     }
@@ -232,10 +271,10 @@ async fn get_account_transaction(
 
         Ok(Some(TransactionView {
             version: tx_version,
-            hash: tx.transaction.hash().to_string(),
+            hash: tx.transaction.hash().to_hex(),
             transaction: tx.transaction.into(),
             events,
-            vm_status: tx.proof.transaction_info().major_status(),
+            vm_status: tx.proof.transaction_info().status().into(),
             gas_used: tx.proof.transaction_info().gas_used(),
         }))
     } else {
@@ -266,28 +305,20 @@ async fn currencies_info(
     service: JsonRpcService,
     request: JsonRpcRequest,
 ) -> Result<Vec<CurrencyInfoView>> {
-    let raw_data = service.db.deref().batch_fetch_resources_by_version(
-        vec![RegisteredCurrencies::CONFIG_ID.access_path()],
-        request.version(),
-    )?;
-    ensure!(raw_data.len() == 1, "invalid storage result");
-    let currencies = RegisteredCurrencies::from_bytes(&raw_data[0])?;
-    let access_paths: Vec<_> = currencies
-        .currency_codes()
-        .iter()
-        .map(|code| CurrencyInfoResource::resource_path_for(code.clone()))
-        .collect();
-
-    let mut currencies = vec![];
-    for raw_data in service
+    if let Some(blob) = service
         .db
-        .deref()
-        .batch_fetch_resources_by_version(access_paths, request.version())?
+        .get_account_state_with_proof_by_version(libra_root_address(), request.version())?
+        .0
     {
-        let currency_info = CurrencyInfoResource::try_from_bytes(&raw_data)?;
-        currencies.push(CurrencyInfoView::from(currency_info));
+        let account_state = AccountState::try_from(&blob)?;
+        Ok(account_state
+            .get_registered_currency_info_resources()?
+            .iter()
+            .map(|info| CurrencyInfoView::from(info.as_ref().unwrap()))
+            .collect())
+    } else {
+        Ok(vec![])
     }
-    Ok(currencies)
 }
 
 /// Returns proof of new state relative to version known to client
@@ -329,37 +360,40 @@ async fn get_account_state_with_proof(
 
 /// Returns the number of peers this node is connected to
 async fn get_network_status(service: JsonRpcService, _request: JsonRpcRequest) -> Result<u64> {
-    let blah = counters::LIBRA_NETWORK_PEERS
+    let peers = counters::LIBRA_NETWORK_PEERS
         .get_metric_with_label_values(&[service.role.as_str(), "connected"])?;
-    Ok(blah.get() as u64)
+    Ok(peers.get() as u64)
 }
 
 /// Builds registry of all available RPC methods
 /// To register new RPC method, add it via `register_rpc_method!` macros call
 /// Note that RPC method name will equal to name of function
+#[allow(unused_comparisons)]
 pub(crate) fn build_registry() -> RpcRegistry {
     let mut registry = RpcRegistry::new();
-    register_rpc_method!(registry, "submit", submit, 1);
-    register_rpc_method!(registry, "get_metadata", get_metadata, 1);
-    register_rpc_method!(registry, "get_account_state", get_account_state, 1);
-    register_rpc_method!(registry, "get_transactions", get_transactions, 3);
+    register_rpc_method!(registry, "submit", submit, 1, 0);
+    register_rpc_method!(registry, "get_metadata", get_metadata, 0, 1);
+    register_rpc_method!(registry, "get_account", get_account, 1, 0);
+    register_rpc_method!(registry, "get_transactions", get_transactions, 3, 0);
     register_rpc_method!(
         registry,
         "get_account_transaction",
         get_account_transaction,
-        3
+        3,
+        0
     );
-    register_rpc_method!(registry, "get_events", get_events, 3);
-    register_rpc_method!(registry, "get_currencies", currencies_info, 0);
+    register_rpc_method!(registry, "get_events", get_events, 3, 0);
+    register_rpc_method!(registry, "get_currencies", currencies_info, 0, 0);
 
-    register_rpc_method!(registry, "get_state_proof", get_state_proof, 1);
+    register_rpc_method!(registry, "get_state_proof", get_state_proof, 1, 0);
     register_rpc_method!(
         registry,
         "get_account_state_with_proof",
         get_account_state_with_proof,
-        3
+        3,
+        0
     );
-    register_rpc_method!(registry, "get_network_status", get_network_status, 0);
+    register_rpc_method!(registry, "get_network_status", get_network_status, 0, 0);
 
     registry
 }

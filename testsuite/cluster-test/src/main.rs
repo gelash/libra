@@ -252,6 +252,8 @@ struct BasicSwarmUtil {
 struct ClusterTestRunner {
     logs: LogTail,
     trace_tail: TraceTail,
+    cluster_builder: ClusterBuilder,
+    cluster_builder_params: ClusterBuilderParams,
     cluster: Cluster,
     health_check_runner: HealthCheckRunner,
     slack: SlackClient,
@@ -361,7 +363,7 @@ impl BasicSwarmUtil {
     pub async fn diag(&self) -> Result<()> {
         let emitter = TxEmitter::new(&self.cluster);
         let mut faucet_account: Option<AccountData> = None;
-        let instances: Vec<_> = self.cluster.all_instances().collect();
+        let instances: Vec<_> = self.cluster.validator_and_fullnode_instances().collect();
         for instance in &instances {
             print!("Getting faucet account sequence number on {}...", instance);
             let account = emitter
@@ -462,8 +464,9 @@ impl ClusterTestRunner {
             .expect("Failed to discover grafana url in k8s");
         let prometheus = Prometheus::new(prometheus_ip, grafana_base_url);
         let cluster_builder = ClusterBuilder::new(current_tag.to_string(), cluster_swarm.clone());
+        let cluster_builder_params = args.cluster_builder_params.clone();
         let cluster = cluster_builder
-            .setup_cluster(&args.cluster_builder_params)
+            .setup_cluster(&cluster_builder_params, true)
             .await
             .map_err(|e| format_err!("Failed to setup cluster: {}", e))?;
         let log_tail_started = Instant::now();
@@ -499,6 +502,8 @@ impl ClusterTestRunner {
         Ok(Self {
             logs,
             trace_tail,
+            cluster_builder,
+            cluster_builder_params,
             cluster,
             health_check_runner,
             slack,
@@ -561,11 +566,15 @@ impl ClusterTestRunner {
         let suite_started = Instant::now();
         for experiment in suite.experiments {
             let experiment_name = format!("{}", experiment);
-            self.run_single_experiment(experiment, None)
+            let experiment_result = self
+                .run_single_experiment(experiment, None)
                 .await
-                .map_err(move |e| {
-                    format_err!("Experiment `{}` failed: `{}`", experiment_name, e)
-                })?;
+                .map_err(move |e| format_err!("Experiment `{}` failed: `{}`", experiment_name, e));
+            if let Err(e) = experiment_result.as_ref() {
+                self.report.report_text(e.to_string());
+                self.print_report();
+                experiment_result?;
+            }
         }
         info!(
             "Suite completed in {:?}",
@@ -653,6 +662,8 @@ impl ClusterTestRunner {
             &mut self.tx_emitter,
             &mut self.trace_tail,
             &self.prometheus,
+            &mut self.cluster_builder,
+            &self.cluster_builder_params,
             &self.cluster,
             &mut self.report,
             &mut global_emit_job_request,
@@ -710,13 +721,20 @@ impl ClusterTestRunner {
             "All nodes are now healthy. Checking json rpc endpoints of validators and full nodes"
         );
         loop {
-            let results = join_all(self.cluster.all_instances().map(Instance::try_json_rpc)).await;
+            let results = join_all(
+                self.cluster
+                    .validator_and_fullnode_instances()
+                    .map(Instance::try_json_rpc),
+            )
+            .await;
 
             if results.iter().all(Result::is_ok) {
                 break;
             }
             if Instant::now() > deadline {
-                for (instance, result) in zip(self.cluster.all_instances(), results) {
+                for (instance, result) in
+                    zip(self.cluster.validator_and_fullnode_instances(), results)
+                {
                     if let Err(err) = result {
                         warn!("Instance {} still unhealthy: {}", instance, err);
                     }
@@ -742,7 +760,7 @@ impl ClusterTestRunner {
             .cluster
             .find_instance_by_pod(pod)
             .ok_or_else(|| format_err!("Can not find instance with pod {}", pod))?;
-        instance.exec(cmd).await
+        instance.exec(cmd, false).await
     }
 }
 

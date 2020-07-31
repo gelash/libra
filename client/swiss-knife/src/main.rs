@@ -5,13 +5,18 @@ use libra_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     test_utils::KeyPair,
-    HashValue, Signature, SigningKey, Uniform, ValidCryptoMaterialStringExt,
+    Signature, SigningKey, Uniform, ValidCryptoMaterialStringExt,
 };
-use libra_types::transaction::{
-    authenticator::AuthenticationKey, RawTransaction, SignedTransaction, TransactionPayload,
+use libra_types::{
+    chain_id::ChainId,
+    transaction::{
+        authenticator::AuthenticationKey, RawTransaction, SignedTransaction, Transaction,
+        TransactionPayload,
+    },
 };
 use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use structopt::StructOpt;
 use swiss_knife::helpers;
 
@@ -22,6 +27,7 @@ enum Command {
     /// Refer to README.md for examples.
     GenerateRawTxn,
     /// Generates a SignedTransaction given the serialized RawTransaction, the public key and signature.
+    /// It also includes the txn_hash which gets included in the chain
     /// Takes the input json payload from stdin. Writes the output json payload to stdout.
     /// Refer to README.md for examples.
     GenerateSignedTxn,
@@ -30,10 +36,18 @@ enum Command {
         #[structopt(long)]
         seed: Option<u64>,
     },
-    /// Generates a signature using the provided Ed25519 private key.
-    SignPayloadUsingEd25519,
-    /// Verifies the Ed25519 signature using the provided Ed25519 public key.
+    /// Verifies the Ed25519 signature using the provided Ed25519 public
+    /// key. Assumes the caller has a correct binary payload: this is thex
+    /// Ed25519 signature verification you would find in an off-the-shelf
+    /// Ed25519 library (RFC 8032), hence advised only for sanity-checking and
+    /// testing.
     VerifyEd25519Signature,
+    /// Generates a signature of a RawTransaction using the provided Ed25519
+    /// private key. Handles producing the binary representation of that transaction.
+    SignTransactionUsingEd25519,
+    /// Verifies the Ed25519 signature using the provided Ed25519 public
+    /// key. Handles producing the binary representation of that transaction.
+    VerifyTransactionEd25519Signature,
 }
 
 #[derive(Debug, StructOpt)]
@@ -70,15 +84,6 @@ fn main() {
         Command::GenerateTestEd25519Keypair { seed } => {
             helpers::exit_success_with_data(generate_key_pair(seed));
         }
-        Command::SignPayloadUsingEd25519 => {
-            let input = helpers::read_stdin();
-            let request: SignPayloadUsingEd25519Request = serde_json::from_str(&input)
-                .map_err(|err| {
-                    helpers::exit_with_error(format!("Failed to deserialize json : {}", err))
-                })
-                .unwrap();
-            helpers::exit_success_with_data(sign_payload_using_ed25519(request));
-        }
         Command::VerifyEd25519Signature => {
             let input = helpers::read_stdin();
             let request: VerifyEd25519SignatureRequest = serde_json::from_str(&input)
@@ -87,6 +92,24 @@ fn main() {
                 })
                 .unwrap();
             helpers::exit_success_with_data(verify_signature_using_ed25519(request));
+        }
+        Command::SignTransactionUsingEd25519 => {
+            let input = helpers::read_stdin();
+            let request: SignTransactionUsingEd25519Request = serde_json::from_str(&input)
+                .map_err(|err| {
+                    helpers::exit_with_error(format!("Failed to deserialize json : {}", err))
+                })
+                .unwrap();
+            helpers::exit_success_with_data(sign_transaction_using_ed25519(request));
+        }
+        Command::VerifyTransactionEd25519Signature => {
+            let input = helpers::read_stdin();
+            let request: VerifyTransactionEd25519SignatureRequest = serde_json::from_str(&input)
+                .map_err(|err| {
+                    helpers::exit_with_error(format!("Failed to deserialize json : {}", err))
+                })
+                .unwrap();
+            helpers::exit_success_with_data(verify_transaction_signature_using_ed25519(request));
         }
     }
 }
@@ -98,6 +121,8 @@ struct TxnParams {
     pub sender_address: String,
     // Sequence number of this transaction corresponding to sender's account.
     pub sequence_number: u64,
+    // Chain ID of the Libra network this transaction is intended for
+    pub chain_id: String,
     // Maximal total gas specified by wallet to spend for this transaction.
     pub max_gas_amount: u64,
     // Maximal price can be paid per gas.
@@ -110,7 +135,7 @@ struct TxnParams {
     // will never be included.
     // A transaction that doesn't expire is represented by a very large value like
     // u64::max_value().
-    pub expiration_timestamp: u64,
+    pub expiration_timestamp_secs: u64,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -139,8 +164,8 @@ struct GenerateRawTxnRequest {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 struct GenerateRawTxnResponse {
+    pub script: String,
     pub raw_txn: String,
-    pub raw_txn_hash: String,
 }
 
 fn generate_raw_txn(g: GenerateRawTxnRequest) -> GenerateRawTxnResponse {
@@ -158,7 +183,7 @@ fn generate_raw_txn(g: GenerateRawTxnRequest) -> GenerateRawTxnResponse {
         } => {
             let coin_tag = helpers::coin_tag_parser(&coin_tag);
             let recipient_address = helpers::account_address_parser(&recipient_address);
-            transaction_builder::encode_transfer_with_metadata_script(
+            transaction_builder::encode_peer_to_peer_with_metadata_script(
                 coin_tag,
                 recipient_address,
                 amount,
@@ -167,16 +192,20 @@ fn generate_raw_txn(g: GenerateRawTxnRequest) -> GenerateRawTxnResponse {
             )
         }
     };
+    let payload = TransactionPayload::Script(script);
+    let script_hex = hex::encode(lcs::to_bytes(&payload).unwrap());
     let raw_txn = RawTransaction::new(
         helpers::account_address_parser(&g.txn_params.sender_address),
         g.txn_params.sequence_number,
-        TransactionPayload::Script(script),
+        payload,
         g.txn_params.max_gas_amount,
         g.txn_params.gas_unit_price,
         g.txn_params.gas_currency_code,
-        std::time::Duration::new(g.txn_params.expiration_timestamp, 0),
+        g.txn_params.expiration_timestamp_secs,
+        ChainId::from_str(&g.txn_params.chain_id).expect("Failed to convert str to ChainId"),
     );
     GenerateRawTxnResponse {
+        script: script_hex,
         raw_txn: hex::encode(
             lcs::to_bytes(&raw_txn)
                 .map_err(|err| {
@@ -187,7 +216,6 @@ fn generate_raw_txn(g: GenerateRawTxnRequest) -> GenerateRawTxnResponse {
                 })
                 .unwrap(),
         ),
-        raw_txn_hash: CryptoHash::hash(&raw_txn).to_hex(),
     }
 }
 
@@ -203,6 +231,7 @@ struct GenerateSignedTxnRequest {
 #[serde(rename_all = "snake_case")]
 struct GenerateSignedTxnResponse {
     pub signed_txn: String,
+    pub txn_hash: String,
 }
 
 fn generate_signed_txn(request: GenerateSignedTxnRequest) -> GenerateSignedTxnResponse {
@@ -234,6 +263,7 @@ fn generate_signed_txn(request: GenerateSignedTxnRequest) -> GenerateSignedTxnRe
         })
         .unwrap();
     let signed_txn = SignedTransaction::new(raw_txn, public_key, signature);
+    let txn_hash = CryptoHash::hash(&Transaction::UserTransaction(signed_txn.clone())).to_hex();
     let signed_txn = hex::encode(
         lcs::to_bytes(&signed_txn)
             .map_err(|err| {
@@ -244,7 +274,10 @@ fn generate_signed_txn(request: GenerateSignedTxnRequest) -> GenerateSignedTxnRe
             })
             .unwrap(),
     );
-    GenerateSignedTxnResponse { signed_txn }
+    GenerateSignedTxnResponse {
+        signed_txn,
+        txn_hash,
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -283,30 +316,37 @@ fn generate_key_pair(seed: Option<u64>) -> GenerateKeypairResponse {
     }
 }
 
+///////////////////////////
+// Sign a RawTransaction //
+///////////////////////////
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-struct SignPayloadUsingEd25519Request {
-    pub payload: String,
+struct SignTransactionUsingEd25519Request {
+    pub raw_txn: String,
     pub private_key: String,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-struct SignPayloadUsingEd25519Response {
+struct SignTransactionUsingEd25519Response {
     pub signature: String,
 }
 
-fn sign_payload_using_ed25519(
-    request: SignPayloadUsingEd25519Request,
-) -> SignPayloadUsingEd25519Response {
-    let hash_value = HashValue::from_hex(&request.payload)
-        .map_err(|err| {
-            helpers::exit_with_error(format!(
-                "Failed to hex decode payload into HashValue {} : {}",
-                request.payload, err
-            ))
-        })
-        .unwrap();
+fn sign_transaction_using_ed25519(
+    request: SignTransactionUsingEd25519Request,
+) -> SignTransactionUsingEd25519Response {
+    let raw_txn: RawTransaction = lcs::from_bytes(
+        &hex::decode(request.raw_txn.clone())
+            .map_err(|err| {
+                helpers::exit_with_error(format!("hex decode of raw_txn failed : {}", err))
+            })
+            .unwrap(),
+    )
+    .map_err(|err| {
+        helpers::exit_with_error(format!("lcs deserialization failure of raw_txn : {}", err))
+    })
+    .unwrap();
     let private_key = Ed25519PrivateKey::from_encoded_string(&request.private_key)
         .map_err(|err| {
             helpers::exit_with_error(format!(
@@ -315,8 +355,8 @@ fn sign_payload_using_ed25519(
             ))
         })
         .unwrap();
-    let signature = private_key.sign_message(&hash_value);
-    SignPayloadUsingEd25519Response {
+    let signature = private_key.sign(&raw_txn);
+    SignTransactionUsingEd25519Response {
         signature: signature
             .to_encoded_string()
             .map_err(|err| {
@@ -325,6 +365,10 @@ fn sign_payload_using_ed25519(
             .unwrap(),
     }
 }
+
+//////////////////////
+// Verify raw bytes //
+//////////////////////
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -343,14 +387,7 @@ struct VerifyEd25519SignatureResponse {
 fn verify_signature_using_ed25519(
     request: VerifyEd25519SignatureRequest,
 ) -> VerifyEd25519SignatureResponse {
-    let hash_value = HashValue::from_hex(&request.payload)
-        .map_err(|err| {
-            helpers::exit_with_error(format!(
-                "Failed to hex decode payload into HashValue {} : {}",
-                request.payload, err
-            ))
-        })
-        .unwrap();
+    let message = helpers::hex_decode(&request.payload);
     let signature = Ed25519Signature::from_encoded_string(&request.signature)
         .map_err(|err| {
             helpers::exit_with_error(format!(
@@ -367,7 +404,60 @@ fn verify_signature_using_ed25519(
             ))
         })
         .unwrap();
-    VerifyEd25519SignatureResponse {
-        valid_signature: signature.verify(&hash_value, &public_key).is_ok(),
-    }
+    let valid_signature = signature
+        .verify_arbitrary_msg(&message, &public_key)
+        .is_ok();
+    VerifyEd25519SignatureResponse { valid_signature }
+}
+
+//////////////////////////////////////////
+// verify signature of a RawTransaction //
+//////////////////////////////////////////
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VerifyTransactionEd25519SignatureRequest {
+    pub raw_txn: String,
+    pub signature: String,
+    pub public_key: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VerifyTransactionEd25519SignatureResponse {
+    pub valid_signature: bool,
+}
+
+fn verify_transaction_signature_using_ed25519(
+    request: VerifyTransactionEd25519SignatureRequest,
+) -> VerifyTransactionEd25519SignatureResponse {
+    let raw_txn: RawTransaction = lcs::from_bytes(
+        &hex::decode(request.raw_txn.clone())
+            .map_err(|err| {
+                helpers::exit_with_error(format!("hex decode of raw_txn failed : {}", err))
+            })
+            .unwrap(),
+    )
+    .map_err(|err| {
+        helpers::exit_with_error(format!("lcs deserialization failure of raw_txn : {}", err))
+    })
+    .unwrap();
+    let signature = Ed25519Signature::from_encoded_string(&request.signature)
+        .map_err(|err| {
+            helpers::exit_with_error(format!(
+                "Failed to hex decode signature {} : {}",
+                request.signature, err
+            ))
+        })
+        .unwrap();
+    let public_key = Ed25519PublicKey::from_encoded_string(&request.public_key)
+        .map_err(|err| {
+            helpers::exit_with_error(format!(
+                "Failed to hex decode public_key {} : {}",
+                request.public_key, err
+            ))
+        })
+        .unwrap();
+    let valid_signature = signature.verify(&raw_txn, &public_key).is_ok();
+    VerifyTransactionEd25519SignatureResponse { valid_signature }
 }

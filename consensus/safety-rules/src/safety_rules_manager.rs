@@ -11,11 +11,7 @@ use crate::{
     thread::ThreadService,
     SafetyRules, TSafetyRules,
 };
-use libra_config::{
-    config::{SafetyRulesConfig, SafetyRulesService},
-    keys::KeyPair,
-};
-use libra_crypto::ed25519::Ed25519PrivateKey;
+use libra_config::config::{SafetyRulesConfig, SafetyRulesService};
 use libra_secure_storage::{KVStorage, Storage};
 use std::{
     convert::TryInto,
@@ -23,35 +19,26 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub fn storage(config: &mut SafetyRulesConfig) -> PersistentSafetyStorage {
+pub fn storage(config: &SafetyRulesConfig) -> PersistentSafetyStorage {
     let backend = &config.backend;
     let internal_storage: Storage = backend.try_into().expect("Unable to initialize storage");
     internal_storage
         .available()
         .expect("Storage is not available");
 
-    if let Some(test_config) = config.test.as_mut() {
+    if let Some(test_config) = &config.test {
         let author = test_config.author;
         let consensus_private_key = test_config
-            .consensus_keypair
-            .as_mut()
-            .expect("Missing consensus keypair in test config")
-            .take_private()
-            .expect("Failed to take Consensus private key, key absent or already read");
+            .consensus_key
+            .as_ref()
+            .expect("Missing consensus key in test config")
+            .private_key();
+        let execution_private_key = test_config
+            .execution_key
+            .as_ref()
+            .expect("Missing execution key in test config")
+            .private_key();
         let waypoint = test_config.waypoint.expect("No waypoint in config");
-
-        // Hack because Ed25519PrivateKey does not support clone / copy
-        let bytes = lcs::to_bytes(
-            &test_config
-                .execution_keypair
-                .as_ref()
-                .expect("Missing execution keypair in test config"),
-        )
-        .expect("lcs deserialization cannot fail");
-        let execution_private_key = lcs::from_bytes::<KeyPair<Ed25519PrivateKey>>(&bytes)
-            .expect("lcs serialization cannot fail")
-            .take_private()
-            .expect("Failed to take Execution private key, key absent or already read");
 
         PersistentSafetyStorage::initialize(
             internal_storage,
@@ -78,9 +65,11 @@ pub struct SafetyRulesManager {
 }
 
 impl SafetyRulesManager {
-    pub fn new(config: &mut SafetyRulesConfig) -> Self {
+    pub fn new(config: &SafetyRulesConfig) -> Self {
         match &config.service {
-            SafetyRulesService::Process(conf) => return Self::new_process(conf.server_address()),
+            SafetyRulesService::Process(conf) => {
+                return Self::new_process(conf.server_address(), config.network_timeout_ms)
+            }
             SafetyRulesService::SpawnedProcess(_) => return Self::new_spawned_process(config),
             _ => (),
         };
@@ -92,7 +81,11 @@ impl SafetyRulesManager {
             SafetyRulesService::Serializer => {
                 Self::new_serializer(storage, verify_vote_proposal_signature)
             }
-            SafetyRulesService::Thread => Self::new_thread(storage, verify_vote_proposal_signature),
+            SafetyRulesService::Thread => Self::new_thread(
+                storage,
+                verify_vote_proposal_signature,
+                config.network_timeout_ms,
+            ),
             _ => panic!("Unimplemented SafetyRulesService: {:?}", config.service),
         }
     }
@@ -107,8 +100,8 @@ impl SafetyRulesManager {
         }
     }
 
-    pub fn new_process(server_addr: SocketAddr) -> Self {
-        let process_service = ProcessService::new(server_addr);
+    pub fn new_process(server_addr: SocketAddr, timeout_ms: u64) -> Self {
+        let process_service = ProcessService::new(server_addr, timeout_ms);
         Self {
             internal_safety_rules: SafetyRulesWrapper::Process(process_service),
         }
@@ -137,8 +130,9 @@ impl SafetyRulesManager {
     pub fn new_thread(
         storage: PersistentSafetyStorage,
         verify_vote_proposal_signature: bool,
+        timeout_ms: u64,
     ) -> Self {
-        let thread = ThreadService::new(storage, verify_vote_proposal_signature);
+        let thread = ThreadService::new(storage, verify_vote_proposal_signature, timeout_ms);
         Self {
             internal_safety_rules: SafetyRulesWrapper::Thread(thread),
         }

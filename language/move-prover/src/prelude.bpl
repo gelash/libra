@@ -40,7 +40,7 @@ function $DebugTrackLocal(file_id: int, byte_index:  int, var_idx: int, $Value: 
 }
 
 // Tracks at which location a function was aborted.
-function $DebugTrackAbort(file_id: int, byte_index: int) : bool {
+function $DebugTrackAbort(file_id: int, byte_index: int, code: int) : bool {
   true
 }
 
@@ -72,7 +72,7 @@ function {:constructor} $IntegerType() : $TypeValue;
 function {:constructor} $AddressType() : $TypeValue;
 function {:constructor} $StrType() : $TypeValue;
 function {:constructor} $VectorType(t: $TypeValue) : $TypeValue;
-function {:constructor} $StructType(name: $TypeName, ps: $TypeValueArray, ts: $TypeValueArray) : $TypeValue;
+function {:constructor} $StructType(name: $TypeName, ts: $TypeValueArray) : $TypeValue;
 function {:constructor} $TypeType(): $TypeValue;
 function {:constructor} $ErrorType() : $TypeValue;
 
@@ -84,6 +84,7 @@ function {:constructor} $TypeValueArray(v: [int]$TypeValue, l: int): $TypeValueA
 const $EmptyTypeValueArray: $TypeValueArray;
 axiom l#$TypeValueArray($EmptyTypeValueArray) == 0;
 axiom v#$TypeValueArray($EmptyTypeValueArray) == $MapConstTypeValue($DefaultTypeValue());
+
 
 
 // Values
@@ -259,6 +260,10 @@ function {{backend.func_inline}} $RemoveValueArray(a: $ValueArray): $ValueArray 
     )
 }
 
+function {{backend.func_inline}} $SingleValueArray(v: $Value): $ValueArray {
+    $ValueArray($MapConstValue($DefaultValue())[0 := v], 1)
+}
+
 function {{backend.func_inline}} $RemoveIndexValueArray(a: $ValueArray, i: int): $ValueArray {
     (
         var l := l#$ValueArray(a) - 1;
@@ -274,11 +279,11 @@ function {{backend.func_inline}} $RemoveIndexValueArray(a: $ValueArray, i: int):
 
 function {{backend.func_inline}} $ConcatValueArray(a1: $ValueArray, a2: $ValueArray): $ValueArray {
     (
-        var l1, l2 := l#$ValueArray(a1), l#$ValueArray(a2);
+        var l1, m1, l2, m2 := l#$ValueArray(a1), v#$ValueArray(a1), l#$ValueArray(a2), v#$ValueArray(a2);
         $ValueArray(
             (lambda i: int ::
                 if i >= 0 && i < l1 + l2 then
-                    if i < l1 then v#$ValueArray(a1)[i] else v#$ValueArray(a2)[i - l1]
+                    if i < l1 then m1[i] else m2[i - l1]
                 else
                     $DefaultValue()),
             l1 + l2)
@@ -348,7 +353,7 @@ function {:inline} $IsEqual(v1: $Value, v2: $Value): bool {
 
 // Generate a stratified version of IsEqual for depth of {{backend.stratification_depth}}.
 {{#stratified}}
-function {{backend.aggressive_backend.func_inline}} $IsEqual_{{@this_suffix}}(v1: $Value, v2: $Value): bool {
+function {{backend.aggressive_func_inline}} $IsEqual_{{@this_suffix}}(v1: $Value, v2: $Value): bool {
     (v1 == v2) ||
     (is#$Vector(v1) &&
      is#$Vector(v2) &&
@@ -370,7 +375,7 @@ function {:inline} $IsEqual(v1: $Value, v2: $Value): bool {
 // Generate stratified ReadValue for the depth of {{backend.stratification_depth}}.
 
 {{#stratified}}
-function {{backend.aggressive_backend.func_inline}} $ReadValue_{{@this_suffix}}(p: $Path, v: $Value) : $Value {
+function {{backend.aggressive_func_inline}} $ReadValue_{{@this_suffix}}(p: $Path, v: $Value) : $Value {
     if ({{@this_level}} == size#$Path(p)) then
         v
     else
@@ -389,7 +394,7 @@ function {:inline} $ReadValue(p: $Path, v: $Value): $Value {
 // Generate stratified $UpdateValue for the depth of {{backend.stratification_depth}}.
 
 {{#stratified}}
-function {{backend.aggressive_backend.func_inline}} $UpdateValue_{{@this_suffix}}(p: $Path, offset: int, v: $Value, new_v: $Value): $Value {
+function {{backend.aggressive_func_inline}} $UpdateValue_{{@this_suffix}}(p: $Path, offset: int, v: $Value, new_v: $Value): $Value {
     (var poffset := offset + {{@this_level}};
     if (poffset == size#$Path(p)) then
         new_v
@@ -410,7 +415,7 @@ function {:inline} $UpdateValue(p: $Path, offset: int, v: $Value, new_v: $Value)
 // Generate stratified $IsPathPrefix for the depth of {{backend.stratification_depth}}.
 
 {{#stratified}}
-function {{backend.aggressive_backend.func_inline}} $IsPathPrefix_{{@this_suffix}}(p1: $Path, p2: $Path): bool {
+function {{backend.aggressive_func_inline}} $IsPathPrefix_{{@this_suffix}}(p1: $Path, p2: $Path): bool {
     if ({{@this_level}} == size#$Path(p1)) then
         true
     else if (p#$Path(p1)[{{@this_level}}] == p#$Path(p2)[{{@this_level}}]) then
@@ -431,7 +436,7 @@ function {:inline} $IsPathPrefix(p1: $Path, p2: $Path): bool {
 // Generate stratified $ConcatPath for the depth of {{backend.stratification_depth}}.
 
 {{#stratified}}
-function {{backend.aggressive_backend.func_inline}} $ConcatPath_{{@this_suffix}}(p1: $Path, p2: $Path): $Path {
+function {{backend.aggressive_func_inline}} $ConcatPath_{{@this_suffix}}(p1: $Path, p2: $Path): $Path {
     if ({{@this_level}} == size#$Path(p2)) then
         p1
     else
@@ -471,6 +476,9 @@ function {:inline} $push_back_vector(v: $Value, elem: $Value): $Value {
 }
 function {:inline} $pop_back_vector(v: $Value): $Value {
     $Vector($RemoveValueArray(v#$Vector(v)))
+}
+function {:inline} $single_vector(v: $Value): $Value {
+    $Vector($SingleValueArray(v))
 }
 function {:inline} $append_vector(v1: $Value, v2: $Value): $Value {
     $Vector($ConcatValueArray(v#$Vector(v1), v#$Vector(v2)))
@@ -517,169 +525,165 @@ function {:inline} $InRange(r: $Value, i: int): bool {
 // Memory
 
 type {:datatype} $Location;
-function {:constructor} $Global(t: $TypeValue, a: int): $Location;
+
+// A global resource location within the statically known resource type's memory.
+// `ts` are the type parameters for the outer type, and `a` is the address.
+function {:constructor} $Global(ts: $TypeValueArray, a: int): $Location;
+
+// A local location. `i` is the unique index of the local.
 function {:constructor} $Local(i: int): $Location;
+
+// The location of a reference outside of the verification scope, for example, a `&mut` parameter
+// of the function being verified. References with these locations don't need to be written back
+// when mutation ends.
 function {:constructor} $Param(i: int): $Location;
 
-type {:datatype} $Reference;
-function {:constructor} $Reference(l: $Location, p: $Path, v: $Value): $Reference;
-const $DefaultReference: $Reference;
 
+// A mutable reference which also carries its current value. Since mutual references
+// are single threaded in Move, we can keep them together and treat them as a value
+// during mutation until the point they are stored back to their original location.
+type {:datatype} $Mutation;
+function {:constructor} $Mutation(l: $Location, p: $Path, v: $Value): $Mutation;
+const $DefaultMutation: $Mutation;
+
+// Representation of memory for a given type. The maps take the content of a Global location.
 type {:datatype} $Memory;
-function {:constructor} $Memory(domain: [$Location]bool, contents: [$Location]$Value): $Memory;
+function {:constructor} $Memory(domain: [$TypeValueArray, int]bool, contents: [$TypeValueArray, int]$Value): $Memory;
 
-function $Memory__is_well_formed(m: $Memory): bool;
+function {:inline} $Memory__is_well_formed(m: $Memory): bool {
+    true
+}
 
-function {:builtin "MapConst"} $ConstMemoryDomain(v: bool): [$Location]bool;
-function {:builtin "MapConst"} $ConstMemoryContent(v: $Value): [$Location]$Value;
+function {:builtin "MapConst"} $ConstMemoryDomain(v: bool): [$TypeValueArray, int]bool;
+function {:builtin "MapConst"} $ConstMemoryContent(v: $Value): [$TypeValueArray, int]$Value;
 
 const $EmptyMemory: $Memory;
 axiom domain#$Memory($EmptyMemory) == $ConstMemoryDomain(false);
 axiom contents#$Memory($EmptyMemory) == $ConstMemoryContent($DefaultValue());
 
-var $m: $Memory;
 var $abort_flag: bool;
+var $abort_code: int;
+
+const $EXEC_FAILURE_CODE: int;
+axiom $EXEC_FAILURE_CODE == -1;
+
+// TODO(wrwg): currently we map aborts of native functions like those for vectors also to
+//   execution failure. This may need to be aligned with what the runtime actually does.
+
+procedure {:inline 1} $ExecFailureAbort() {
+    $abort_flag := true;
+    $abort_code := $EXEC_FAILURE_CODE;
+}
 
 procedure {:inline 1} $InitVerification() {
-  // Set abort_flag to false
+  // Set abort_flag to false, and havoc abort_code
   $abort_flag := false;
+  havoc $abort_code;
 }
 
 // ============================================================================================
-// Specifications
+// Functional APIs
 
 // TODO: unify some of this with instruction procedures to avoid duplication
 
 // Tests whether resource exists.
-function {:inline} $ResourceExistsRaw(m: $Memory, resource: $TypeValue, addr: int): bool {
-    domain#$Memory(m)[$Global(resource, addr)]
+function {:inline} $ResourceExistsRaw(m: $Memory, args: $TypeValueArray, addr: int): bool {
+    domain#$Memory(m)[args, addr]
 }
-function {:inline} $ResourceExists(m: $Memory, resource: $TypeValue, address: $Value): $Value {
-    $Boolean($ResourceExistsRaw(m, resource, a#$Address(address)))
+function {:inline} $ResourceExists(m: $Memory, args: $TypeValueArray, addr: $Value): $Value {
+    $Boolean($ResourceExistsRaw(m, args, a#$Address(addr)))
 }
 
 // Obtains Value of given resource.
-function {:inline} $ResourceValue(m: $Memory, resource: $TypeValue, address: $Value): $Value {
-  contents#$Memory(m)[$Global(resource, a#$Address(address))]
+function {:inline} $ResourceValue(m: $Memory, args: $TypeValueArray, addr: $Value): $Value {
+  contents#$Memory(m)[args, a#$Address(addr)]
 }
 
 // Applies a field selection to a Value.
-function {:inline} $SelectField(val: $Value, field: $FieldName): $Value { //breaks abstracts, we don't know $Fieldname = int
+function {:inline} $SelectField(val: $Value, field: $FieldName): $Value {
     $select_vector(val, field)
 }
 
 // Dereferences a reference.
-function {:inline} $Dereference(ref: $Reference): $Value {
-    v#$Reference(ref)
+function {:inline} $Dereference(ref: $Mutation): $Value {
+    v#$Mutation(ref)
 }
-
-// Check whether sender account exists.
-function {:inline} $ExistsTxnSenderAccount(m: $Memory, txn: $Transaction): bool {
-   domain#$Memory(m)[$Global($LibraAccount_T_type_value(), sender#$Transaction(txn))]
-}
-
-function {:inline} $TxnSender(txn: $Transaction): $Value {
-    $Address(sender#$Transaction(txn))
-}
-
-// Forward declaration of type Value of LibraAccount. This is declared so we can define
-// $ExistsTxnSenderAccount and $LibraAccount_save_account
-const unique $LibraAccount_T: $TypeName;
-function $LibraAccount_T_type_value(): $TypeValue;
-axiom is#$StructType($LibraAccount_T_type_value()) && name#$StructType($LibraAccount_T_type_value()) == $LibraAccount_T;
-function $LibraAccount_Balance_type_value(tv: $TypeValue): $TypeValue;
 
 // ============================================================================================
 // Instructions
 
-procedure {:inline 1} $Exists(address: $Value, t: $TypeValue) returns (dst: $Value)
-{{backend.type_requires}} is#$Address(address);
+procedure {:inline 1} $MoveToRaw(m: $Memory, ta: $TypeValueArray, a: int, v: $Value) returns (m': $Memory)
 {
-    dst := $ResourceExists($m, t, address);
-}
-
-procedure {:inline 1} $MoveToRaw(ta: $TypeValue, a: int, v: $Value)
-{
-    var l: $Location;
-
-    l := $Global(ta, a);
-    if ($ResourceExistsRaw($m, ta, a)) {
-        $abort_flag := true;
+    if ($ResourceExistsRaw(m, ta, a)) {
+        call $ExecFailureAbort();
         return;
     }
-    $m := $Memory(domain#$Memory($m)[l := true], contents#$Memory($m)[l := v]);
+    m' := $Memory(domain#$Memory(m)[ta, a := true], contents#$Memory(m)[ta, a := v]);
 }
 
-procedure {:inline 1} $MoveTo(ta: $TypeValue, v: $Value, signer: $Value)
+procedure {:inline 1} $MoveTo(m: $Memory, ta: $TypeValueArray, v: $Value, signer: $Value) returns (m': $Memory)
 {
     var addr: $Value;
-
     call addr := $Signer_borrow_address(signer);
-    call $MoveToRaw(ta, a#$Address(addr), v);
+    call m' := $MoveToRaw(m, ta, a#$Address(addr), v);
 }
 
-procedure {:inline 1} $MoveToSender(ta: $TypeValue, v: $Value)
-{
-    call $MoveToRaw(ta, sender#$Transaction($txn), v);
-}
-
-procedure {:inline 1} $MoveFrom(address: $Value, ta: $TypeValue) returns (dst: $Value)
+procedure {:inline 1} $MoveFrom(m: $Memory, address: $Value, ta: $TypeValueArray) returns (m': $Memory, dst: $Value)
 {{backend.type_requires}} is#$Address(address);
 {
     var a: int;
-    var l: $Location;
     a := a#$Address(address);
-    l := $Global(ta, a);
-    if (!$ResourceExistsRaw($m, ta, a)) {
-        $abort_flag := true;
+    if (!$ResourceExistsRaw(m, ta, a)) {
+        call $ExecFailureAbort();
         return;
     }
-    dst := contents#$Memory($m)[l];
-    $m := $Memory(domain#$Memory($m)[l := false], contents#$Memory($m)[l := $DefaultValue()]);
+    dst := contents#$Memory(m)[ta, a];
+    m' := $Memory(domain#$Memory(m)[ta, a := false], contents#$Memory(m)[ta, a := $DefaultValue()]);
 }
 
-procedure {:inline 1} $BorrowGlobal(address: $Value, ta: $TypeValue) returns (dst: $Reference)
+procedure {:inline 1} $BorrowGlobal(m: $Memory, address: $Value, ta: $TypeValueArray) returns (dst: $Mutation)
 {{backend.type_requires}} is#$Address(address);
 {
     var a: int;
-    var l: $Location;
     a := a#$Address(address);
-    l := $Global(ta, a);
-    if (!$ResourceExistsRaw($m, ta, a)) {
-        $abort_flag := true;
+    if (!$ResourceExistsRaw(m, ta, a)) {
+        call $ExecFailureAbort();
         return;
     }
-    dst := $Reference(l, $EmptyPath, contents#$Memory($m)[l]);
+    dst := $Mutation($Global(ta, a), $EmptyPath, contents#$Memory(m)[ta, a]);
 }
 
-procedure {:inline 1} $BorrowLoc(l: int, v: $Value) returns (dst: $Reference)
+procedure {:inline 1} $BorrowLoc(l: int, v: $Value) returns (dst: $Mutation)
 {
-    dst := $Reference($Local(l), $EmptyPath, v);
+    dst := $Mutation($Local(l), $EmptyPath, v);
 }
 
-procedure {:inline 1} $BorrowField(src: $Reference, f: $FieldName) returns (dst: $Reference)
+procedure {:inline 1} $BorrowField(src: $Mutation, f: $FieldName) returns (dst: $Mutation)
 {
     var p: $Path;
     var size: int;
 
-    p := p#$Reference(src);
+    p := p#$Mutation(src);
     size := size#$Path(p);
     p := $Path(p#$Path(p)[size := f], size+1);
-    dst := $Reference(l#$Reference(src), p, $select_vector(v#$Reference(src), f)); //breaks abstraction
+    dst := $Mutation(l#$Mutation(src), p, $select_vector(v#$Mutation(src), f));
 }
 
-procedure {:inline 1} $GetGlobal(address: $Value, ta: $TypeValue) returns (dst: $Value)
+procedure {:inline 1} $GetGlobal(m: $Memory, address: $Value, ta: $TypeValueArray) returns (dst: $Value)
 {{backend.type_requires}} is#$Address(address);
 {
-    var r: $Reference;
-
-    call r := $BorrowGlobal(address, ta);
-    call dst := $ReadRef(r);
+    var a: int;
+    a := a#$Address(address);
+    if (!$ResourceExistsRaw(m, ta, a)) {
+        call $ExecFailureAbort();
+        return;
+    }
+    dst := $ResourceValue(m, ta, address);
 }
 
-procedure {:inline 1} $GetFieldFromReference(src: $Reference, f: $FieldName) returns (dst: $Value)
+procedure {:inline 1} $GetFieldFromReference(src: $Mutation, f: $FieldName) returns (dst: $Value)
 {
-    var r: $Reference;
+    var r: $Mutation;
 
     call r := $BorrowField(src, f);
     call dst := $ReadRef(r);
@@ -687,20 +691,20 @@ procedure {:inline 1} $GetFieldFromReference(src: $Reference, f: $FieldName) ret
 
 procedure {:inline 1} $GetFieldFromValue(src: $Value, f: $FieldName) returns (dst: $Value)
 {
-    dst := $select_vector(src, f); //breaks abstraction
+    dst := $select_vector(src, f);
 }
 
-procedure {:inline 1} $WriteRef(to: $Reference, new_v: $Value) returns (to': $Reference)
+procedure {:inline 1} $WriteRef(to: $Mutation, new_v: $Value) returns (to': $Mutation)
 {
-    to' := $Reference(l#$Reference(to), p#$Reference(to), new_v);
+    to' := $Mutation(l#$Mutation(to), p#$Mutation(to), new_v);
 }
 
-procedure {:inline 1} $ReadRef(from: $Reference) returns (v: $Value)
+procedure {:inline 1} $ReadRef(from: $Mutation) returns (v: $Value)
 {
-    v := v#$Reference(from);
+    v := v#$Mutation(from);
 }
 
-procedure {:inline 1} $CopyOrMoveRef(local: $Reference) returns (dst: $Reference)
+procedure {:inline 1} $CopyOrMoveRef(local: $Mutation) returns (dst: $Mutation)
 {
     dst := local;
 }
@@ -710,53 +714,58 @@ procedure {:inline 1} $CopyOrMoveValue(local: $Value) returns (dst: $Value)
     dst := local;
 }
 
-procedure {:inline 1} $WritebackToGlobal(src: $Reference)
+procedure {:inline 1} $WritebackToGlobal(m: $Memory, src: $Mutation) returns (m': $Memory)
 {
     var l: $Location;
+    var ta: $TypeValueArray;
+    var a: int;
     var v: $Value;
 
-    l := l#$Reference(src);
+    l := l#$Mutation(src);
     if (is#$Global(l)) {
-        v := $UpdateValue(p#$Reference(src), 0, contents#$Memory($m)[l], v#$Reference(src));
-        $m := $Memory(domain#$Memory($m), contents#$Memory($m)[l := v]);
+        ta := ts#$Global(l);
+        a := a#$Global(l);
+        v := $UpdateValue(p#$Mutation(src), 0, contents#$Memory(m)[ta, a], v#$Mutation(src));
+        m' := $Memory(domain#$Memory(m), contents#$Memory(m)[ta, a := v]);
+    } else {
+        m' := m;
     }
 }
 
-procedure {:inline 1} $WritebackToValue(src: $Reference, idx: int, vdst: $Value) returns (vdst': $Value)
+procedure {:inline 1} $WritebackToValue(src: $Mutation, idx: int, vdst: $Value) returns (vdst': $Value)
 {
-    if (l#$Reference(src) == $Local(idx)) {
-        vdst' := $UpdateValue(p#$Reference(src), 0, vdst, v#$Reference(src));
+    if (l#$Mutation(src) == $Local(idx)) {
+        vdst' := $UpdateValue(p#$Mutation(src), 0, vdst, v#$Mutation(src));
     } else {
         vdst' := vdst;
     }
 }
 
-procedure {:inline 1} $WritebackToReference(src: $Reference, dst: $Reference) returns (dst': $Reference)
+procedure {:inline 1} $WritebackToReference(src: $Mutation, dst: $Mutation) returns (dst': $Mutation)
 {
     var srcPath, dstPath: $Path;
 
-    srcPath := p#$Reference(src);
-    dstPath := p#$Reference(dst);
-    if (l#$Reference(dst) == l#$Reference(src) && size#$Path(dstPath) <= size#$Path(srcPath) && $IsPathPrefix(dstPath, srcPath)) {
-        dst' := $Reference(
-                    l#$Reference(dst),
+    srcPath := p#$Mutation(src);
+    dstPath := p#$Mutation(dst);
+    if (l#$Mutation(dst) == l#$Mutation(src) && size#$Path(dstPath) <= size#$Path(srcPath) && $IsPathPrefix(dstPath, srcPath)) {
+        dst' := $Mutation(
+                    l#$Mutation(dst),
                     dstPath,
-                    $UpdateValue(srcPath, size#$Path(dstPath), v#$Reference(dst), v#$Reference(src)));
+                    $UpdateValue(srcPath, size#$Path(dstPath), v#$Mutation(dst), v#$Mutation(src)));
     } else {
         dst' := dst;
     }
 }
 
-procedure {:inline 1} $Splice1(idx1: int, src1: $Reference, dst: $Reference) returns (dst': $Reference) {
-    assume l#$Reference(dst) == $Local(idx1);
-    dst' := $Reference(l#$Reference(dst), $ConcatPath(p#$Reference(src1), p#$Reference(dst)), v#$Reference(dst));
+procedure {:inline 1} $Splice1(idx1: int, src1: $Mutation, dst: $Mutation) returns (dst': $Mutation) {
+    dst' := $Mutation(l#$Mutation(src1), $ConcatPath(p#$Mutation(src1), p#$Mutation(dst)), v#$Mutation(dst));
 }
 
 procedure {:inline 1} $CastU8(src: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src);
 {
     if (i#$Integer(src) > $MAX_U8) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := src;
@@ -766,7 +775,7 @@ procedure {:inline 1} $CastU64(src: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src);
 {
     if (i#$Integer(src) > $MAX_U64) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := src;
@@ -776,7 +785,7 @@ procedure {:inline 1} $CastU128(src: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src);
 {
     if (i#$Integer(src) > $MAX_U128) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := src;
@@ -786,7 +795,7 @@ procedure {:inline 1} $AddU8(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU8(src1) && $IsValidU8(src2);
 {
     if (i#$Integer(src1) + i#$Integer(src2) > $MAX_U8) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) + i#$Integer(src2));
@@ -796,7 +805,7 @@ procedure {:inline 1} $AddU64(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU64(src1) && $IsValidU64(src2);
 {
     if (i#$Integer(src1) + i#$Integer(src2) > $MAX_U64) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) + i#$Integer(src2));
@@ -812,7 +821,7 @@ procedure {:inline 1} $AddU128(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU128(src1) && $IsValidU128(src2);
 {
     if (i#$Integer(src1) + i#$Integer(src2) > $MAX_U128) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) + i#$Integer(src2));
@@ -828,7 +837,7 @@ procedure {:inline 1} $Sub(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src1) && is#$Integer(src2);
 {
     if (i#$Integer(src1) < i#$Integer(src2)) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) - i#$Integer(src2));
@@ -869,7 +878,7 @@ procedure {:inline 1} $MulU8(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU8(src1) && $IsValidU8(src2);
 {
     if (i#$Integer(src1) * i#$Integer(src2) > $MAX_U8) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) * i#$Integer(src2));
@@ -879,7 +888,7 @@ procedure {:inline 1} $MulU64(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU64(src1) && $IsValidU64(src2);
 {
     if (i#$Integer(src1) * i#$Integer(src2) > $MAX_U64) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) * i#$Integer(src2));
@@ -889,7 +898,7 @@ procedure {:inline 1} $MulU128(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} $IsValidU128(src1) && $IsValidU128(src2);
 {
     if (i#$Integer(src1) * i#$Integer(src2) > $MAX_U128) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) * i#$Integer(src2));
@@ -899,7 +908,7 @@ procedure {:inline 1} $Div(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src1) && is#$Integer(src2);
 {
     if (i#$Integer(src2) == 0) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) div i#$Integer(src2));
@@ -909,7 +918,7 @@ procedure {:inline 1} $Mod(src1: $Value, src2: $Value) returns (dst: $Value)
 {{backend.type_requires}} is#$Integer(src1) && is#$Integer(src2);
 {
     if (i#$Integer(src2) == 0) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $Integer(i#$Integer(src1) mod i#$Integer(src2));
@@ -964,14 +973,6 @@ procedure {:inline 1} $Not(src: $Value) returns (dst: $Value)
 // Pack and Unpack are auto-generated for each type T
 
 
-// Transaction
-// -----------
-
-type {:datatype} $Transaction;
-var $txn: $Transaction;
-function {:constructor} $Transaction(sender: int) : $Transaction;
-
-
 // ==================================================================================
 // Native Vector Type
 
@@ -1024,7 +1025,7 @@ procedure {:inline 1} $Vector_pop_back(ta: $TypeValue, v: $Value) returns (e: $V
     assume is#$Vector(v);
     len := $vlen(v);
     if (len == 0) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     e := $select_vector(v, len-1);
@@ -1054,13 +1055,13 @@ procedure {:inline 1} $Vector_borrow(ta: $TypeValue, src: $Value, i: $Value) ret
     assume is#$Integer(i);
     i_ind := i#$Integer(i);
     if (i_ind < 0 || i_ind >= $vlen(src)) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     dst := $select_vector(src, i_ind);
 }
 
-procedure {:inline 1} $Vector_borrow_mut(ta: $TypeValue, v: $Value, index: $Value) returns (dst: $Reference, v': $Value)
+procedure {:inline 1} $Vector_borrow_mut(ta: $TypeValue, v: $Value, index: $Value) returns (dst: $Mutation, v': $Value)
 {{backend.type_requires}} is#$Integer(index);
 {
     var i_ind: int;
@@ -1068,16 +1069,16 @@ procedure {:inline 1} $Vector_borrow_mut(ta: $TypeValue, v: $Value, index: $Valu
     i_ind := i#$Integer(index);
     assume is#$Vector(v);
     if (i_ind < 0 || i_ind >= $vlen(v)) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
-    dst := $Reference($Local(0), $Path(p#$Path($EmptyPath)[0 := i_ind], 1), $select_vector(v, i_ind));
+    dst := $Mutation($Local(0), $Path(p#$Path($EmptyPath)[0 := i_ind], 1), $select_vector(v, i_ind));
     v' := v;
 }
 
 procedure {:inline 1} $Vector_destroy_empty(ta: $TypeValue, v: $Value) {
     if ($vlen(v) != 0) {
-      $abort_flag := true;
+      call $ExecFailureAbort();
     }
 }
 
@@ -1090,7 +1091,7 @@ procedure {:inline 1} $Vector_swap(ta: $TypeValue, v: $Value, i: $Value, j: $Val
     i_ind := i#$Integer(i);
     j_ind := i#$Integer(j);
     if (i_ind >= $vlen(v) || j_ind >= $vlen(v) || i_ind < 0 || j_ind < 0) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     v' := $swap_vector(v, i_ind, j_ind);
@@ -1104,7 +1105,7 @@ procedure {:inline 1} $Vector_remove(ta: $TypeValue, v: $Value, i: $Value) retur
     assume is#$Vector(v);
     i_ind := i#$Integer(i);
     if (i_ind < 0 || i_ind >= $vlen(v)) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     e := $select_vector(v, i_ind);
@@ -1121,7 +1122,7 @@ procedure {:inline 1} $Vector_swap_remove(ta: $TypeValue, v: $Value, i: $Value) 
     i_ind := i#$Integer(i);
     len := $vlen(v);
     if (i_ind < 0 || i_ind >= len) {
-        $abort_flag := true;
+        call $ExecFailureAbort();
         return;
     }
     e := $select_vector(v, i_ind);
@@ -1179,7 +1180,7 @@ ensures !b#$Boolean(res1) ==> i#$Integer(res2) == 0;
 // assert that sha2/3 are injections without using global quantified axioms.
 
 
-function {:inline} $Hash_sha2($m: $Memory, $txn: $Transaction, val: $Value): $Value {
+function {:inline} $Hash_sha2(val: $Value): $Value {
     $Hash_sha2_core(val)
 }
 
@@ -1205,7 +1206,7 @@ ensures $IsValidU8Vector(res);    // result is a legal vector of U8s.
 ensures $vlen(res) == 32;               // result is 32 bytes.
 
 // similarly for Hash_sha3
-function {:inline} $Hash_sha3($m: $Memory, $txn: $Transaction, val: $Value): $Value {
+function {:inline} $Hash_sha3(val: $Value): $Value {
     $Hash_sha3_core(val)
 }
 function $Hash_sha3_core(val: $Value): $Value;
@@ -1224,41 +1225,6 @@ ensures $vlen(res) == 32;               // result is 32 bytes.
 // ==================================================================================
 // Native libra_account
 
-// TODO: this function clashes with a similar version in older libraries. This is solved by a hack where the
-// translator appends _OLD to the name when encountering this. The hack shall be removed once old library
-// sources are not longer used.
-procedure {:inline 1} $LibraAccount_save_account_OLD(ta: $TypeValue, balance: $Value, account: $Value, addr: $Value) {
-    var a: int;
-    var t_T: $TypeValue;
-    var l_T: $Location;
-    var t_Balance: $TypeValue;
-    var l_Balance: $Location;
-
-    a := a#$Address(addr);
-    t_T := $LibraAccount_T_type_value();
-    if ($ResourceExistsRaw($m, t_T, a)) {
-        $abort_flag := true;
-        return;
-    }
-
-    t_Balance := $LibraAccount_Balance_type_value(ta);
-    if ($ResourceExistsRaw($m, t_Balance, a)) {
-        $abort_flag := true;
-        return;
-    }
-
-    l_T := $Global(t_T, a);
-    l_Balance := $Global(t_Balance, a);
-    $m := $Memory(domain#$Memory($m)[l_T := true][l_Balance := true], contents#$Memory($m)[l_T := account][l_Balance := balance]);
-}
-
-procedure {:inline 1} $LibraAccount_save_account(
-       t_Token: $TypeValue, t_AT: $TypeValue, account_type: $Value, balance: $Value,
-       account: $Value, event_generator: $Value, addr: $Value) {
-    // TODO: implement this
-    assert false;
-}
-
 procedure {:inline 1} $LibraAccount_create_signer(
   addr: $Value
 ) returns (signer: $Value) {
@@ -1272,15 +1238,6 @@ procedure {:inline 1} $LibraAccount_destroy_signer(
   return;
 }
 
-procedure {:inline 1} $LibraAccount_write_to_event_store(ta: $TypeValue, guid: $Value, count: $Value, msg: $Value) {
-    // TODO: this is used in old library sources, remove it once those sources are not longer used in tests.
-    // This function is modeled as a no-op because the actual side effect of this native function is not observable from the Move side.
-}
-
-procedure {:inline 1} $Event_write_to_event_store(ta: $TypeValue, guid: $Value, count: $Value, msg: $Value) {
-    // This function is modeled as a no-op because the actual side effect of this native function is not observable from the Move side.
-}
-
 // ==================================================================================
 // Native Signer
 
@@ -1290,22 +1247,30 @@ procedure {:inline 1} $Signer_borrow_address(signer: $Value) returns (res: $Valu
     res := signer;
 }
 
-// TODO: implement the below methods
 // ==================================================================================
 // Native signature
 
-// TODO: implement the below methods. See issue #4666.
+// Signature related functionality is handled via uninterpreted functions. This is sound
+// currently because we verify every code path based on signature verification with
+// an arbitrary interpretation.
+
+function $Signature_spec_ed25519_validate_pubkey(public_key: $Value): $Value;
+function $Signature_spec_ed25519_verify(signature: $Value, public_key: $Value, message: $Value): $Value;
+
+axiom (forall public_key: $Value ::
+        is#$Boolean($Signature_spec_ed25519_validate_pubkey(public_key)));
+
+axiom (forall signature, public_key, message: $Value ::
+        is#$Boolean($Signature_spec_ed25519_verify(signature, public_key, message)));
+
 
 procedure {:inline 1} $Signature_ed25519_validate_pubkey(public_key: $Value) returns (res: $Value) {
-    res := $Boolean(true);
+    res := $Signature_spec_ed25519_validate_pubkey(public_key);
 }
 
-procedure {:inline 1} $Signature_ed25519_verify(signature: $Value, public_key: $Value, message: $Value) returns (res: $Value) {
-    res := $Boolean(true);
-}
-
-procedure {:inline 1} Signature_ed25519_threshold_verify(bitmap: $Value, signature: $Value, public_key: $Value, message: $Value) returns (res: $Value) {
-    assert false; // Signature_ed25519_threshold_verify not implemented
+procedure {:inline 1} $Signature_ed25519_verify(
+        signature: $Value, public_key: $Value, message: $Value) returns (res: $Value) {
+    res := $Signature_spec_ed25519_verify(signature, public_key, message);
 }
 
 // ==================================================================================
@@ -1316,7 +1281,7 @@ procedure {:inline 1} Signature_ed25519_threshold_verify(bitmap: $Value, signatu
 // Serialize is modeled as an uninterpreted function, with an additional
 // axiom to say it's an injection.
 
-function {:inline} $LCS_serialize($m: $Memory, $txn: $Transaction, ta: $TypeValue, v: $Value): $Value {
+function {:inline} $LCS_serialize(ta: $TypeValue, v: $Value): $Value {
     $LCS_serialize_core(v)
 }
 
@@ -1340,31 +1305,17 @@ const $serialized_address_len: int;
 axiom (forall v: $Value :: (var r := $LCS_serialize_core(v); is#$Address(v) ==> $vlen(r) == $serialized_address_len));
 
 procedure $LCS_to_bytes(ta: $TypeValue, v: $Value) returns (res: $Value);
-ensures res == $LCS_serialize($m, $txn, ta, v);
+ensures res == $LCS_serialize(ta, v);
 ensures $IsValidU8Vector(res);    // result is a legal vector of U8s.
 
 // ==================================================================================
 // Native Signer::spec_address_of
 
-function {:inline} $Signer_spec_address_of($m: $Memory, $txn: $Transaction, signer: $Value): $Value
+function {:inline} $Signer_spec_address_of(signer: $Value): $Value
 {
     // A signer is currently identical to an address.
     signer
 }
-
-// ==================================================================================
-// FixedPoint32 intrinsic functions
-
-procedure $FixedPoint32_multiply_u64(num: $Value, multiplier: $Value) returns (res: $Value);
-ensures $IsValidU64(res);
-
-procedure $FixedPoint32_divide_u64(num: $Value, multiplier: $Value) returns (res: $Value);
-ensures $IsValidU64(res);
-
-procedure $FixedPoint32_create_from_rational(numerator: $Value, denominator: $Value) returns (res: $Value);
-// The predicate in the following line is equivalent to $FixedPoint32_FixedPoint32_is_well_formed(res),
-// but written this way to avoid the forward declaration.
-ensures $Vector_is_well_formed(res) && $vlen(res) == 1 && $IsValidU64($SelectField(res, 0));
 
 // ==================================================================================
 // Mocked out Event module

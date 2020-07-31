@@ -12,6 +12,9 @@ WORKDIR /libra
 COPY rust-toolchain /libra/rust-toolchain
 RUN rustup install $(cat rust-toolchain)
 
+COPY cargo-toolchain /libra/cargo-toolchain
+RUN rustup install $(cat cargo-toolchain)
+
 FROM toolchain AS builder
 
 COPY . /libra
@@ -23,7 +26,8 @@ FROM debian:buster-slim AS prod
 
 RUN apt-get update && apt-get -y install socat && apt-get clean && rm -r /var/lib/apt/lists/*
 
-COPY --from=builder /libra/target/release/libra-management /usr/local/bin
+COPY --from=builder /libra/target/release/libra-genesis-tool /usr/local/bin
+COPY --from=builder /libra/target/release/libra-operational-tool /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REV

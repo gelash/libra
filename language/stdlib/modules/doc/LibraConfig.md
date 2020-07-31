@@ -12,17 +12,13 @@
 -  [Function `initialize`](#0x1_LibraConfig_initialize)
 -  [Function `get`](#0x1_LibraConfig_get)
 -  [Function `set`](#0x1_LibraConfig_set)
--  [Function `set_with_capability`](#0x1_LibraConfig_set_with_capability)
--  [Function `publish_new_config_with_capability`](#0x1_LibraConfig_publish_new_config_with_capability)
--  [Function `publish_new_treasury_compliance_config`](#0x1_LibraConfig_publish_new_treasury_compliance_config)
+-  [Function `set_with_capability_and_reconfigure`](#0x1_LibraConfig_set_with_capability_and_reconfigure)
+-  [Function `publish_new_config_and_get_capability`](#0x1_LibraConfig_publish_new_config_and_get_capability)
 -  [Function `publish_new_config`](#0x1_LibraConfig_publish_new_config)
--  [Function `publish_new_config_with_delegate`](#0x1_LibraConfig_publish_new_config_with_delegate)
--  [Function `claim_delegated_modify_config`](#0x1_LibraConfig_claim_delegated_modify_config)
 -  [Function `reconfigure`](#0x1_LibraConfig_reconfigure)
 -  [Function `reconfigure_`](#0x1_LibraConfig_reconfigure_)
 -  [Function `emit_reconfiguration_event`](#0x1_LibraConfig_emit_reconfiguration_event)
 -  [Specification](#0x1_LibraConfig_Specification)
-    -  [Function `publish_new_config_with_capability`](#0x1_LibraConfig_Specification_publish_new_config_with_capability)
     -  [Function `publish_new_config`](#0x1_LibraConfig_Specification_publish_new_config)
     -  [Function `reconfigure_`](#0x1_LibraConfig_Specification_reconfigure_)
 
@@ -172,8 +168,9 @@
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_initialize">initialize</a>(
     config_account: &signer,
 ) {
+    <b>assert</b>(<a href="LibraTimestamp.md#0x1_LibraTimestamp_is_genesis">LibraTimestamp::is_genesis</a>(), ENOT_GENESIS);
     // Operational constraint
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), 1);
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), EINVALID_SINGLETON_ADDRESS);
     move_to&lt;<a href="#0x1_LibraConfig_Configuration">Configuration</a>&gt;(
         config_account,
         <a href="#0x1_LibraConfig_Configuration">Configuration</a> {
@@ -204,9 +201,10 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_get">get</a>&lt;Config: <b>copyable</b>&gt;(): Config <b>acquires</b> <a href="#0x1_LibraConfig">LibraConfig</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_get">get</a>&lt;Config: <b>copyable</b>&gt;(): Config
+<b>acquires</b> <a href="#0x1_LibraConfig">LibraConfig</a> {
     <b>let</b> addr = <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>();
-    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), 24);
+    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), ECONFIG_DOES_NOT_EXIST);
     *&borrow_global&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr).payload
 }
 </code></pre>
@@ -230,11 +228,12 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set">set</a>&lt;Config: <b>copyable</b>&gt;(account: &signer, payload: Config) <b>acquires</b> <a href="#0x1_LibraConfig">LibraConfig</a>, <a href="#0x1_LibraConfig_Configuration">Configuration</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set">set</a>&lt;Config: <b>copyable</b>&gt;(account: &signer, payload: Config)
+<b>acquires</b> <a href="#0x1_LibraConfig">LibraConfig</a>, <a href="#0x1_LibraConfig_Configuration">Configuration</a> {
     <b>let</b> addr = <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>();
-    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), 24);
+    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), ECONFIG_DOES_NOT_EXIST);
     <b>let</b> signer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(account);
-    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt;&gt;(signer_address), 24);
+    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt;&gt;(signer_address), EMODIFY_CAPABILITY_NOT_HELD);
 
     <b>let</b> config = borrow_global_mut&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr);
     config.payload = payload;
@@ -247,13 +246,13 @@
 
 </details>
 
-<a name="0x1_LibraConfig_set_with_capability"></a>
+<a name="0x1_LibraConfig_set_with_capability_and_reconfigure"></a>
 
-## Function `set_with_capability`
+## Function `set_with_capability_and_reconfigure`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set_with_capability">set_with_capability</a>&lt;Config: <b>copyable</b>&gt;(_cap: &<a href="#0x1_LibraConfig_ModifyConfigCapability">LibraConfig::ModifyConfigCapability</a>&lt;Config&gt;, payload: Config)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set_with_capability_and_reconfigure">set_with_capability_and_reconfigure</a>&lt;Config: <b>copyable</b>&gt;(_cap: &<a href="#0x1_LibraConfig_ModifyConfigCapability">LibraConfig::ModifyConfigCapability</a>&lt;Config&gt;, payload: Config)
 </code></pre>
 
 
@@ -262,12 +261,12 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set_with_capability">set_with_capability</a>&lt;Config: <b>copyable</b>&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_set_with_capability_and_reconfigure">set_with_capability_and_reconfigure</a>&lt;Config: <b>copyable</b>&gt;(
     _cap: &<a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt;,
     payload: Config
 ) <b>acquires</b> <a href="#0x1_LibraConfig">LibraConfig</a>, <a href="#0x1_LibraConfig_Configuration">Configuration</a> {
     <b>let</b> addr = <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>();
-    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), 24);
+    <b>assert</b>(exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr), ECONFIG_DOES_NOT_EXIST);
     <b>let</b> config = borrow_global_mut&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(addr);
     config.payload = payload;
     <a href="#0x1_LibraConfig_reconfigure_">reconfigure_</a>();
@@ -278,13 +277,13 @@
 
 </details>
 
-<a name="0x1_LibraConfig_publish_new_config_with_capability"></a>
+<a name="0x1_LibraConfig_publish_new_config_and_get_capability"></a>
 
-## Function `publish_new_config_with_capability`
+## Function `publish_new_config_and_get_capability`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_with_capability">publish_new_config_with_capability</a>&lt;Config: <b>copyable</b>&gt;(config_account: &signer, payload: Config): <a href="#0x1_LibraConfig_ModifyConfigCapability">LibraConfig::ModifyConfigCapability</a>&lt;Config&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_and_get_capability">publish_new_config_and_get_capability</a>&lt;Config: <b>copyable</b>&gt;(config_account: &signer, payload: Config): <a href="#0x1_LibraConfig_ModifyConfigCapability">LibraConfig::ModifyConfigCapability</a>&lt;Config&gt;
 </code></pre>
 
 
@@ -293,49 +292,15 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_with_capability">publish_new_config_with_capability</a>&lt;Config: <b>copyable</b>&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_and_get_capability">publish_new_config_and_get_capability</a>&lt;Config: <b>copyable</b>&gt;(
     config_account: &signer,
     payload: Config,
 ): <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt; {
-    // TODO: <b>abort</b> code
-    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_on_chain_config_privilege">Roles::has_on_chain_config_privilege</a>(config_account), 919414);
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), 1);
+    <b>assert</b>(<a href="LibraTimestamp.md#0x1_LibraTimestamp_is_genesis">LibraTimestamp::is_genesis</a>(), ENOT_GENESIS);
+    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_libra_root_role">Roles::has_libra_root_role</a>(config_account), ENOT_LIBRA_ROOT);
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), EINVALID_SINGLETON_ADDRESS);
     move_to(config_account, <a href="#0x1_LibraConfig">LibraConfig</a> { payload });
-    // We don't trigger reconfiguration here, instead we'll wait for all validators <b>update</b> the binary
-    // <b>to</b> register this config into ON_CHAIN_CONFIG_REGISTRY then send another transaction <b>to</b> change
-    // the value which triggers the reconfiguration.
-    <b>return</b> <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt; {}
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_LibraConfig_publish_new_treasury_compliance_config"></a>
-
-## Function `publish_new_treasury_compliance_config`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_treasury_compliance_config">publish_new_treasury_compliance_config</a>&lt;Config: <b>copyable</b>&gt;(config_account: &signer, tc_account: &signer, payload: Config)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_treasury_compliance_config">publish_new_treasury_compliance_config</a>&lt;Config: <b>copyable</b>&gt;(
-    config_account: &signer,
-    tc_account: &signer,
-    payload: Config,
-) {
-    // TODO: <b>abort</b> code
-    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_on_chain_config_privilege">Roles::has_on_chain_config_privilege</a>(config_account), 919415);
-    move_to(config_account, <a href="#0x1_LibraConfig">LibraConfig</a> { payload });
-    move_to(tc_account, <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt; {});
+    <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt; {}
 }
 </code></pre>
 
@@ -362,73 +327,8 @@
     config_account: &signer,
     payload: Config
 ) {
-    // TODO: <b>abort</b> code
-    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_on_chain_config_privilege">Roles::has_on_chain_config_privilege</a>(config_account), 919416);
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), 1);
-    move_to(config_account, <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt; {});
-    move_to(config_account, <a href="#0x1_LibraConfig">LibraConfig</a>{ payload });
-    // We don't trigger reconfiguration here, instead we'll wait for all validators <b>update</b> the binary
-    // <b>to</b> register this config into ON_CHAIN_CONFIG_REGISTRY then send another transaction <b>to</b> change
-    // the value which triggers the reconfiguration.
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_LibraConfig_publish_new_config_with_delegate"></a>
-
-## Function `publish_new_config_with_delegate`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_with_delegate">publish_new_config_with_delegate</a>&lt;Config: <b>copyable</b>&gt;(config_account: &signer, payload: Config, delegate: address)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_with_delegate">publish_new_config_with_delegate</a>&lt;Config: <b>copyable</b>&gt;(
-    config_account: &signer,
-    payload: Config,
-    delegate: address,
-) {
-    // TODO: <b>abort</b> code
-    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_on_chain_config_privilege">Roles::has_on_chain_config_privilege</a>(config_account), 919417);
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(config_account) == <a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(), 1);
-    <a href="Offer.md#0x1_Offer_create">Offer::create</a>(config_account, <a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt;{}, delegate);
-    move_to(config_account, <a href="#0x1_LibraConfig">LibraConfig</a> { payload });
-    // We don't trigger reconfiguration here, instead we'll wait for all validators <b>update</b> the
-    // binary <b>to</b> register this config into ON_CHAIN_CONFIG_REGISTRY then send another
-    // transaction <b>to</b> change the value which triggers the reconfiguration.
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_LibraConfig_claim_delegated_modify_config"></a>
-
-## Function `claim_delegated_modify_config`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_claim_delegated_modify_config">claim_delegated_modify_config</a>&lt;Config&gt;(account: &signer, offer_address: address)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_claim_delegated_modify_config">claim_delegated_modify_config</a>&lt;Config&gt;(account: &signer, offer_address: address) {
-    move_to(account, <a href="Offer.md#0x1_Offer_redeem">Offer::redeem</a>&lt;<a href="#0x1_LibraConfig_ModifyConfigCapability">ModifyConfigCapability</a>&lt;Config&gt;&gt;(account, offer_address))
+    <b>let</b> capability = <a href="#0x1_LibraConfig_publish_new_config_and_get_capability">publish_new_config_and_get_capability</a>&lt;Config&gt;(config_account, payload);
+    move_to(config_account, capability);
 }
 </code></pre>
 
@@ -454,9 +354,8 @@
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_reconfigure">reconfigure</a>(
     lr_account: &signer,
 ) <b>acquires</b> <a href="#0x1_LibraConfig_Configuration">Configuration</a> {
-    // Only callable by association address or by the VM internally.
-    // TODO: <b>abort</b> code
-    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_libra_root_role">Roles::has_libra_root_role</a>(lr_account), 919418);
+    // Only callable by libra root account or by the VM internally.
+    <b>assert</b>(<a href="Roles.md#0x1_Roles_has_libra_root_role">Roles::has_libra_root_role</a>(lr_account), ENOT_LIBRA_ROOT);
     <a href="#0x1_LibraConfig_reconfigure_">reconfigure_</a>();
 }
 </code></pre>
@@ -492,7 +391,7 @@
    // correspondence between system reconfigurations and emitted ReconfigurationEvents.
 
    <b>let</b> current_block_time = <a href="LibraTimestamp.md#0x1_LibraTimestamp_now_microseconds">LibraTimestamp::now_microseconds</a>();
-   <b>assert</b>(current_block_time &gt; config_ref.last_reconfiguration_time, 23);
+   <b>assert</b>(current_block_time &gt; config_ref.last_reconfiguration_time, EINVALID_BLOCK_TIME);
    config_ref.last_reconfiguration_time = current_block_time;
 
    <a href="#0x1_LibraConfig_emit_reconfiguration_event">emit_reconfiguration_event</a>();
@@ -538,26 +437,6 @@
 <a name="0x1_LibraConfig_Specification"></a>
 
 ## Specification
-
-
-<a name="0x1_LibraConfig_Specification_publish_new_config_with_capability"></a>
-
-### Function `publish_new_config_with_capability`
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraConfig_publish_new_config_with_capability">publish_new_config_with_capability</a>&lt;Config: <b>copyable</b>&gt;(config_account: &signer, payload: Config): <a href="#0x1_LibraConfig_ModifyConfigCapability">LibraConfig::ModifyConfigCapability</a>&lt;Config&gt;
-</code></pre>
-
-
-
-TODO(wrwg): enable
-aborts_if spec_is_published<Config>();
-
-
-<pre><code><b>ensures</b> <b>old</b>(!<a href="#0x1_LibraConfig_spec_is_published">spec_is_published</a>&lt;Config&gt;());
-<b>ensures</b> <a href="#0x1_LibraConfig_spec_is_published">spec_is_published</a>&lt;Config&gt;();
-</code></pre>
-
 
 
 <a name="0x1_LibraConfig_Specification_publish_new_config"></a>
@@ -641,9 +520,5 @@ Spec version of
 
 <pre><code><b>define</b> <a href="#0x1_LibraConfig_spec_is_published">spec_is_published</a>&lt;Config&gt;(): bool {
     exists&lt;<a href="#0x1_LibraConfig">LibraConfig</a>&lt;Config&gt;&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_SPEC_LIBRA_ROOT_ADDRESS">CoreAddresses::SPEC_LIBRA_ROOT_ADDRESS</a>())
-}
-<a name="0x1_LibraConfig_spec_has_on_chain_config_privilege"></a>
-<b>define</b> <a href="#0x1_LibraConfig_spec_has_on_chain_config_privilege">spec_has_on_chain_config_privilege</a>(account: signer): bool {
-    <a href="Roles.md#0x1_Roles_spec_has_libra_root_role">Roles::spec_has_libra_root_role</a>(account)
 }
 </code></pre>

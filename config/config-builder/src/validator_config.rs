@@ -14,7 +14,7 @@ use libra_config::{
 use libra_crypto::{ed25519::Ed25519PrivateKey, PrivateKey, Uniform};
 use libra_network_address::NetworkAddress;
 use libra_temppath::TempPath;
-use libra_types::waypoint::Waypoint;
+use libra_types::{chain_id::ChainId, waypoint::Waypoint};
 use libra_vm::LibraVM;
 use libradb::LibraDB;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -29,8 +29,9 @@ pub struct ValidatorConfig {
     pub advertised_address: NetworkAddress,
     pub build_waypoint: bool,
     pub bootstrap: NetworkAddress,
-    pub node_index: usize,
+    pub chain_id: ChainId,
     pub listen_address: NetworkAddress,
+    pub node_index: usize,
     pub num_nodes: usize,
     pub num_nodes_in_genesis: Option<usize>,
     pub safety_rules_addr: Option<SocketAddr>,
@@ -48,8 +49,9 @@ impl Default for ValidatorConfig {
             advertised_address: NetworkAddress::from_str(DEFAULT_ADVERTISED_ADDRESS).unwrap(),
             bootstrap: NetworkAddress::from_str(DEFAULT_ADVERTISED_ADDRESS).unwrap(),
             build_waypoint: true,
-            node_index: 0,
+            chain_id: ChainId::test(),
             listen_address: NetworkAddress::from_str(DEFAULT_LISTEN_ADDRESS).unwrap(),
+            node_index: 0,
             num_nodes: 1,
             num_nodes_in_genesis: None,
             safety_rules_addr: None,
@@ -102,9 +104,9 @@ impl ValidatorConfig {
     }
 
     pub fn build_faucet_client(&self) -> Result<(Ed25519PrivateKey, Waypoint)> {
-        let (configs, faucet_key) = self.build_common(false)?;
+        let (configs, libra_root_key) = self.build_common(false)?;
         Ok((
-            faucet_key,
+            libra_root_key,
             configs[0]
                 .base
                 .waypoint
@@ -126,7 +128,7 @@ impl ValidatorConfig {
             }
         );
 
-        let (faucet_key, config_seed) = self.build_faucet_key();
+        let (libra_root_key, config_seed) = self.build_libra_root_key();
         let generator::ValidatorSwarm { mut nodes, .. } = generator::validator_swarm(
             &self.template,
             self.num_nodes,
@@ -143,15 +145,18 @@ impl ValidatorConfig {
         // present at genesis time.
         let nodes_in_genesis = self.num_nodes_in_genesis.unwrap_or(self.num_nodes);
 
-        let validators = vm_genesis::validator_registrations(&nodes[..nodes_in_genesis]);
+        let operator_assignments = vm_genesis::operator_assignments(&nodes[..nodes_in_genesis]);
+        let operator_registrations = vm_genesis::operator_registrations(&nodes[..nodes_in_genesis]);
 
-        let genesis = vm_genesis::encode_genesis_transaction_with_validator(
-            faucet_key.public_key(),
-            &validators,
+        let genesis = vm_genesis::encode_genesis_transaction(
+            libra_root_key.public_key(),
+            &operator_assignments,
+            &operator_registrations,
             self.template
                 .test
                 .as_ref()
                 .and_then(|config| config.publishing_option.clone()),
+            self.chain_id,
         );
 
         let (waypoint, maybe_waypoint) = if self.build_waypoint {
@@ -174,18 +179,19 @@ impl ValidatorConfig {
                 test_config.waypoint = maybe_waypoint;
             }
 
+            node.base.chain_id = self.chain_id;
             node.base.waypoint = waypoint.clone();
             node.execution.genesis = genesis.clone();
         }
 
-        Ok((nodes, faucet_key))
+        Ok((nodes, libra_root_key))
     }
 
-    pub fn build_faucet_key(&self) -> (Ed25519PrivateKey, [u8; 32]) {
-        let mut faucet_rng = StdRng::from_seed(self.seed);
-        let faucet_key = Ed25519PrivateKey::generate(&mut faucet_rng);
-        let config_seed: [u8; 32] = faucet_rng.gen();
-        (faucet_key, config_seed)
+    pub fn build_libra_root_key(&self) -> (Ed25519PrivateKey, [u8; 32]) {
+        let mut seeded_rng = StdRng::from_seed(self.seed);
+        let libra_root_key = Ed25519PrivateKey::generate(&mut seeded_rng);
+        let config_seed: [u8; 32] = seeded_rng.gen();
+        (libra_root_key, config_seed)
     }
 
     fn build_safety_rules(&self, config: &mut NodeConfig) -> Result<()> {

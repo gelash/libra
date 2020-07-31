@@ -1,7 +1,11 @@
-[package-exceptions]
-libra-crypto = { path = "crypto/crypto", all-features = false }
-libra-node = { path = "libra-node" }
-testsuite = { path = "testsuite", system = true }
+[system-tests]
+testsuite = { path = "testsuite" }
+
+[cargo]
+toolchain = "nightly-2020-07-08"
+flags = "-Zfeatures=all"
+
+[fix]
 
 [clippy]
 allowed = [
@@ -48,9 +52,6 @@ lazy_static = "use once_cell::sync::Lazy instead"
 criterion = "criterion is only for benchmarks"
 proptest = "proptest is only for testing and fuzzing"
 
-[workspace.overlay]
-features = ["fuzzing"]
-
 # This is a list of test-only members. These are workspace members that do not form part of the main
 # Libra production codebase, and are only used to verify correctness and/or performance.
 #
@@ -65,7 +66,7 @@ features = ["fuzzing"]
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 [workspace.test-only]
 members = [
-    "common/option-future",
+    "common/libradoc",
     "common/proptest-helpers",
     "common/retrier",
     "common/workspace-builder",
@@ -85,7 +86,7 @@ members = [
     "language/tools/test-generation",
     "language/tools/utils",
     "language/vm/serializer-tests",
-    "network/onchain-discovery",
+    "network/memsocket",
     "network/socket-bench-server",
     "testsuite",
     "testsuite/cluster-test",

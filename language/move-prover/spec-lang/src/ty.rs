@@ -8,7 +8,11 @@ use crate::{
     env::{GlobalEnv, ModuleId, StructEnv, StructId},
     symbol::{Symbol, SymbolPool},
 };
-use std::{collections::BTreeMap, fmt, fmt::Formatter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    fmt::Formatter,
+};
 
 /// Represents a type.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -111,6 +115,15 @@ impl Type {
         false
     }
 
+    /// Skip reference type.
+    pub fn skip_reference(&self) -> &Type {
+        if let Type::Reference(_, bt) = self {
+            &*bt
+        } else {
+            self
+        }
+    }
+
     /// If this is a struct type, replace the type instantiation.
     pub fn replace_struct_instantiation(&self, inst: &[Type]) -> Type {
         match self {
@@ -128,6 +141,15 @@ impl Type {
             Some((env.get_module(*module_idx).into_struct(*struct_idx), params))
         } else {
             None
+        }
+    }
+
+    /// Require this to be a struct, if so extracts its content.
+    pub fn require_struct(&self) -> (ModuleId, StructId, &[Type]) {
+        if let Type::Struct(mid, sid, targs) = self {
+            (*mid, *sid, targs.as_slice())
+        } else {
+            panic!("expected a Type::Struct")
         }
     }
 
@@ -153,12 +175,12 @@ impl Type {
             }
             Type::Var(i) => {
                 if let Some(s) = subs {
-                    if let Some(s) = s.subs.get(i) {
+                    if let Some(t) = s.subs.get(i) {
                         // Recursively call replacement again here, in case the substitution s
                         // refers to type variables.
                         // TODO: a more efficient approach is to maintain that type assignments
                         // are always fully specialized w.r.t. to the substitution.
-                        s.replace(params, subs)
+                        t.replace(params, subs)
                     } else {
                         self.clone()
                     }
@@ -176,7 +198,7 @@ impl Type {
             Type::Tuple(args) => Type::Tuple(replace_vec(args)),
             Type::Vector(et) => Type::Vector(Box::new(et.replace(params, subs))),
             Type::TypeDomain(et) => Type::TypeDomain(Box::new(et.replace(params, subs))),
-            _ => self.clone(),
+            Type::Primitive(..) | Type::TypeLocal(..) | Type::Error => self.clone(),
         }
     }
 
@@ -209,7 +231,35 @@ impl Type {
             Fun(ts, r) => ts.iter().any(|t| t.is_incomplete()) || r.is_incomplete(),
             Struct(_, _, ts) => ts.iter().any(|t| t.is_incomplete()),
             Vector(et) => et.is_incomplete(),
-            _ => false,
+            Reference(_, bt) => bt.is_incomplete(),
+            TypeDomain(bt) => bt.is_incomplete(),
+            Error | Primitive(..) | TypeParameter(..) | TypeLocal(..) => false,
+        }
+    }
+
+    /// Get the unbound type variables in the type.
+    pub fn get_vars(&self) -> BTreeSet<u16> {
+        let mut vars = BTreeSet::new();
+        self.internal_get_vars(&mut vars);
+        vars
+    }
+
+    fn internal_get_vars(&self, vars: &mut BTreeSet<u16>) {
+        use Type::*;
+        match self {
+            Var(id) => {
+                vars.insert(*id);
+            }
+            Tuple(ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
+            Fun(ts, r) => {
+                r.internal_get_vars(vars);
+                ts.iter().for_each(|t| t.internal_get_vars(vars));
+            }
+            Struct(_, _, ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
+            Vector(et) => et.internal_get_vars(vars),
+            Reference(_, bt) => bt.internal_get_vars(vars),
+            TypeDomain(bt) => bt.internal_get_vars(vars),
+            Error | Primitive(..) | TypeParameter(..) | TypeLocal(..) => {}
         }
     }
 }
@@ -220,6 +270,11 @@ impl Substitution {
         Self {
             subs: BTreeMap::new(),
         }
+    }
+
+    /// Binds the type variables.
+    pub fn bind(&mut self, var: u16, ty: Type) {
+        self.subs.insert(var, ty);
     }
 
     /// Specializes the type, substituting all variables bound in this substitution.
