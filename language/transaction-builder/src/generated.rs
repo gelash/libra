@@ -118,6 +118,41 @@ pub fn encode_cancel_burn_script(token: TypeTag, preburn_address: AccountAddress
     )
 }
 
+/// A doc to make the test not fail TODO. Another doc.
+pub fn encode_cancel_money_order_script(
+    amount: u64,
+    issuer: AccountAddress,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 37, 7, 53, 74, 8,
+            127, 16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2,
+            1, 1, 6, 6, 12, 3, 5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2,
+            0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79,
+            114, 100, 101, 114, 68, 101, 115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110,
+            99, 101, 108, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111,
+            110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116,
+            111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 5, 13, 10, 0, 11, 0,
+            10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 1, 2,
+        ],
+        vec![],
+        vec![
+            TransactionArgument::U64(amount),
+            TransactionArgument::Address(issuer),
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
+            TransactionArgument::U8Vector(user_public_key),
+            TransactionArgument::U8Vector(issuer_signature),
+            TransactionArgument::U8Vector(user_signature),
+        ],
+    )
+}
+
 /// Create a `ChildVASP` account for sender `parent_vasp` at `child_address` with a
 /// balance of `child_initial_balance` in `CoinType` and an initial authentication_key
 /// `auth_key_prefix | child_address`. If `add_all_currencies` is true, the child address
@@ -316,6 +351,57 @@ pub fn encode_create_validator_operator_account_script(
     )
 }
 
+/// TODO Some docs
+pub fn encode_debug_money_order_coin_balance_script() -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 10, 7, 27, 48, 8,
+            75, 16, 0, 0, 0, 1, 0, 2, 0, 1, 1, 1, 1, 3, 2, 3, 0, 0, 3, 1, 6, 9, 0, 0, 1, 6, 12, 1,
+            3, 5, 68, 101, 98, 117, 103, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 5,
+            112, 114, 105, 110, 116, 24, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
+            99, 111, 105, 110, 95, 98, 97, 108, 97, 110, 99, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 2, 3, 6, 11, 0, 17, 1, 12, 1, 14, 1, 56, 0, 2,
+        ],
+        vec![],
+        vec![],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_deposit_money_order_script(
+    amount: u64,
+    issuer: AccountAddress,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 35, 7, 51, 75, 8,
+            126, 16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2,
+            0, 6, 6, 12, 3, 5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10,
+            77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114,
+            100, 101, 114, 68, 101, 115, 99, 114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111,
+            115, 105, 116, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111,
+            110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116,
+            111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 1, 12, 10, 0, 11, 0,
+            10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 2,
+        ],
+        vec![],
+        vec![
+            TransactionArgument::U64(amount),
+            TransactionArgument::Address(issuer),
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
+            TransactionArgument::U8Vector(user_public_key),
+            TransactionArgument::U8Vector(issuer_signature),
+            TransactionArgument::U8Vector(user_signature),
+        ],
+    )
+}
+
 /// Freeze account `address`. Initiator must be authorized. `sliding_nonce` is a unique
 /// nonce for operation, see sliding_nonce.move for details.
 pub fn encode_freeze_account_script(
@@ -336,6 +422,80 @@ pub fn encode_freeze_account_script(
         vec![
             TransactionArgument::U64(sliding_nonce),
             TransactionArgument::Address(to_freeze_account),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_initialize_money_orders_script(public_key: Vec<u8>, starting_balance: u64) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 7, 7, 14, 35, 8, 49, 16, 0, 0,
+            0, 1, 0, 1, 0, 3, 6, 12, 10, 2, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101,
+            114, 23, 105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 95, 109, 111, 110, 101, 121,
+            95, 111, 114, 100, 101, 114, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+            1, 5, 11, 0, 11, 1, 10, 2, 17, 0, 2,
+        ],
+        vec![],
+        vec![
+            TransactionArgument::U8Vector(public_key),
+            TransactionArgument::U64(starting_balance),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issue_money_order_script(validity_microseconds: u64) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 11, 7, 28, 41, 8,
+            69, 16, 0, 0, 0, 1, 0, 2, 0, 1, 1, 1, 1, 3, 2, 3, 0, 0, 3, 1, 6, 9, 0, 0, 2, 6, 12, 3,
+            1, 3, 5, 68, 101, 98, 117, 103, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 5,
+            112, 114, 105, 110, 116, 17, 105, 115, 115, 117, 101, 95, 109, 111, 110, 101, 121, 95,
+            111, 114, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 3, 7,
+            11, 0, 10, 1, 17, 1, 12, 2, 14, 2, 56, 0, 2,
+        ],
+        vec![],
+        vec![TransactionArgument::U64(validity_microseconds)],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issue_money_order_batch_script(
+    batch_size: u64,
+    validity_microseconds: u64,
+) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 12, 7, 29, 47, 8,
+            76, 16, 0, 0, 0, 1, 0, 2, 0, 1, 1, 1, 1, 3, 2, 3, 0, 0, 3, 1, 6, 9, 0, 0, 3, 6, 12, 3,
+            3, 1, 3, 5, 68, 101, 98, 117, 103, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114,
+            5, 112, 114, 105, 110, 116, 23, 105, 115, 115, 117, 101, 95, 109, 111, 110, 101, 121,
+            95, 111, 114, 100, 101, 114, 95, 98, 97, 116, 99, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 2, 3, 8, 11, 0, 10, 1, 10, 2, 17, 1, 12, 3, 14, 3, 56, 0, 2,
+        ],
+        vec![],
+        vec![
+            TransactionArgument::U64(batch_size),
+            TransactionArgument::U64(validity_microseconds),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issuer_cancel_money_order_script(batch_index: u64, order_index: u64) -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 8, 7, 15, 37, 8, 52, 16, 0, 0,
+            0, 1, 0, 1, 0, 3, 6, 12, 3, 3, 1, 1, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101,
+            114, 25, 105, 115, 115, 117, 101, 114, 95, 99, 97, 110, 99, 101, 108, 95, 109, 111,
+            110, 101, 121, 95, 111, 114, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 1, 0, 0, 2, 6, 11, 0, 10, 1, 10, 2, 17, 0, 1, 2,
+        ],
+        vec![],
+        vec![
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
         ],
     )
 }
@@ -432,6 +592,21 @@ pub fn encode_preburn_script(token: TypeTag, amount: u64) -> Script {
         ],
         vec![token],
         vec![TransactionArgument::U64(amount)],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_publish_money_order_coin_script() -> Script {
+    Script::new(
+        vec![
+            161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 4, 7, 11, 36, 8, 47, 16, 0, 0,
+            0, 1, 0, 1, 0, 1, 6, 12, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 24,
+            112, 117, 98, 108, 105, 115, 104, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101,
+            114, 95, 99, 111, 105, 110, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 3,
+            11, 0, 17, 0, 2,
+        ],
+        vec![],
+        vec![],
     )
 }
 

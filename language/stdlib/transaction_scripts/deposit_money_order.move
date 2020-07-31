@@ -1,6 +1,7 @@
 script {
     use 0x1::MoneyOrder;
 
+    /// TODO Some docs
     fun deposit_money_order(receiver: &signer,
                             amount: u64,
                             issuer: address,
