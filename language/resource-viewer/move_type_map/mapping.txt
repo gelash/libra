@@ -1,81 +1,5 @@
 [
   [
-    "01059c53ce127f3323b6b19be7601b537fb42b41d25a05cd0c5e5123a698d9215d",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "SlidingNonce",
-            "name": "CreateSlidingNonce",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "SlidingNonce",
-            "name": "CreateSlidingNonce",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "010cbf43cdbd64bd38fc2b564f1573fdaaafc0abbcfab873f005adf0c39a66b63d",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "CreateOnChainConfig",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "CreateOnChainConfig",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
     "0110d33fe260cbf75c282946f4ce8c4da2e0c6ac72e14811372bfc57d9281fbf9b",
     {
       "address": "00000000000000000000000000000001",
@@ -469,44 +393,6 @@
       "is_resource": true,
       "ty_args": [],
       "layout": [
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "01285a64b6110ed5c0ac027903579966f8ffd3b727f42c1768090531f4ec570ab8",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "ValidatorConfig",
-            "name": "UpdateValidatorConfig",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "ValidatorConfig",
-            "name": "UpdateValidatorConfig",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
         "Bool"
       ]
     }
@@ -1054,82 +940,6 @@
     }
   ],
   [
-    "015cb6050b74181552f18050d9f4b3fad5b1b9d9689132c6bdcc995a6361956a83",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "DesignatedDealerRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "DesignatedDealerRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "01646fb94c79540230964ba051527a802931b95d8e715685db49da34d6be70d0be",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "TreasuryComplianceRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "TreasuryComplianceRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
     "01687bf580492aa6c5257639c5209bd1d9f6faa38cefcec7b14e88a92967e036a9",
     {
       "address": "00000000000000000000000000000001",
@@ -1151,44 +961,6 @@
         }
       ],
       "layout": [
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "0171d3ceb70e544cc470319507d96fd1befe78404d648de1329a3d18a80324cabd",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "DualAttestationLimit",
-            "name": "UpdateDualAttestationThreshold",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "DualAttestationLimit",
-            "name": "UpdateDualAttestationThreshold",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
         "Bool"
       ]
     }
@@ -1474,44 +1246,6 @@
     }
   ],
   [
-    "0182c8ed589b89916502c11e260ada59b166ffa3bd94143e583f9e586745b95d62",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "LibraRootRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "LibraRootRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
     "0185aa1f79e25ca70b8f54f8a0b673259fc19b1af35acb98885d99e160600387c9",
     {
       "address": "00000000000000000000000000000001",
@@ -1670,44 +1404,6 @@
           }
         },
         "U64",
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "01897f1c48e7d51143c2fb916296bd96636a5b33986b4c7bf0252110a299a0b2c2",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "AccountFreezing",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "AccountFreezing",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
         "Bool"
       ]
     }
@@ -2243,44 +1939,6 @@
     }
   ],
   [
-    "01c341d3340ce81ba55caa5bd807a5e33aa08138a0fcbd3efbb8463660e129952d",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "AccountUnfreezing",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "AccountUnfreezing",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
     "01c5a88aa4ec51fc5df0119af0f6faf3c82fe99ac6bc38e82fd6385cdaa45190c7",
     {
       "address": "00000000000000000000000000000001",
@@ -2535,44 +2193,6 @@
     }
   ],
   [
-    "01c8d30e274db51f137a239272b83b3218fb6fea6d26b311759e252de807baa93c",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "RegisterNewCurrency",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "RegisterNewCurrency",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
     "01ca1cdf0d3f9f145c25fbc8b486f00b7dc6c3e0bb70d8e56f754894ee6e2217f7",
     {
       "address": "00000000000000000000000000000001",
@@ -2742,44 +2362,6 @@
             ]
           }
         }
-      ]
-    }
-  ],
-  [
-    "01e882bc8d62f14b068ec48e56a482a2110ed5804d26c0053b73cdc8b140406dec",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "ValidatorRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Roles",
-            "name": "ValidatorRole",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
       ]
     }
   ],
