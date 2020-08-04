@@ -2553,6 +2553,138 @@
     }
   ],
   [
+    "01f473da8b92d598017f14946ca49a1ce0a3edd413c6bbdbd1c1dbffc4778708eb",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrders",
+      "is_resource": true,
+      "ty_args": [],
+      "layout": [
+        {
+          "Vector": {
+            "Struct": {
+              "address": "00000000000000000000000000000001",
+              "module": "MoneyOrder",
+              "name": "MoneyOrderBatch",
+              "is_resource": true,
+              "ty_args": [],
+              "layout": [
+                {
+                  "Vector": "U8"
+                },
+                "U64"
+              ]
+            }
+          }
+        },
+        {
+          "Vector": "U8"
+        },
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "MoneyOrder",
+            "name": "MoneyOrderCoin",
+            "is_resource": true,
+            "ty_args": [],
+            "layout": [
+              "U64"
+            ]
+          }
+        },
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Event",
+            "name": "EventHandle",
+            "is_resource": true,
+            "ty_args": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "MoneyOrder",
+                  "name": "IssuedMoneyOrderEvent",
+                  "is_resource": false,
+                  "ty_args": [],
+                  "layout": [
+                    "U64",
+                    "U64"
+                  ]
+                }
+              }
+            ],
+            "layout": [
+              "U64",
+              {
+                "Vector": "U8"
+              }
+            ]
+          }
+        },
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Event",
+            "name": "EventHandle",
+            "is_resource": true,
+            "ty_args": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "MoneyOrder",
+                  "name": "CanceledMoneyOrderEvent",
+                  "is_resource": false,
+                  "ty_args": [],
+                  "layout": [
+                    "U64",
+                    "U64"
+                  ]
+                }
+              }
+            ],
+            "layout": [
+              "U64",
+              {
+                "Vector": "U8"
+              }
+            ]
+          }
+        },
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Event",
+            "name": "EventHandle",
+            "is_resource": true,
+            "ty_args": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "MoneyOrder",
+                  "name": "RedeemedMoneyOrderEvent",
+                  "is_resource": false,
+                  "ty_args": [],
+                  "layout": [
+                    "U64",
+                    "U64",
+                    "U64"
+                  ]
+                }
+              }
+            ],
+            "layout": [
+              "U64",
+              {
+                "Vector": "U8"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "01f69f6b7b1ff23ab4670d435314c8bc3da82822b38643dee5c71c2e171fd6a868",
     {
       "address": "00000000000000000000000000000001",
