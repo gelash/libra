@@ -86,10 +86,11 @@ impl<'a> MoveValueAnnotator<'a> {
     pub fn view_account_state(&self, state: &AccountState) -> Result<AnnotatedAccountStateBlob> {
         let mut output = BTreeMap::new();
         for (k, v) in state.iter() {
-            let ty = resource_vec_to_type_tag(k.as_slice())?;
+            if let Ok(ty) = resource_vec_to_type_tag(k.as_slice()){
             let struct_def = (&ty).try_into()?;
             let move_struct = MoveStruct::simple_deserialize(v.as_slice(), &struct_def)?;
             output.insert(ty.struct_tag()?, self.annotate_struct(&move_struct, &ty)?);
+            }
         }
         Ok(AnnotatedAccountStateBlob(output))
     }

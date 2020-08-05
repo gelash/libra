@@ -8,6 +8,7 @@ use libra_types::{
         AccountResource, AccountRole, BalanceResource, BurnEvent, CancelBurnEvent,
         CurrencyInfoResource, MintEvent, NewBlockEvent, NewEpochEvent, PreburnEvent,
         ReceivedPaymentEvent, SentPaymentEvent, ToLBRExchangeRateUpdateEvent, UpgradeEvent,
+        RedeemedMoneyOrderEvent,
     },
     account_state_blob::AccountStateWithProof,
     contract_event::ContractEvent,
@@ -156,13 +157,21 @@ pub enum EventDataView {
         proposer: BytesView,
         proposed_time: u64,
     },
+    #[serde(rename = "redeem_mo")]
+    RedeemedMoneyOrderEvent {
+        amount: u64,
+        batch_index: u64,
+        order_index: u64,
+    },
     #[serde(rename = "unknown")]
     Unknown {},
 }
 
 impl From<(u64, ContractEvent)> for EventView {
+
     /// Tries to convert the provided byte array into Event Key.
     fn from((txn_version, event): (u64, ContractEvent)) -> EventView {
+        print!("EVENT TAG PARSE");
         let event_data = if event.type_tag() == &TypeTag::Struct(ReceivedPaymentEvent::struct_tag())
         {
             if let Ok(received_event) = ReceivedPaymentEvent::try_from(&event) {
@@ -277,7 +286,20 @@ impl From<(u64, ContractEvent)> for EventView {
             } else {
                 Err(format_err!("Unable to parse UpgradeEvent"))
             }
+        }
+        else if event.type_tag() == &TypeTag::Struct(RedeemedMoneyOrderEvent::struct_tag()) {
+
+            if let Ok(redeem_event) = RedeemedMoneyOrderEvent::try_from_bytes(&event.event_data()) {
+                Ok(EventDataView::RedeemedMoneyOrderEvent {
+                    amount: redeem_event.amount,
+                    batch_index: redeem_event.batch_index,
+                    order_index: redeem_event.order_index,
+                })
+            } else {
+                Err(format_err!("Unable to parse RedeemedMoneyOrderEvent"))
+            }
         } else {
+            print!("EVENT TAG {}", event.type_tag());
             Err(format_err!("Unknown events"))
         };
 
