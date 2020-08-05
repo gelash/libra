@@ -299,7 +299,6 @@ impl From<(u64, ContractEvent)> for EventView {
                 Err(format_err!("Unable to parse RedeemedMoneyOrderEvent"))
             }
         } else {
-            print!("EVENT TAG {}", event.type_tag());
             Err(format_err!("Unknown events"))
         };
 
