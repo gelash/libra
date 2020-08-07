@@ -172,17 +172,17 @@ address 0x1 {
                                            batch_size: u64,
                                            validity_microseconds: u64,
                                            grace_period_microseconds: u64,
-        ): u64 acquires MoneyOrders {
+        ) acquires MoneyOrders {
             let status = vector_with_copies(div_ceil(batch_size, 8), 0);
 
             let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
             let duration_microseconds = validity_microseconds + grace_period_microseconds;
+            
+            let batch_id = Vector::length(&orders.batches);
             Vector::push_back(&mut orders.batches, MoneyOrderBatch {
                 order_status: status,
                 expiration_time: LibraTimestamp::now_microseconds() + duration_microseconds,
             });
-
-            let batch_id = Vector::length(&orders.batches);
 
             Event::emit_event<IssuedMoneyOrderEvent>(
                 &mut orders.issued_events,
@@ -191,15 +191,13 @@ address 0x1 {
                     num_orders: batch_size,
                 }
             );
-
-            batch_id
         }
 
         // Note: more complex general MO batching logic can be totally issuer-side.
         public fun issue_money_order(issuer: &signer,
                                      validity_microseconds: u64,
                                      grace_period_microseconds: u64,
-        ): u64 acquires MoneyOrders {
+        ) acquires MoneyOrders {
             issue_money_order_batch(issuer,
                                     1,
                                     validity_microseconds,

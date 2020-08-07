@@ -30,13 +30,10 @@ TODO Some docs
                             validity_microseconds: u64,
                             grace_period_microseconds: u64,
 ) {
-    <b>let</b> num_batches =
-        <a href="../../modules/doc/MoneyOrder.md#0x1_MoneyOrder_issue_money_order_batch">MoneyOrder::issue_money_order_batch</a>(issuer,
-                                            batch_size,
-                                            validity_microseconds,
-                                            grace_period_microseconds);
-
-    <a href="../../modules/doc/Debug.md#0x1_Debug_print">Debug::print</a>&lt;u64&gt;(&num_batches);
+    <a href="../../modules/doc/MoneyOrder.md#0x1_MoneyOrder_issue_money_order_batch">MoneyOrder::issue_money_order_batch</a>(issuer,
+                                        batch_size,
+                                        validity_microseconds,
+                                        grace_period_microseconds);
 }
 </code></pre>
 

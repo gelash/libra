@@ -554,7 +554,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_issue_money_order_batch">issue_money_order_batch</a>(issuer: &signer, batch_size: u64, validity_microseconds: u64, grace_period_microseconds: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_issue_money_order_batch">issue_money_order_batch</a>(issuer: &signer, batch_size: u64, validity_microseconds: u64, grace_period_microseconds: u64)
 </code></pre>
 
 
@@ -567,17 +567,17 @@
                                    batch_size: u64,
                                    validity_microseconds: u64,
                                    grace_period_microseconds: u64,
-): u64 <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
     <b>let</b> status = <a href="#0x1_MoneyOrder_vector_with_copies">vector_with_copies</a>(<a href="#0x1_MoneyOrder_div_ceil">div_ceil</a>(batch_size, 8), 0);
 
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
     <b>let</b> duration_microseconds = validity_microseconds + grace_period_microseconds;
+
+    <b>let</b> batch_id = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&orders.batches);
     <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> orders.batches, <a href="#0x1_MoneyOrder_MoneyOrderBatch">MoneyOrderBatch</a> {
         order_status: status,
         expiration_time: <a href="LibraTimestamp.md#0x1_LibraTimestamp_now_microseconds">LibraTimestamp::now_microseconds</a>() + duration_microseconds,
     });
-
-    <b>let</b> batch_id = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&orders.batches);
 
     <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(
         &<b>mut</b> orders.issued_events,
@@ -586,8 +586,6 @@
             num_orders: batch_size,
         }
     );
-
-    batch_id
 }
 </code></pre>
 
@@ -601,7 +599,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_issue_money_order">issue_money_order</a>(issuer: &signer, validity_microseconds: u64, grace_period_microseconds: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_issue_money_order">issue_money_order</a>(issuer: &signer, validity_microseconds: u64, grace_period_microseconds: u64)
 </code></pre>
 
 
@@ -613,7 +611,7 @@
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_issue_money_order">issue_money_order</a>(issuer: &signer,
                              validity_microseconds: u64,
                              grace_period_microseconds: u64,
-): u64 <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
     <a href="#0x1_MoneyOrder_issue_money_order_batch">issue_money_order_batch</a>(issuer,
                             1,
                             validity_microseconds,

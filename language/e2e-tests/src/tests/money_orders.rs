@@ -84,6 +84,9 @@ fn money_orders() {
         .filter_map(|event| IssuedMoneyOrderEvent::try_from(event).ok())
         .collect();
     assert_eq!(issued_events.len(), 1);
+    let issued_event = &issued_events[0];
+    assert_eq!(issued_event.batch_index(), 0);
+    assert_eq!(issued_event.num_orders(), 100);
 
     let mut args: Vec<TransactionArgument> = Vec::new();
     args.push(TransactionArgument::U64(0));
