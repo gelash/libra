@@ -12,6 +12,7 @@ pub mod received_payment;
 pub mod sent_payment;
 pub mod upgrade;
 pub mod issued_money_order;
+pub mod canceled_money_order;
 
 pub use burn::*;
 pub use cancel_burn::*;
@@ -24,3 +25,4 @@ pub use received_payment::*;
 pub use sent_payment::*;
 pub use upgrade::*;
 pub use issued_money_order::*;
+pub use canceled_money_order::*;

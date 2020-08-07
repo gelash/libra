@@ -5,6 +5,7 @@ use crate::{
     account_config::{
         BurnEvent,
         CancelBurnEvent,
+        CanceledMoneyOrderEvent,
         IssuedMoneyOrderEvent,
         MintEvent,
         NewBlockEvent,
@@ -107,6 +108,17 @@ impl ContractEventV0 {
 
     pub fn type_tag(&self) -> &TypeTag {
         &self.type_tag
+    }
+}
+
+impl TryFrom<&ContractEvent> for CanceledMoneyOrderEvent {
+    type Error = Error;
+
+    fn try_from(event: &ContractEvent) -> Result<Self> {
+        if event.type_tag != TypeTag::Struct(CanceledMoneyOrderEvent::struct_tag()) {
+            anyhow::bail!("Expected Canceled Money Order")
+        }
+        Self::try_from_bytes(&event.event_data)
     }
 }
 

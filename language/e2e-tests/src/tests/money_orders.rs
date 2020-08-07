@@ -10,11 +10,12 @@ use crate::{
         cancel_money_order_txn,
     },
     executor::FakeExecutor,
-    gas_costs, keygen::KeyGen
+    gas_costs, keygen::KeyGen,
 };
 use compiled_stdlib::transaction_scripts::StdlibScript;
 use libra_types::{
-    account_config::{IssuedMoneyOrderEvent},
+    account_config::{CanceledMoneyOrderEvent,
+                     IssuedMoneyOrderEvent,},
     transaction::TransactionStatus,
     account_config::{LBR_NAME},
     vm_status::{StatusCode, VMStatus},
@@ -105,6 +106,15 @@ fn money_orders() {
         output.status(),
         &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
     );
+    let issued_events: Vec<_> = output
+        .events()
+        .iter()
+        .filter_map(|event| CanceledMoneyOrderEvent::try_from(event).ok())
+        .collect();
+    assert_eq!(issued_events.len(), 1);
+    let issued_event = &issued_events[0];
+    assert_eq!(issued_event.batch_index(), 0);
+    assert_eq!(issued_event.order_index(), 2);
 
     let txn = deposit_money_order_txn(
         &receiver_account.account(),
@@ -171,6 +181,15 @@ fn money_orders() {
         output.status(),
         &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
     );
+        let issued_events: Vec<_> = output
+        .events()
+        .iter()
+        .filter_map(|event| CanceledMoneyOrderEvent::try_from(event).ok())
+        .collect();
+    assert_eq!(issued_events.len(), 1);
+    let issued_event = &issued_events[0];
+    assert_eq!(issued_event.batch_index(), 0);
+    assert_eq!(issued_event.order_index(), 4);
 
     // Wrong user signature
     let txn = cancel_money_order_txn(
