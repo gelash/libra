@@ -11,12 +11,21 @@ address 0x1 {
         use 0x1::Signature;
         use 0x1::Signer;
         use 0x1::Vector;
-        // use 0x1::Debug;
 
         // TODO: decide exactly what should be a resource among these structs below.
         // TODO: switch to Libra<MoneyOrderCoin> when that's allowed.
         resource struct MoneyOrderCoin {
             amount: u64,
+
+            issuer_address: address,
+        }
+
+        // Since we use MoneyOrderCoin as a token that varies by the issuer, have a
+        // resource for accounts to keep MoneyOrderCoins from different issuers.
+        // TODO: get rid of if and when we don't use tokens, otherwise should use
+        // a more suitable data-structure than Vector (e.g. Map) when available.
+        resource struct MoneyOrderCoinVector {
+            coins: vector<MoneyOrderCoin>,
         }
 
         resource struct MoneyOrderBatch {
@@ -56,7 +65,7 @@ address 0x1 {
             // The amount of MoneyOrderCoin redeemable with the money order.
             amount: u64,
 
-            issuer: address,
+            issuer_address: address,
             // Index of the batch among batches.
             batch_index: u64,
             // Index among the money order status bits.
@@ -89,14 +98,14 @@ address 0x1 {
         public fun money_order_descriptor(
             _sender: &signer,
             amount: u64,
-            issuer: address,
+            issuer_address: address,
             batch_index: u64,
             order_index: u64,
             user_public_key: vector<u8>,
         ): MoneyOrderDescriptor {
             MoneyOrderDescriptor {
                 amount: amount,
-                issuer: issuer,
+                issuer_address: issuer_address,
                 batch_index: batch_index,
                 order_index: order_index,
                 user_public_key: user_public_key
@@ -107,9 +116,11 @@ address 0x1 {
         // only ever called from API with the issuer as a signer, i.e. a caller can only
         // mint to the MoneyOrder balance published on its account.
         fun mint_money_order_coin(amount: u64,
+                                  issuer_address: address,
         ): MoneyOrderCoin {
             MoneyOrderCoin {
                 amount: amount,
+                issuer_address: issuer_address,
             }
         }
 
@@ -124,23 +135,11 @@ address 0x1 {
             move_to(issuer, MoneyOrders {
                 batches: Vector::empty(),
                 public_key: public_key,
-                balance: mint_money_order_coin(starting_balance),
+                balance: mint_money_order_coin(starting_balance, Signer::address_of(issuer)),
                 issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
                 redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
             });
-        }
-
-        public fun publish_money_order_coin(sender: &signer,
-        ) {
-            move_to(sender, mint_money_order_coin(0));
-        }
-
-        public fun money_order_coin_balance(sender: &signer,
-        ) : u64 acquires MoneyOrderCoin {
-            let coins = borrow_global<MoneyOrderCoin>(
-                Signer::address_of(sender));
-            coins.amount
         }
 
         // Checks whether a particular expiration time has passed.
@@ -172,13 +171,15 @@ address 0x1 {
         public fun issue_money_order_batch(issuer: &signer,
                                            batch_size: u64,
                                            validity_microseconds: u64,
+                                           grace_period_microseconds: u64,
         ): u64 acquires MoneyOrders {
             let status = vector_with_copies(div_ceil(batch_size, 8), 0);
 
             let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
+            let duration_microseconds = validity_microseconds + grace_period_microseconds;
             Vector::push_back(&mut orders.batches, MoneyOrderBatch {
                 order_status: status,
-                expiration_time: LibraTimestamp::now_microseconds() + validity_microseconds,
+                expiration_time: LibraTimestamp::now_microseconds() + duration_microseconds,
             });
 
             let batch_id = Vector::length(&orders.batches);
@@ -197,15 +198,20 @@ address 0x1 {
         // Note: more complex general MO batching logic can be totally issuer-side.
         public fun issue_money_order(issuer: &signer,
                                      validity_microseconds: u64,
+                                     grace_period_microseconds: u64,
         ): u64 acquires MoneyOrders {
-            issue_money_order_batch(issuer, 1, validity_microseconds)
+            issue_money_order_batch(issuer,
+                                    1,
+                                    validity_microseconds,
+                                    grace_period_microseconds)
         }
 
         // Verifies the issuer signature for a money order descriptor.
         fun verify_issuer_signature(money_order_descriptor: MoneyOrderDescriptor,
                                     issuer_signature: vector<u8>,
         ) acquires MoneyOrders {
-            let orders = borrow_global<MoneyOrders>(money_order_descriptor.issuer);
+            let orders = borrow_global<MoneyOrders>(
+                money_order_descriptor.issuer_address);
 
             let issuer_message = Vector::empty();
             Vector::append(&mut issuer_message, b"@@$$LIBRA_MONEY_ORDER_ISSUE$$@@");
@@ -320,16 +326,14 @@ address 0x1 {
                                       issuer_signature: vector<u8>,
                                       user_signature: vector<u8>,
         ): MoneyOrderCoin acquires MoneyOrders {
-
-            // Debug::print<vector<u8>>(&user_signature);
             verify_user_signature(receiver,
                                   *&money_order_descriptor,
                                   user_signature,
                                   b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
-            // Debug::print<vector<u8>>(&issuer_signature);
             verify_issuer_signature(*&money_order_descriptor, issuer_signature);
 
-            let orders = borrow_global_mut<MoneyOrders>(money_order_descriptor.issuer);
+            let issuer_address = money_order_descriptor.issuer_address;
+            let orders = borrow_global_mut<MoneyOrders>(issuer_address);
             let order_batch = Vector::borrow_mut(&mut orders.batches,
                                                  money_order_descriptor.batch_index);
 
@@ -342,6 +346,7 @@ address 0x1 {
 
             // Actually withdraw the coins from issuer's account.
             let issuer_coin_value = &mut orders.balance.amount;
+            // orders.balance.issuer == money_order_descriptor.issuer, issuer's MOCoin.
             assert(*issuer_coin_value >= money_order_descriptor.amount, 8004);
             *issuer_coin_value = *issuer_coin_value - money_order_descriptor.amount;
 
@@ -357,24 +362,79 @@ address 0x1 {
 
             MoneyOrderCoin {
                 amount: money_order_descriptor.amount,
+                issuer_address: issuer_address,
             }
         }
 
+        // Implements finding a MoneyOrderCoin based on address in a Vector.
+        // TODO: Replace w. Map<Address, MoneyOrderCoin> find(addr) when Map is
+        // available (or get rid of if we don't use tokens and use real coins instead).
+        fun index_of_coin(coins_vector: &vector<MoneyOrderCoin>,
+                          issuer_address: address,
+        ): (bool, u64) {
+            let i = 0;
+            while (i < Vector::length(coins_vector)) {
+                let coin = Vector::borrow(coins_vector, i);
+                if (coin.issuer_address == issuer_address) return (true, i);
+                i = i + 1;
+            };
+            (false, 0)
+        }
+
+        public fun money_order_coin_balance(sender: &signer,
+                                            issuer_address: address,
+        ) : u64 acquires MoneyOrderCoinVector {
+            let sender_address = Signer::address_of(sender);
+            
+            if (!exists<MoneyOrderCoinVector>(sender_address)) return 0;
+            
+            let coins_vec = borrow_global<MoneyOrderCoinVector>(sender_address);
+            let (found, coin_index) = index_of_coin(&coins_vec.coins,
+                                                    issuer_address);
+            if (!found) return 0;
+            
+            let target_coin = Vector::borrow(&coins_vec.coins, coin_index);
+            target_coin.amount
+        }
+        
         public fun deposit_money_order(receiver: &signer,
                                        money_order_descriptor: MoneyOrderDescriptor,
                                        issuer_signature: vector<u8>,
                                        user_signature: vector<u8>,
-        ) acquires MoneyOrderCoin, MoneyOrders {
-            let MoneyOrderCoin { amount } = redeem_money_order(receiver,
-                                                              money_order_descriptor,
-                                                              issuer_signature,
-                                                              user_signature);
+        ) acquires MoneyOrderCoinVector, MoneyOrders {
+            let MoneyOrderCoin { amount, issuer_address } =
+                redeem_money_order(receiver,
+                                   money_order_descriptor,
+                                   issuer_signature,
+                                   user_signature);
+            
+            let receiver_address = Signer::address_of(receiver);
 
-            let receiver_coins = borrow_global_mut<MoneyOrderCoin>(
-                Signer::address_of(receiver));
-            let receiver_coin_value = &mut receiver_coins.amount;
-            *receiver_coin_value = *receiver_coin_value + amount;
-            // TODO: Figure out if we need to return an event on success.
+            // Get receiver's storage of MoneyOrderCoin, currently a Vector. Publish an
+            // empty Vector<MoneyOrderCoin> if none exists at receiver's account yet.
+            // TODO: Switch to a Map when that exists to merge coins based on address.
+            if (!exists<MoneyOrderCoinVector>(receiver_address)) {
+                move_to(receiver, MoneyOrderCoinVector {
+                    coins: Vector::empty(),
+                });
+            };
+            let receiver_vec =
+                borrow_global_mut<MoneyOrderCoinVector>(receiver_address);
+
+            let (found, coin_index) = index_of_coin(&receiver_vec.coins,
+                                                    issuer_address);
+            if (!found)
+            {
+                coin_index = Vector::length(&receiver_vec.coins);
+                Vector::push_back(&mut receiver_vec.coins,
+                                  mint_money_order_coin(0, issuer_address));
+            };
+
+            // Actually increment the MoneyOrderCoin's value (issued by issuer).
+            let target_coin = Vector::borrow_mut(&mut receiver_vec.coins,
+                                                 coin_index);
+            let target_coin_value = &mut target_coin.amount;
+            *target_coin_value = *target_coin_value + amount;                
         }
 
         // Money order cancellation by the receiver/user - doesn't redeem, just sets
@@ -391,7 +451,7 @@ address 0x1 {
                                   b"@@$$LIBRA_MONEY_ORDER_CANCEL$$@@");
             verify_issuer_signature(*&money_order_descriptor, issuer_signature);
 
-            cancel_order_impl(money_order_descriptor.issuer,
+            cancel_order_impl(money_order_descriptor.issuer_address,
                               money_order_descriptor.batch_index,
                               money_order_descriptor.order_index)
         }

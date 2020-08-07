@@ -4,7 +4,9 @@ script {
 
     /// TODO Some docs
     fun debug_money_order_coin_balance(sender: &signer,
+                                       issuer_address: address,
     ) {
-        Debug::print<u64>(&MoneyOrder::money_order_coin_balance(sender));
+        Debug::print<u64>(
+            &MoneyOrder::money_order_coin_balance(sender, issuer_address));
     }
 }

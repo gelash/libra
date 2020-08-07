@@ -19,7 +19,7 @@ script {
 script {
     use 0x1::MoneyOrder;
     fun main(sender: &signer) {
-        MoneyOrder::issue_money_order_batch(sender, 100, 3600000000);
+        MoneyOrder::issue_money_order_batch(sender, 100, 3600000000, 0);
     }
 }
 // check: IssuedMoneyOrderEvent
@@ -116,8 +116,6 @@ script {
 script {
     use 0x1::MoneyOrder;
     fun main(sender: &signer) {
-        MoneyOrder::publish_money_order_coin(sender);
-        
         MoneyOrder::deposit_money_order(
             sender,
             MoneyOrder::money_order_descriptor(
@@ -129,7 +127,8 @@ script {
                 x"a47e5b2bf7cbcc133cea8d7ad17d37ed125a65cfbe8448216ab30e3db0cfab31"),
             x"98d1072c99e9dc7ccd2b6aebaed5aab1fbfb4d95badb13111f192edc3d723ec8f78eb8c1b5d0bf5c5ff6038c7db47631508aa84f7bd76300e96a033f00dc2e0d",
             x"7d7e41659b10f034ba4ebcd9eacaab05da8c82d0676d7a73e370fc022634f38936d650aeae8dcbb8effe06983ed49bdc6b2d1948e23caac475cc97c093570208");
-        assert(MoneyOrder::money_order_coin_balance(sender) == 5, 8000);
+        assert(MoneyOrder::money_order_coin_balance(sender, {{alice}}) == 5, 8000);
+        assert(MoneyOrder::money_order_coin_balance(sender, {{bob}}) == 0, 8000);
     }
 }
 // not: IssuedMoneyOrderEvent
@@ -153,7 +152,7 @@ script {
                 x"a47e5b2bf7cbcc133cea8d7ad17d37ed125a65cfbe8448216ab30e3db0cfab31"),
             x"98d1072c99e9dc7ccd2b6aebaed5aab1fbfb4d95badb13111f192edc3d723ec8f78eb8c1b5d0bf5c5ff6038c7db47631508aa84f7bd76300e96a033f00dc2e0d",
             x"7d7e41659b10f034ba4ebcd9eacaab05da8c82d0676d7a73e370fc022634f38936d650aeae8dcbb8effe06983ed49bdc6b2d1948e23caac475cc97c093570208");
-        assert(MoneyOrder::money_order_coin_balance(sender) == 5, 8000);
+        assert(MoneyOrder::money_order_coin_balance(sender, {{alice}}) == 5, 8000);
     }
 }
 // check: ABORTED

@@ -139,7 +139,6 @@ module Genesis {
             x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1",
             100000
             );
-        MoneyOrder::publish_money_order_coin(lr_account);
     }
 
 }

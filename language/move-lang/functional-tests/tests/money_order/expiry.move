@@ -20,9 +20,9 @@ script {
     use 0x1::MoneyOrder;
     fun main(sender: &signer) {
         // Immediate expiry.
-        MoneyOrder::issue_money_order_batch(sender, 100, 0);
+        MoneyOrder::issue_money_order_batch(sender, 100, 0, 0);
         // Second batch with no expiry (time is always 0 in unit tests).
-        MoneyOrder::issue_money_order_batch(sender, 10, 3600000000);
+        MoneyOrder::issue_money_order_batch(sender, 10, 3600000000, 0);
     }
 }
 // not: CanceledMoneyOrderEvent
@@ -35,7 +35,7 @@ script {
     use 0x1::MoneyOrder;
     fun main(sender: &signer) {
         // Immediate expiry.
-        MoneyOrder::issue_money_order_batch(sender, 20, 0);
+        MoneyOrder::issue_money_order_batch(sender, 20, 0, 0);
     }
 }
 // not: CanceledMoneyOrderEvent

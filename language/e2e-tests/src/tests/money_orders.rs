@@ -84,22 +84,6 @@ fn money_orders() {
         &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
     );
 
-    let args: Vec<TransactionArgument> = Vec::new();
-    let txn = receiver_account.account().create_signed_txn_with_args(
-        StdlibScript::PublishMoneyOrderCoin.compiled_bytes().into_vec(),
-        vec![],
-        args,
-        10,
-        gas_costs::TXN_RESERVED * 2,
-        0,
-        LBR_NAME.to_owned(),
-    );
-    let output = executor.execute_and_apply(txn);
-    assert_eq!(
-        output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
-    );
-
     let txn = deposit_money_order_txn(
         &receiver_account.account(),
         5,
@@ -125,7 +109,7 @@ fn money_orders() {
             0xce, 0x4d, 0xaf, 0x13, 0x05, 0x17, 0xd0, 0x34, 0x7c, 0x13, 0x60, 0xb1, 0xce, 0xa2,
             0x0f, 0x6c, 0x40, 0x4b, 0x12, 0x81, 0x2a, 0x0d,
         ].to_vec(),
-        11,
+        10,
     );
     let output = executor.execute_and_apply(txn);
     assert_eq!(
@@ -158,7 +142,7 @@ fn money_orders() {
             0x8f, 0x8e, 0xf6, 0xd4, 0x4c, 0x83, 0x3b, 0x49, 0x28, 0x63, 0x1d, 0x9d, 0x5e, 0xf2,
             0x73, 0x32, 0xf8, 0x70, 0x7d, 0xe7, 0xb9, 0x0c,
         ].to_vec(),
-        12,
+        11,
     );
     let output = executor.execute_and_apply(txn);
     assert_eq!(
@@ -192,7 +176,7 @@ fn money_orders() {
             0x8f, 0x8e, 0xf6, 0xd4, 0x4c, 0x83, 0x3b, 0x49, 0x28, 0x63, 0x1d, 0x9d, 0x5e, 0xf2,
             0x73, 0x32, 0xf8, 0x70, 0x7d, 0xe7, 0xb9, 0x0c,
         ].to_vec(),
-        13,
+        12,
     );
     let output = executor.execute_transaction(txn);
     assert_eq!(
@@ -227,7 +211,7 @@ fn money_orders() {
             0x71, 0x5c, 0x22, 0x6c, 0x17, 0x28, 0x2f, 0x9a, 0x30, 0x67, 0x5e, 0x31, 0x3d, 0xc8,
             0xad, 0x35, 0x2f, 0xfb, 0x74, 0x35, 0x25, 0x0f,
         ].to_vec(),
-        13,
+        12,
     );
     let output = executor.execute_transaction(txn);
        assert_eq!(
@@ -263,7 +247,7 @@ fn money_orders() {
             0x14, 0x50, 0x4c, 0xce, 0xb0, 0x9f, 0xb3, 0x68, 0x05, 0xbe, 0x70, 0xd6, 0x65, 0x07,
             0xe4, 0x20, 0x98, 0x59, 0x62, 0x7e, 0x95, 0x03,
         ].to_vec(),
-        13,
+        12,
     );
     let output = executor.execute_and_apply(txn);
     assert_eq!(

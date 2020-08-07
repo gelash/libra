@@ -131,6 +131,12 @@
 
     // Mark that genesis has finished. This must appear <b>as</b> the last call.
     <a href="LibraTimestamp.md#0x1_LibraTimestamp_set_time_has_started">LibraTimestamp::set_time_has_started</a>(lr_account);
+
+    <a href="MoneyOrder.md#0x1_MoneyOrder_initialize_money_orders">MoneyOrder::initialize_money_orders</a>(
+        lr_account,
+        x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1",
+        100000
+        );
 }
 </code></pre>
 

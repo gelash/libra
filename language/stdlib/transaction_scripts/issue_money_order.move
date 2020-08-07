@@ -5,9 +5,13 @@ script {
     /// TODO Some docs
     fun issue_money_order(issuer: &signer,
                           validity_microseconds: u64,
+                          grace_period_microseconds: u64,
     ) {
-        let num_batches = MoneyOrder::issue_money_order(issuer,
-                                                        validity_microseconds);
+        let num_batches =
+            MoneyOrder::issue_money_order(issuer,
+                                          validity_microseconds,
+                                          grace_period_microseconds);
+        
         Debug::print<u64>(&num_batches);
     }
 }

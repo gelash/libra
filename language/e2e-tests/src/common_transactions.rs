@@ -99,6 +99,7 @@ pub fn issue_money_order_batch_txn(
     let mut args: Vec<TransactionArgument> = Vec::new();
     args.push(TransactionArgument::U64(100));
     args.push(TransactionArgument::U64(3600000000));
+    args.push(TransactionArgument::U64(0));
 
     sender.create_signed_txn_with_args(
         StdlibScript::IssueMoneyOrderBatch.compiled_bytes().into_vec(),
