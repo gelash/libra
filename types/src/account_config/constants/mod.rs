@@ -10,6 +10,7 @@ pub mod debug;
 pub mod event;
 pub mod lbr;
 pub mod libra;
+pub mod money_order;
 
 pub use account::*;
 pub use account_limits::*;
@@ -20,3 +21,4 @@ pub use debug::*;
 pub use event::*;
 pub use lbr::*;
 pub use libra::*;
+pub use money_order::*;

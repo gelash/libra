@@ -3,8 +3,17 @@
 
 use crate::{
     account_config::{
-        BurnEvent, CancelBurnEvent, MintEvent, NewBlockEvent, NewEpochEvent, PreburnEvent,
-        ReceivedPaymentEvent, SentPaymentEvent, ToLBRExchangeRateUpdateEvent, UpgradeEvent,
+        BurnEvent,
+        CancelBurnEvent,
+        IssuedMoneyOrderEvent,
+        MintEvent,
+        NewBlockEvent,
+        NewEpochEvent,
+        PreburnEvent,
+        ReceivedPaymentEvent,
+        SentPaymentEvent,
+        ToLBRExchangeRateUpdateEvent,
+        UpgradeEvent,
     },
     event::EventKey,
     ledger_info::LedgerInfo,
@@ -98,6 +107,17 @@ impl ContractEventV0 {
 
     pub fn type_tag(&self) -> &TypeTag {
         &self.type_tag
+    }
+}
+
+impl TryFrom<&ContractEvent> for IssuedMoneyOrderEvent {
+    type Error = Error;
+
+    fn try_from(event: &ContractEvent) -> Result<Self> {
+        if event.type_tag != TypeTag::Struct(IssuedMoneyOrderEvent::struct_tag()) {
+            anyhow::bail!("Expected Issued Money Order")
+        }
+        Self::try_from_bytes(&event.event_data)
     }
 }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::{AccountData},
+    account::{AccountData, AccountRoleSpecifier, lbr_currency_code},
     common_transactions::{
         initialize_money_orders_txn,
         issue_money_order_batch_txn,
@@ -10,29 +10,48 @@ use crate::{
         cancel_money_order_txn,
     },
     executor::FakeExecutor,
-    gas_costs,
+    gas_costs, keygen::KeyGen
 };
 use compiled_stdlib::transaction_scripts::StdlibScript;
 use libra_types::{
-    // account_config::{IssuedMoneyOrderEvent},
+    account_config::{IssuedMoneyOrderEvent},
     transaction::TransactionStatus,
     account_config::{LBR_NAME},
     vm_status::{StatusCode, VMStatus},
     transaction::{TransactionArgument},
 };
+use std::convert::TryFrom;
 
 #[test]
 fn money_orders() {
     let mut executor = FakeExecutor::from_genesis_file();
-    let issuer_account = AccountData::new_fixed_addr(1000, 10);
-    // Addr is 5455a8193f1dfc1b113ecc54d067afe1
-    let receiver_account = AccountData::another_fixed_addr(1000, 10);
-    // Addr is ffccb556fc111b099569ce5d4af70906
+
+    // Add issuer's account
+    let (privkey, pubkey) = KeyGen::from_seed([9u8; 32]).generate_keypair();
+    let issuer_account =
+        AccountData::with_keypair(privkey,
+                                  pubkey,
+                                  1000,
+                                  lbr_currency_code(),
+                                  10,
+                                  AccountRoleSpecifier::ParentVASP,);
     executor.add_account_data(&issuer_account);
-    executor.add_account_data(&receiver_account);
     // println!("{}", issuer_account.address());
+    // Addr is 5455a8193f1dfc1b113ecc54d067afe1
+
+    // Add receiver's account    
+    let (privkey, pubkey) = KeyGen::from_seed([7u8; 32]).generate_keypair();
+    let receiver_account = 
+        AccountData::with_keypair(privkey,
+                                  pubkey,
+                                  1000,
+                                  lbr_currency_code(),
+                                  10,
+                                  AccountRoleSpecifier::ParentVASP,);
+    executor.add_account_data(&receiver_account);
     // println!("{}", receiver_account.address());
-    
+    // Addr is ffccb556fc111b099569ce5d4af70906
+
     executor.new_block();
     let txn = initialize_money_orders_txn(
         &issuer_account.account(),
@@ -59,12 +78,12 @@ fn money_orders() {
         output.status(),
         &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
     );
-    // let issued_events: Vec<_> = output
-    //     .events()
-    //     .iter()
-    //     .filter_map(|event| IssuedMoneyOrderEvent::try_from(event).ok())
-    //     .collect();
-    // assert_eq!(issued_events.len(), 1);
+    let issued_events: Vec<_> = output
+        .events()
+        .iter()
+        .filter_map(|event| IssuedMoneyOrderEvent::try_from(event).ok())
+        .collect();
+    assert_eq!(issued_events.len(), 1);
 
     let mut args: Vec<TransactionArgument> = Vec::new();
     args.push(TransactionArgument::U64(0));
