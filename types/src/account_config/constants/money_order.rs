@@ -13,6 +13,8 @@ static CANCELED_EVENT_NAME: Lazy<Identifier> =
     Lazy::new(|| Identifier::new("CanceledMoneyOrderEvent").unwrap());
 static ISSUED_EVENT_NAME: Lazy<Identifier> =
     Lazy::new(|| Identifier::new("IssuedMoneyOrderEvent").unwrap());
+static REDEEMED_EVENT_NAME: Lazy<Identifier> =
+    Lazy::new(|| Identifier::new("RedeemedMoneyOrderEvent").unwrap());
 
 pub fn canceled_event_name() -> &'static IdentStr {
     &*CANCELED_EVENT_NAME
@@ -20,4 +22,8 @@ pub fn canceled_event_name() -> &'static IdentStr {
 
 pub fn issued_event_name() -> &'static IdentStr {
     &*ISSUED_EVENT_NAME
+}
+
+pub fn redeemed_event_name() -> &'static IdentStr {
+    &*REDEEMED_EVENT_NAME
 }

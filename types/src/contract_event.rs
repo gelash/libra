@@ -12,6 +12,7 @@ use crate::{
         NewEpochEvent,
         PreburnEvent,
         ReceivedPaymentEvent,
+        RedeemedMoneyOrderEvent,
         SentPaymentEvent,
         ToLBRExchangeRateUpdateEvent,
         UpgradeEvent,
@@ -128,6 +129,17 @@ impl TryFrom<&ContractEvent> for IssuedMoneyOrderEvent {
     fn try_from(event: &ContractEvent) -> Result<Self> {
         if event.type_tag != TypeTag::Struct(IssuedMoneyOrderEvent::struct_tag()) {
             anyhow::bail!("Expected Issued Money Order")
+        }
+        Self::try_from_bytes(&event.event_data)
+    }
+}
+
+impl TryFrom<&ContractEvent> for RedeemedMoneyOrderEvent {
+    type Error = Error;
+
+    fn try_from(event: &ContractEvent) -> Result<Self> {
+        if event.type_tag != TypeTag::Struct(RedeemedMoneyOrderEvent::struct_tag()) {
+            anyhow::bail!("Expected Redeemed Money Order")
         }
         Self::try_from_bytes(&event.event_data)
     }

@@ -3,26 +3,28 @@
 
 pub mod burn;
 pub mod cancel_burn;
+pub mod canceled_money_order;
 pub mod exchange_rate_update;
+pub mod issued_money_order;
 pub mod mint;
 pub mod new_block;
 pub mod new_epoch;
 pub mod preburn;
 pub mod received_payment;
+pub mod redeemed_money_order;
 pub mod sent_payment;
 pub mod upgrade;
-pub mod issued_money_order;
-pub mod canceled_money_order;
 
 pub use burn::*;
 pub use cancel_burn::*;
+pub use canceled_money_order::*;
 pub use exchange_rate_update::*;
+pub use issued_money_order::*;
 pub use mint::*;
 pub use new_block::*;
 pub use new_epoch::*;
 pub use preburn::*;
 pub use received_payment::*;
+pub use redeemed_money_order::*;
 pub use sent_payment::*;
 pub use upgrade::*;
-pub use issued_money_order::*;
-pub use canceled_money_order::*;
