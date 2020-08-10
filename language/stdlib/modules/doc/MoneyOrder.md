@@ -29,6 +29,7 @@
 -  [Function `redeem_money_order`](#0x1_MoneyOrder_redeem_money_order)
 -  [Function `index_of_coin`](#0x1_MoneyOrder_index_of_coin)
 -  [Function `money_order_coin_balance`](#0x1_MoneyOrder_money_order_coin_balance)
+-  [Function `init_coins_money_order`](#0x1_MoneyOrder_init_coins_money_order)
 -  [Function `deposit_money_order`](#0x1_MoneyOrder_deposit_money_order)
 -  [Function `cancel_money_order`](#0x1_MoneyOrder_cancel_money_order)
 -  [Function `clear_vector`](#0x1_MoneyOrder_clear_vector)
@@ -931,6 +932,42 @@
 
     <b>let</b> target_coin = <a href="Vector.md#0x1_Vector_borrow">Vector::borrow</a>(&coins_vec.coins, coin_index);
     target_coin.amount
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_init_coins_money_order"></a>
+
+## Function `init_coins_money_order`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_init_coins_money_order">init_coins_money_order</a>(receiver: &signer)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_init_coins_money_order">init_coins_money_order</a>(receiver: &signer)
+     {
+
+    <b>let</b> receiver_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver);
+
+    // Get receiver's storage of <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>, currently a <a href="Vector.md#0x1_Vector">Vector</a>. Publish an
+    // empty <a href="Vector.md#0x1_Vector">Vector</a>&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>&gt; <b>if</b> none exists at receiver's account yet.
+    // TODO: Switch <b>to</b> a Map when that exists <b>to</b> merge coins based on address.
+    <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(receiver_address)) {
+        move_to(receiver, <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a> {
+            coins: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
+        });
+    };
+
 }
 </code></pre>
 

@@ -1806,19 +1806,6 @@
     }
   ],
   [
-    "01a7664cd4a0d4e68b6d493c2a2fa1a358bc38ac3dc2e3cfd4f7300631b7e86340",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "MoneyOrder",
-      "name": "MoneyOrderCoin",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64"
-      ]
-    }
-  ],
-  [
     "01a85fca6da4e127a8214a813986f2959674e4b008cf24c1a2022cf1344b910683",
     {
       "address": "00000000000000000000000000000001",
@@ -2278,6 +2265,33 @@
     }
   ],
   [
+    "01d4d3051e37613f8b531cd0556c88ad4e44a6d1e8369fe64109ac63278b387633",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderCoinVector",
+      "is_resource": true,
+      "ty_args": [],
+      "layout": [
+        {
+          "Vector": {
+            "Struct": {
+              "address": "00000000000000000000000000000001",
+              "module": "MoneyOrder",
+              "name": "MoneyOrderCoin",
+              "is_resource": true,
+              "ty_args": [],
+              "layout": [
+                "U64",
+                "Address"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  [
     "01d6e6cfb8152b64de92443d0187c2f2ba78c18d20243d1bde105270b6992ca952",
     {
       "address": "00000000000000000000000000000001",
@@ -2602,7 +2616,8 @@
             "is_resource": true,
             "ty_args": [],
             "layout": [
-              "U64"
+              "U64",
+              "Address"
             ]
           }
         },

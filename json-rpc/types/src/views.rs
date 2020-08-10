@@ -291,9 +291,9 @@ impl From<(u64, ContractEvent)> for EventView {
 
             if let Ok(redeem_event) = RedeemedMoneyOrderEvent::try_from_bytes(&event.event_data()) {
                 Ok(EventDataView::RedeemedMoneyOrderEvent {
-                    amount: redeem_event.amount,
-                    batch_index: redeem_event.batch_index,
-                    order_index: redeem_event.order_index,
+                    amount: redeem_event.amount(),
+                    batch_index: redeem_event.batch_index(),
+                    order_index: redeem_event.order_index(),
                 })
             } else {
                 Err(format_err!("Unable to parse RedeemedMoneyOrderEvent"))

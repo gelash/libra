@@ -177,7 +177,7 @@ address 0x1 {
 
             let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
             let duration_microseconds = validity_microseconds + grace_period_microseconds;
-            
+
             let batch_id = Vector::length(&orders.batches);
             Vector::push_back(&mut orders.batches, MoneyOrderBatch {
                 order_status: status,
@@ -383,18 +383,34 @@ address 0x1 {
                                             issuer_address: address,
         ) : u64 acquires MoneyOrderCoinVector {
             let sender_address = Signer::address_of(sender);
-            
+
             if (!exists<MoneyOrderCoinVector>(sender_address)) return 0;
-            
+
             let coins_vec = borrow_global<MoneyOrderCoinVector>(sender_address);
             let (found, coin_index) = index_of_coin(&coins_vec.coins,
                                                     issuer_address);
             if (!found) return 0;
-            
+
             let target_coin = Vector::borrow(&coins_vec.coins, coin_index);
             target_coin.amount
         }
-        
+
+        public fun init_coins_money_order(receiver: &signer)
+             {
+
+            let receiver_address = Signer::address_of(receiver);
+
+            // Get receiver's storage of MoneyOrderCoin, currently a Vector. Publish an
+            // empty Vector<MoneyOrderCoin> if none exists at receiver's account yet.
+            // TODO: Switch to a Map when that exists to merge coins based on address.
+            if (!exists<MoneyOrderCoinVector>(receiver_address)) {
+                move_to(receiver, MoneyOrderCoinVector {
+                    coins: Vector::empty(),
+                });
+            };
+
+        }
+
         public fun deposit_money_order(receiver: &signer,
                                        money_order_descriptor: MoneyOrderDescriptor,
                                        issuer_signature: vector<u8>,
@@ -405,7 +421,7 @@ address 0x1 {
                                    money_order_descriptor,
                                    issuer_signature,
                                    user_signature);
-            
+
             let receiver_address = Signer::address_of(receiver);
 
             // Get receiver's storage of MoneyOrderCoin, currently a Vector. Publish an
@@ -432,7 +448,7 @@ address 0x1 {
             let target_coin = Vector::borrow_mut(&mut receiver_vec.coins,
                                                  coin_index);
             let target_coin_value = &mut target_coin.amount;
-            *target_coin_value = *target_coin_value + amount;                
+            *target_coin_value = *target_coin_value + amount;
         }
 
         // Money order cancellation by the receiver/user - doesn't redeem, just sets

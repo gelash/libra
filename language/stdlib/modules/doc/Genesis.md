@@ -137,6 +137,8 @@
         x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1",
         100000
         );
+    <a href="MoneyOrder.md#0x1_MoneyOrder_init_coins_money_order">MoneyOrder::init_coins_money_order</a>(lr_account);
+
 }
 </code></pre>
 
