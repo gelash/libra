@@ -9,13 +9,13 @@ use libra_types::{
     validator_verifier::ValidatorVerifier,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 /// Vote is the struct that is ultimately sent by the voter in response for
 /// receiving a proposal.
 /// Vote carries the `LedgerInfo` of a block that is going to be committed in case this vote
 /// is gathers QuorumCertificate (see the detailed explanation in the comments of `LedgerInfo`).
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Vote {
     /// The data of the vote
     vote_data: VoteData,
@@ -27,6 +27,13 @@ pub struct Vote {
     signature: Ed25519Signature,
     /// The round signatures can be aggregated into a timeout certificate if present.
     timeout_signature: Option<Ed25519Signature>,
+}
+
+// this is required by structured log
+impl Debug for Vote {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 impl Display for Vote {
@@ -52,7 +59,7 @@ impl Vote {
         validator_signer: &ValidatorSigner,
     ) -> Self {
         ledger_info_placeholder.set_consensus_data_hash(vote_data.hash());
-        let li_sig = validator_signer.sign_message(ledger_info_placeholder.hash());
+        let li_sig = validator_signer.sign(&ledger_info_placeholder);
         Self {
             vote_data,
             author,
@@ -124,11 +131,11 @@ impl Vote {
             "Vote's hash mismatch with LedgerInfo"
         );
         validator
-            .verify_signature(self.author(), self.ledger_info.hash(), &self.signature)
+            .verify(self.author(), &self.ledger_info, &self.signature)
             .context("Failed to verify Vote")?;
         if let Some(timeout_signature) = &self.timeout_signature {
             validator
-                .verify_signature(self.author(), self.timeout().hash(), timeout_signature)
+                .verify(self.author(), &self.timeout(), timeout_signature)
                 .context("Failed to verify Timeout Vote")?;
         }
         Ok(())

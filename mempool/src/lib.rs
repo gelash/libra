@@ -67,8 +67,8 @@ pub use shared_mempool::{
         SubmissionStatus, TransactionExclusion,
     },
 };
-#[cfg(feature = "fuzzing")]
-pub use tests::mocks;
+#[cfg(any(test, feature = "fuzzing"))]
+pub use tests::{fuzzing, mocks};
 
 mod core_mempool;
 mod counters;

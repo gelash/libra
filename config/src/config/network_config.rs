@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::{Error, SecureBackend},
-    keys::KeyPair,
+    config::{Error, RoleType, SecureBackend},
+    keys::ConfigKey,
     network_id::NetworkId,
     utils,
 };
 use libra_crypto::{x25519, Uniform};
 use libra_network_address::NetworkAddress;
+use libra_network_address_encryption::Encryptor;
 use libra_secure_storage::{CryptoStorage, KVStorage, Storage};
 use libra_types::{transaction::authenticator::AuthenticationKey, PeerId};
 use rand::{
@@ -18,22 +19,22 @@ use rand::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    convert::{TryFrom, TryInto},
+    convert::TryFrom,
     string::ToString,
 };
 
 /// Current supported protocol negotiation handshake version.
 ///
 /// See [`perform_handshake`] in `network/src/transport.rs`
-// TODO(philiphayes): ideally this constant lives somewhere in network/ ...
+// TODO(philiphayes): ideally these constants live somewhere in network/ ...
 // might need to extract into a separate network_constants crate or something.
 pub const HANDSHAKE_VERSION: u8 = 0;
+pub const MAX_FRAME_SIZE: usize = 8 * 1024 * 1024;
 
 pub type SeedPublicKeys = HashMap<PeerId, HashSet<x25519::PublicKey>>;
 pub type SeedAddresses = HashMap<PeerId, Vec<NetworkAddress>>;
 
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, PartialEq))]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NetworkConfig {
     pub connectivity_check_interval_ms: u64,
@@ -46,6 +47,8 @@ pub struct NetworkConfig {
     // Select this to enforce that both peers should authenticate each other, otherwise
     // authentication only occurs for outgoing connections.
     pub mutual_authentication: bool,
+    // Used to store network address encryption keys for validator nodes
+    pub network_address_key_backend: Option<SecureBackend>,
     pub network_id: NetworkId,
     // Addresses of initial peers to connect to. In a mutual_authentication network,
     // we will extract the public keys from these addresses to set our initial
@@ -55,6 +58,7 @@ pub struct NetworkConfig {
     // mutual_authentication network. This config field is intended as a fallback
     // in case some peers don't have well defined addresses.
     pub seed_pubkeys: SeedPublicKeys,
+    pub max_frame_size: usize,
 }
 
 impl Default for NetworkConfig {
@@ -71,9 +75,11 @@ impl NetworkConfig {
             identity: Identity::None,
             listen_address: "/ip4/0.0.0.0/tcp/6180".parse().unwrap(),
             mutual_authentication: false,
+            network_address_key_backend: None,
             network_id,
             seed_pubkeys: HashMap::default(),
             seed_addrs: HashMap::default(),
+            max_frame_size: MAX_FRAME_SIZE,
         };
         config.prepare_identity();
         config
@@ -81,24 +87,9 @@ impl NetworkConfig {
 }
 
 impl NetworkConfig {
-    /// This clones the underlying data except for the key so that this config can be used as a
-    /// template for another config.
-    pub fn clone_for_template(&self) -> Self {
-        Self {
-            connectivity_check_interval_ms: self.connectivity_check_interval_ms,
-            discovery_method: self.discovery_method.clone(),
-            identity: Identity::None,
-            listen_address: self.listen_address.clone(),
-            mutual_authentication: self.mutual_authentication,
-            network_id: self.network_id.clone(),
-            seed_pubkeys: self.seed_pubkeys.clone(),
-            seed_addrs: self.seed_addrs.clone(),
-        }
-    }
-
-    pub fn identity_key(&mut self) -> x25519::PrivateKey {
-        let key = match &mut self.identity {
-            Identity::FromConfig(config) => config.keypair.take_private(),
+    pub fn identity_key(&self) -> x25519::PrivateKey {
+        let key = match &self.identity {
+            Identity::FromConfig(config) => Some(config.key.clone().key),
             Identity::FromStorage(config) => {
                 let storage: Storage = (&config.backend).into();
                 let key = storage
@@ -113,11 +104,37 @@ impl NetworkConfig {
         key.expect("identity key should be present")
     }
 
-    pub fn load(&mut self) -> Result<(), Error> {
+    pub fn identity_from_storage(&self) -> IdentityFromStorage {
+        if let Identity::FromStorage(identity) = self.identity.clone() {
+            identity
+        } else {
+            panic!("Invalid identity found, expected a storage identity.");
+        }
+    }
+
+    pub fn encryptor(&self) -> Encryptor {
+        if let Some(backend) = self.network_address_key_backend.as_ref() {
+            let storage = backend.into();
+            Encryptor::new(storage)
+        } else {
+            Encryptor::for_testing()
+        }
+    }
+
+    pub fn load(&mut self, role: RoleType) -> Result<(), Error> {
         if self.listen_address.to_string().is_empty() {
             self.listen_address = utils::get_local_ip()
                 .ok_or_else(|| Error::InvariantViolation("No local IP".to_string()))?;
         }
+
+        if role == RoleType::Validator {
+            self.network_id = NetworkId::Validator;
+        } else if self.network_id == NetworkId::Validator {
+            return Err(Error::InvariantViolation(
+                "Set NetworkId::Validator network for a non-validator network".to_string(),
+            ));
+        }
+
         self.prepare_identity();
         Ok(())
     }
@@ -128,12 +145,10 @@ impl NetworkConfig {
             Identity::FromStorage(config) => {
                 let storage: Storage = (&config.backend).into();
                 let peer_id = storage
-                    .get(&config.peer_id_name)
+                    .get::<PeerId>(&config.peer_id_name)
                     .expect("Unable to read peer id")
-                    .value
-                    .string()
-                    .expect("Expected string for peer id");
-                Some(peer_id.try_into().expect("Unable to parse peer id"))
+                    .value;
+                Some(peer_id)
             }
             Identity::None => None,
         }
@@ -146,17 +161,11 @@ impl NetworkConfig {
             Identity::None => {
                 let mut rng = StdRng::from_seed(OsRng.gen());
                 let key = x25519::PrivateKey::generate(&mut rng);
-                let peer_id = AuthenticationKey::try_from(key.public_key().as_slice())
-                    .unwrap()
-                    .derived_address();
+                let peer_id = PeerId::from_identity_public_key(key.public_key());
                 self.identity = Identity::from_config(key, peer_id);
             }
             Identity::FromConfig(config) => {
-                let pubkey = config.keypair.public_key();
-                let peer_id = AuthenticationKey::try_from(pubkey.as_slice())
-                    .unwrap()
-                    .derived_address();
-
+                let peer_id = PeerId::from_identity_public_key(config.key.public_key());
                 if config.peer_id == PeerId::ZERO {
                     config.peer_id = peer_id;
                 }
@@ -232,8 +241,7 @@ pub struct GossipConfig {
     pub discovery_interval_ms: u64,
 }
 
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, PartialEq))]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Identity {
     FromConfig(IdentityFromConfig),
@@ -243,8 +251,8 @@ pub enum Identity {
 
 impl Identity {
     pub fn from_config(key: x25519::PrivateKey, peer_id: PeerId) -> Self {
-        let keypair = KeyPair::load(key);
-        Identity::FromConfig(IdentityFromConfig { keypair, peer_id })
+        let key = ConfigKey::new(key);
+        Identity::FromConfig(IdentityFromConfig { key, peer_id })
     }
 
     pub fn from_storage(key_name: String, peer_id_name: String, backend: SecureBackend) -> Self {
@@ -254,29 +262,19 @@ impl Identity {
             peer_id_name,
         })
     }
-
-    pub fn public_key_from_config(&self) -> Option<x25519::PublicKey> {
-        if let Identity::FromConfig(config) = self {
-            Some(config.keypair.public_key())
-        } else {
-            None
-        }
-    }
 }
 
 /// The identity is stored within the config.
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, PartialEq))]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityFromConfig {
-    #[serde(rename = "key")]
-    pub keypair: KeyPair<x25519::PrivateKey>,
+    #[serde(flatten)]
+    pub key: ConfigKey<x25519::PrivateKey>,
     pub peer_id: PeerId,
 }
 
 /// This represents an identity in a secure-storage as defined in NodeConfig::secure.
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, PartialEq))]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityFromStorage {
     pub backend: SecureBackend,

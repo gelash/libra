@@ -28,7 +28,7 @@ impl Command for DevCommand {
             Box::new(DevCommandAddValidator {}),
             Box::new(DevCommandRemoveValidator {}),
             Box::new(DevCommandGenWaypoint {}),
-            Box::new(DevCommandRegisterValidator {}),
+            Box::new(DevCommandChangeLibraVersion {}),
         ];
         subcommand_execute(&params[0], commands, client, &params[1..]);
     }
@@ -148,11 +148,11 @@ impl Command for DevCommandEnableCustomScript {
     }
 }
 
-pub struct DevCommandDisableCustomScript {}
+pub struct AddToScriptAllowList {}
 
-impl Command for DevCommandDisableCustomScript {
+impl Command for AddToScriptAllowList {
     fn get_aliases(&self) -> Vec<&'static str> {
-        vec!["disable_custom_script"]
+        vec!["add_to_script_allow_list"]
     }
 
     fn get_params_help(&self) -> &'static str {
@@ -160,15 +160,42 @@ impl Command for DevCommandDisableCustomScript {
     }
 
     fn get_description(&self) -> &'static str {
-        "Only allow executing predefined stdlib script in the network."
+        "Add a script hash to the allow list"
     }
 
     fn execute(&self, client: &mut ClientProxy, params: &[&str]) {
-        if params.len() != 1 {
+        if params.len() != 2 {
             println!("Invalid number of arguments");
             return;
         }
-        match client.disable_custom_script(params, true) {
+        match client.add_to_script_allow_list(params, true) {
+            Ok(_) => println!("Successfully finished execution"),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+pub struct DevCommandChangeLibraVersion {}
+
+impl Command for DevCommandChangeLibraVersion {
+    fn get_aliases(&self) -> Vec<&'static str> {
+        vec!["change_libra_version"]
+    }
+
+    fn get_params_help(&self) -> &'static str {
+        "<new_libra_version>"
+    }
+
+    fn get_description(&self) -> &'static str {
+        "Change the libra_version stored on chain"
+    }
+
+    fn execute(&self, client: &mut ClientProxy, params: &[&str]) {
+        if params.len() != 2 {
+            println!("Invalid number of arguments");
+            return;
+        }
+        match client.change_libra_version(params, true) {
             Ok(_) => println!("Successfully finished execution"),
             Err(e) => println!("{}", e),
         }
@@ -301,32 +328,6 @@ impl Command for DevCommandGenWaypoint {
                 li_time_str,
                 waypoint
             ),
-        }
-    }
-}
-
-pub struct DevCommandRegisterValidator {}
-
-impl Command for DevCommandRegisterValidator {
-    fn get_aliases(&self) -> Vec<&'static str> {
-        vec!["register_validator"]
-    }
-    fn get_params_help(&self) -> &'static str {
-        "<validator_account_address> <validator_account_private_key> <consensus_public_key> <network_signing_key> <network_identity_key> <network_address> <fullnode_identity_key> <fullnode_network_address>"
-    }
-
-    fn get_description(&self) -> &'static str {
-        "Register an account address as validator candidate with necessary data, it's up to association to add them to the network"
-    }
-
-    fn execute(&self, client: &mut ClientProxy, params: &[&str]) {
-        if params.len() != 9 {
-            println!("Invalid number of arguments to register validator");
-            return;
-        }
-        match client.register_validator(params, true) {
-            Ok(_) => println!("Successfully finished execution"),
-            Err(e) => println!("{}", e),
         }
     }
 }

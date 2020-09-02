@@ -3,8 +3,12 @@ address 0x1 {
 // TODO: add optional timeout for reclaiming by original publisher once we have implemented time
 module Offer {
   use 0x1::Signer;
+  use 0x1::Errors;
   // A wrapper around value `offered` that can be claimed by the address stored in `for`.
   resource struct Offer<Offered> { offered: Offered, for: address }
+
+  /// An offer of the specified type for the account does not exist
+  const EOFFER_DNE_FOR_ACCOUNT: u64 = 0;
 
   // Publish a value of type `Offered` under the sender's account. The value can be claimed by
   // either the `for` address or the transaction sender.
@@ -19,8 +23,7 @@ module Offer {
   public fun redeem<Offered>(account: &signer, offer_address: address): Offered acquires Offer {
     let Offer<Offered> { offered, for } = move_from<Offer<Offered>>(offer_address);
     let sender = Signer::address_of(account);
-    // fail with INSUFFICIENT_PRIVILEGES
-    assert(sender == for || sender == offer_address, 11);
+    assert(sender == for || sender == offer_address, Errors::invalid_argument(EOFFER_DNE_FOR_ACCOUNT));
     offered
   }
 
@@ -54,9 +57,19 @@ module Offer {
     /// recipient of the offered struct in the `Offer<Offered>` resource at the address `offer_address`
     /// Returns true if the recipient is allowed to redeem `Offer<Offered>` at `offer_address`
     /// and false otherwise.
+    ///
+    /// TODO (dd): this is undefined if the offer does not exist. Should this be anded with
+    /// "exists_at"?
+
     define is_allowed_recipient<Offered>(offer_addr: address, recipient: address): bool {
       recipient == global<Offer<Offered>>(offer_addr).for || recipient == offer_addr
     }
+
+    /// Mirrors the Move function exists_at<Offered>, above.
+    define spec_exists_at<Offered>(offer_addr: address): bool {
+        exists<Offer<Offered>>(offer_addr)
+    }
+
   }
 
   /// ## Creation of Offers

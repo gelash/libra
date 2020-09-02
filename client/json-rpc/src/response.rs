@@ -39,7 +39,7 @@ impl TryFrom<(String, Value)> for JsonRpcResponse {
                 );
                 Ok(JsonRpcResponse::SubmissionResponse)
             }
-            "get_account_state" => {
+            "get_account" => {
                 let account = match value {
                     Value::Null => None,
                     _ => {
@@ -80,6 +80,10 @@ impl TryFrom<(String, Value)> for JsonRpcResponse {
                     }
                 };
                 Ok(JsonRpcResponse::AccountTransactionResponse(txn))
+            }
+            "get_account_transactions" => {
+                let txns: Vec<TransactionView> = serde_json::from_value(value)?;
+                Ok(JsonRpcResponse::TransactionsResponse(txns))
             }
             "get_transactions" => {
                 let txns: Vec<TransactionView> = serde_json::from_value(value)?;

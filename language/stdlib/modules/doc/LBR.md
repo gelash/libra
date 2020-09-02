@@ -8,12 +8,21 @@
 -  [Resource `LBR`](#0x1_LBR_LBR)
 -  [Resource `ReserveComponent`](#0x1_LBR_ReserveComponent)
 -  [Resource `Reserve`](#0x1_LBR_Reserve)
+-  [Const `MAX_U64`](#0x1_LBR_MAX_U64)
+-  [Const `ERESERVE`](#0x1_LBR_ERESERVE)
+-  [Const `ECOIN1`](#0x1_LBR_ECOIN1)
+-  [Const `ECOIN2`](#0x1_LBR_ECOIN2)
+-  [Const `EZERO_LBR_MINT_NOT_ALLOWED`](#0x1_LBR_EZERO_LBR_MINT_NOT_ALLOWED)
 -  [Function `initialize`](#0x1_LBR_initialize)
 -  [Function `is_lbr`](#0x1_LBR_is_lbr)
--  [Function `swap_into`](#0x1_LBR_swap_into)
+-  [Function `calculate_component_amounts_for_lbr`](#0x1_LBR_calculate_component_amounts_for_lbr)
 -  [Function `create`](#0x1_LBR_create)
 -  [Function `unpack`](#0x1_LBR_unpack)
 -  [Function `reserve_address`](#0x1_LBR_reserve_address)
+-  [Specification](#0x1_LBR_Specification)
+    -  [Resource `ReserveComponent`](#0x1_LBR_Specification_ReserveComponent)
+    -  [Function `is_lbr`](#0x1_LBR_Specification_is_lbr)
+    -  [Function `unpack`](#0x1_LBR_Specification_unpack)
 
 This module defines the
 <code><a href="#0x1_LBR">LBR</a></code> currency as an on-chain reserve. The
@@ -198,6 +207,70 @@ e.g., if
 
 </details>
 
+<a name="0x1_LBR_MAX_U64"></a>
+
+## Const `MAX_U64`
+
+TODO(wrwg): This should be provided somewhere centrally in the framework.
+
+
+<pre><code><b>const</b> MAX_U64: u64 = 18446744073709551615;
+</code></pre>
+
+
+
+<a name="0x1_LBR_ERESERVE"></a>
+
+## Const `ERESERVE`
+
+The
+<code><a href="#0x1_LBR_Reserve">Reserve</a></code> resource is in an invalid state
+
+
+<pre><code><b>const</b> ERESERVE: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x1_LBR_ECOIN1"></a>
+
+## Const `ECOIN1`
+
+The amount of
+<code><a href="Coin1.md#0x1_Coin1">Coin1</a></code> does not match what was expected
+
+
+<pre><code><b>const</b> ECOIN1: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x1_LBR_ECOIN2"></a>
+
+## Const `ECOIN2`
+
+The amount of
+<code><a href="Coin2.md#0x1_Coin2">Coin2</a></code> does not match what was expected
+
+
+<pre><code><b>const</b> ECOIN2: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x1_LBR_EZERO_LBR_MINT_NOT_ALLOWED"></a>
+
+## Const `EZERO_LBR_MINT_NOT_ALLOWED`
+
+Minting zero
+<code><a href="#0x1_LBR">LBR</a></code> is not permitted.
+
+
+<pre><code><b>const</b> EZERO_LBR_MINT_NOT_ALLOWED: u64 = 3;
+</code></pre>
+
+
+
 <a name="0x1_LBR_initialize"></a>
 
 ## Function `initialize`
@@ -218,7 +291,7 @@ restrictions are enforced in the
 <code><a href="Libra.md#0x1_Libra_register_currency">Libra::register_currency</a></code> function, but also enforced here.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_initialize">initialize</a>(association: &signer, tc_account: &signer)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_initialize">initialize</a>(lr_account: &signer, tc_account: &signer)
 </code></pre>
 
 
@@ -228,21 +301,23 @@ restrictions are enforced in the
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_initialize">initialize</a>(
-    association: &signer,
+    lr_account: &signer,
     tc_account: &signer,
 ) {
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_genesis">LibraTimestamp::assert_genesis</a>();
     // Operational constraint
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(association) == <a href="#0x1_LBR_reserve_address">reserve_address</a>(), 0);
-    // Register the `<a href="#0x1_LBR">LBR</a>` currency.
+    <a href="CoreAddresses.md#0x1_CoreAddresses_assert_currency_info">CoreAddresses::assert_currency_info</a>(lr_account);
+    // <a href="#0x1_LBR_Reserve">Reserve</a> must not exist.
+    <b>assert</b>(!exists&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>()), <a href="Errors.md#0x1_Errors_already_published">Errors::already_published</a>(ERESERVE));
     <b>let</b> (mint_cap, burn_cap) = <a href="Libra.md#0x1_Libra_register_currency">Libra::register_currency</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(
-        association,
-        tc_account,
+        lr_account,
         <a href="FixedPoint32.md#0x1_FixedPoint32_create_from_rational">FixedPoint32::create_from_rational</a>(1, 1), // exchange rate <b>to</b> <a href="#0x1_LBR">LBR</a>
         <b>true</b>,    // is_synthetic
         1000000, // scaling_factor = 10^6
         1000,    // fractional_part = 10^3
         b"<a href="#0x1_LBR">LBR</a>"
     );
+    <a href="AccountLimits.md#0x1_AccountLimits_publish_unrestricted_limits">AccountLimits::publish_unrestricted_limits</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(lr_account);
     <b>let</b> preburn_cap = <a href="Libra.md#0x1_Libra_create_preburn">Libra::create_preburn</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(tc_account);
     <b>let</b> coin1 = <a href="#0x1_LBR_ReserveComponent">ReserveComponent</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt; {
         ratio: <a href="FixedPoint32.md#0x1_FixedPoint32_create_from_rational">FixedPoint32::create_from_rational</a>(1, 2),
@@ -252,7 +327,7 @@ restrictions are enforced in the
         ratio: <a href="FixedPoint32.md#0x1_FixedPoint32_create_from_rational">FixedPoint32::create_from_rational</a>(1, 2),
         backing: <a href="Libra.md#0x1_Libra_zero">Libra::zero</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;(),
     };
-    move_to(association, <a href="#0x1_LBR_Reserve">Reserve</a> { mint_cap, burn_cap, preburn_cap, coin1, coin2 });
+    move_to(lr_account, <a href="#0x1_LBR_Reserve">Reserve</a> { mint_cap, burn_cap, preburn_cap, coin1, coin2 });
 }
 </code></pre>
 
@@ -288,37 +363,17 @@ Returns true if
 
 </details>
 
-<a name="0x1_LBR_swap_into"></a>
+<a name="0x1_LBR_calculate_component_amounts_for_lbr"></a>
 
-## Function `swap_into`
+## Function `calculate_component_amounts_for_lbr`
 
-Given the constituent coins
-<code>coin1</code> and
-<code>coin2</code> of the
-<code><a href="#0x1_LBR">LBR</a></code>, this
-function calculates the maximum amount of
-<code><a href="#0x1_LBR">LBR</a></code> that can be returned
-for the values of the passed-in coins with respect to the coin ratios
-that are specified in the respective currency's
-<code><a href="#0x1_LBR_ReserveComponent">ReserveComponent</a></code>.
-Any remaining amounts in the passed-in coins are returned back out
-along with any newly-created
-<code><a href="#0x1_LBR">LBR</a></code> coins.
-If either of the coin's values are less than or equal to 1, then the
-function returns the passed-in coins along with zero
+We take the truncated multiplication + 1 (not ceiling!) to withdraw for each currency that makes up the
 <code><a href="#0x1_LBR">LBR</a></code>.
-In order to ensure that the on-chain reserve remains liquid while
-minimizing complexity, the values needed to create an
-<code><a href="#0x1_LBR">LBR</a></code> are the
-truncated division of the passed-in coin with
-<code>1</code> base currency unit added.
-This is different from rounding, or ceiling; e.g.,
-<code>ceil(10 /
-2) = 5</code> whereas we would calculate this as
-<code>trunc(10/5) + 1 = 2 + 1 = 3</code>.
+We do this to ensure that the reserve is always positive. We could do this with other more complex methods such as
+banker's rounding, but this adds considerable arithmetic complexity.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_swap_into">swap_into</a>(coin1: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, coin2: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;): (<a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="#0x1_LBR_LBR">LBR::LBR</a>&gt;, <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_calculate_component_amounts_for_lbr">calculate_component_amounts_for_lbr</a>(amount_lbr: u64): (u64, u64)
 </code></pre>
 
 
@@ -327,28 +382,15 @@ This is different from rounding, or ceiling; e.g.,
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_swap_into">swap_into</a>(
-    coin1: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;,
-    coin2: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;
-): (<a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;, <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;, <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_calculate_component_amounts_for_lbr">calculate_component_amounts_for_lbr</a>(amount_lbr: u64): (u64, u64)
 <b>acquires</b> <a href="#0x1_LBR_Reserve">Reserve</a> {
-    // Grab the reserve
-    <b>let</b> reserve = borrow_global_mut&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>());
-    <b>let</b> coin1_value = <a href="Libra.md#0x1_Libra_value">Libra::value</a>(&coin1);
-    <b>let</b> coin2_value = <a href="Libra.md#0x1_Libra_value">Libra::value</a>(&coin2);
-    // If either of the coin's values is &lt;= 1, then we don't create any <a href="#0x1_LBR">LBR</a>
-    <b>if</b> (coin1_value &lt;= 1 || coin2_value &lt;= 1) <b>return</b> (<a href="Libra.md#0x1_Libra_zero">Libra::zero</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(), coin1, coin2);
-    <b>let</b> lbr_num_coin1 = <a href="FixedPoint32.md#0x1_FixedPoint32_divide_u64">FixedPoint32::divide_u64</a>(coin1_value - 1, *&reserve.coin1.ratio);
-    <b>let</b> lbr_num_coin2 = <a href="FixedPoint32.md#0x1_FixedPoint32_divide_u64">FixedPoint32::divide_u64</a>(coin2_value - 1, *&reserve.coin2.ratio);
-    // The number of `<a href="#0x1_LBR">LBR</a>` that can be minted is the minimum of the amount
-    // that could be possibly minted according <b>to</b> the value of the coin
-    // passed in and that coin's ratio in the reserve.
-    <b>let</b> num_lbr = <b>if</b> (lbr_num_coin2 &lt; lbr_num_coin1) {
-        lbr_num_coin2
-    } <b>else</b> {
-        lbr_num_coin1
-    };
-    <a href="#0x1_LBR_create">create</a>(num_lbr, coin1, coin2)
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_operating">LibraTimestamp::assert_operating</a>();
+    <b>let</b> reserve = borrow_global&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>());
+    <b>let</b> amount1 = <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(amount_lbr, *&reserve.coin1.ratio);
+    <b>let</b> amount2 = <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(amount_lbr, *&reserve.coin2.ratio);
+    <b>assert</b>(amount1 != MAX_U64, <a href="Errors.md#0x1_Errors_limit_exceeded">Errors::limit_exceeded</a>(ECOIN1));
+    <b>assert</b>(amount2 != MAX_U64, <a href="Errors.md#0x1_Errors_limit_exceeded">Errors::limit_exceeded</a>(ECOIN2));
+    (amount1 + 1, amount2 + 1)
 }
 </code></pre>
 
@@ -364,14 +406,17 @@ Create
 <code>amount_lbr</code> number of
 <code><a href="#0x1_LBR">LBR</a></code> from the passed in coins. If
 enough of each coin is passed in, this will return the
-<code><a href="#0x1_LBR">LBR</a></code> along with any
-remaining balances in the passed in coins. If any of the
-coins passed-in do not hold a large enough balance--which is calculated as
+<code><a href="#0x1_LBR">LBR</a></code>.
+* If the passed in coins are not the exact amount needed to mint
+<code>amount_lbr</code> LBR, the function will abort.
+* If any of the coins passed-in do not hold a large enough balance--which is calculated as
 <code>truncate(amount_lbr * reserve_component_c_i.ratio) + 1</code> for each coin
 <code>c_i</code> passed in--the function will abort.
+* If
+<code>amount_lbr</code> is zero the function will abort.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_create">create</a>(amount_lbr: u64, coin1: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, coin2: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;): (<a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="#0x1_LBR_LBR">LBR::LBR</a>&gt;, <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_create">create</a>(amount_lbr: u64, coin1: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, coin2: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="#0x1_LBR_LBR">LBR::LBR</a>&gt;
 </code></pre>
 
 
@@ -384,23 +429,19 @@ coins passed-in do not hold a large enough balance--which is calculated as
     amount_lbr: u64,
     coin1: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;,
     coin2: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;
-): (<a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;, <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;, <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;)
+): <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;
 <b>acquires</b> <a href="#0x1_LBR_Reserve">Reserve</a> {
-    <b>if</b> (amount_lbr == 0) <b>return</b> (<a href="Libra.md#0x1_Libra_zero">Libra::zero</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(), coin1, coin2);
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_operating">LibraTimestamp::assert_operating</a>();
+    <b>assert</b>(amount_lbr &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EZERO_LBR_MINT_NOT_ALLOWED));
+    <b>let</b> (num_coin1, num_coin2) = <a href="#0x1_LBR_calculate_component_amounts_for_lbr">calculate_component_amounts_for_lbr</a>(amount_lbr);
     <b>let</b> reserve = borrow_global_mut&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>());
-    // We take the truncated multiplication + 1 (not ceiling!) <b>to</b> withdraw for each currency.
-    // This is because we want <b>to</b> ensure that the reserve is always
-    // positive. We could do this with other more complex methods such <b>as</b>
-    // bankers rounding, but this adds considerable arithmetic complexity.
-    <b>let</b> num_coin1 = 1 + <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(amount_lbr, *&reserve.coin1.ratio);
-    <b>let</b> num_coin2 = 1 + <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(amount_lbr, *&reserve.coin2.ratio);
-    <b>let</b> coin1_exact = <a href="Libra.md#0x1_Libra_withdraw">Libra::withdraw</a>(&<b>mut</b> coin1, num_coin1);
-    <b>let</b> coin2_exact = <a href="Libra.md#0x1_Libra_withdraw">Libra::withdraw</a>(&<b>mut</b> coin2, num_coin2);
+    <b>assert</b>(num_coin1 == <a href="Libra.md#0x1_Libra_value">Libra::value</a>(&coin1), <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECOIN1));
+    <b>assert</b>(num_coin2 == <a href="Libra.md#0x1_Libra_value">Libra::value</a>(&coin2), <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECOIN2));
     // Deposit the coins in <b>to</b> the reserve
-    <a href="Libra.md#0x1_Libra_deposit">Libra::deposit</a>(&<b>mut</b> reserve.coin1.backing, coin1_exact);
-    <a href="Libra.md#0x1_Libra_deposit">Libra::deposit</a>(&<b>mut</b> reserve.coin2.backing, coin2_exact);
+    <a href="Libra.md#0x1_Libra_deposit">Libra::deposit</a>(&<b>mut</b> reserve.coin1.backing, coin1);
+    <a href="Libra.md#0x1_Libra_deposit">Libra::deposit</a>(&<b>mut</b> reserve.coin2.backing, coin2);
     // Once the coins have been deposited in the reserve, we can mint the <a href="#0x1_LBR">LBR</a>
-    (<a href="Libra.md#0x1_Libra_mint_with_capability">Libra::mint_with_capability</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(amount_lbr, &reserve.mint_cap), coin1, coin2)
+    <a href="Libra.md#0x1_Libra_mint_with_capability">Libra::mint_with_capability</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;(amount_lbr, &reserve.mint_cap)
 }
 </code></pre>
 
@@ -447,11 +488,11 @@ would be
 
 <pre><code><b>public</b> <b>fun</b> <b>unpack</b>(coin: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;): (<a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;, <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;)
 <b>acquires</b> <a href="#0x1_LBR_Reserve">Reserve</a> {
-    <b>let</b> reserve = borrow_global_mut&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>());
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_operating">LibraTimestamp::assert_operating</a>();
+    <b>let</b> reserve = borrow_global_mut&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="#0x1_LBR_reserve_address">reserve_address</a>());
     <b>let</b> ratio_multiplier = <a href="Libra.md#0x1_Libra_value">Libra::value</a>(&coin);
     <b>let</b> sender = <a href="#0x1_LBR_reserve_address">reserve_address</a>();
-    <a href="Libra.md#0x1_Libra_preburn_with_resource">Libra::preburn_with_resource</a>(coin, &<b>mut</b> reserve.preburn_cap, sender);
-    <a href="Libra.md#0x1_Libra_burn_with_resource_cap">Libra::burn_with_resource_cap</a>(&<b>mut</b> reserve.preburn_cap, sender, &reserve.burn_cap);
+    <a href="Libra.md#0x1_Libra_burn_now">Libra::burn_now</a>(coin, &<b>mut</b> reserve.preburn_cap, sender, &reserve.burn_cap);
     <b>let</b> coin1_amount = <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(ratio_multiplier, *&reserve.coin1.ratio);
     <b>let</b> coin2_amount = <a href="FixedPoint32.md#0x1_FixedPoint32_multiply_u64">FixedPoint32::multiply_u64</a>(ratio_multiplier, *&reserve.coin2.ratio);
     <b>let</b> coin1 = <a href="Libra.md#0x1_Libra_withdraw">Libra::withdraw</a>(&<b>mut</b> reserve.coin1.backing, coin1_amount);
@@ -488,3 +529,171 @@ Return the account address where the globally unique LBR::Reserve resource is st
 
 
 </details>
+
+<a name="0x1_LBR_Specification"></a>
+
+## Specification
+
+
+
+<pre><code>pragma verify;
+</code></pre>
+
+
+
+<a name="0x1_LBR_Specification_ReserveComponent"></a>
+
+### Resource `ReserveComponent`
+
+
+<pre><code><b>resource</b> <b>struct</b> <a href="#0x1_LBR_ReserveComponent">ReserveComponent</a>&lt;CoinType&gt;
+</code></pre>
+
+
+
+<dl>
+<dt>
+
+<code>ratio: <a href="FixedPoint32.md#0x1_FixedPoint32_FixedPoint32">FixedPoint32::FixedPoint32</a></code>
+</dt>
+<dd>
+ Specifies the relative ratio between the
+<code>CoinType</code> and
+<code><a href="#0x1_LBR">LBR</a></code> (i.e., how
+ many
+<code>CoinType</code>s make up one
+<code><a href="#0x1_LBR">LBR</a></code>).
+</dd>
+<dt>
+
+<code>backing: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;CoinType&gt;</code>
+</dt>
+<dd>
+ Holds the
+<code>CoinType</code> backing coins for the on-chain reserve.
+</dd>
+</dl>
+
+
+
+<pre><code><b>invariant</b> !<a href="FixedPoint32.md#0x1_FixedPoint32_is_zero">FixedPoint32::is_zero</a>(ratio);
+</code></pre>
+
+
+Global invariant that the Reserve resource exists after genesis.
+
+
+<pre><code><b>invariant</b> [<b>global</b>] <a href="LibraTimestamp.md#0x1_LibraTimestamp_is_operating">LibraTimestamp::is_operating</a>() ==&gt; <a href="#0x1_LBR_reserve_exists">reserve_exists</a>() && <a href="Libra.md#0x1_Libra_is_currency">Libra::is_currency</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;();
+<a name="0x1_LBR_reserve_exists"></a>
+<b>define</b> <a href="#0x1_LBR_reserve_exists">reserve_exists</a>(): bool {
+   exists&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_CURRENCY_INFO_ADDRESS">CoreAddresses::CURRENCY_INFO_ADDRESS</a>())
+}
+</code></pre>
+
+
+
+<a name="0x1_LBR_Specification_is_lbr"></a>
+
+### Function `is_lbr`
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LBR_is_lbr">is_lbr</a>&lt;CoinType&gt;(): bool
+</code></pre>
+
+
+
+
+<pre><code>pragma verify = <b>false</b>, opaque = <b>true</b>;
+</code></pre>
+
+
+The following is correct because currency codes are unique.
+
+
+<pre><code><b>ensures</b> result == <a href="#0x1_LBR_spec_is_lbr">spec_is_lbr</a>&lt;CoinType&gt;();
+</code></pre>
+
+
+Returns true if CoinType is LBR.
+
+
+<a name="0x1_LBR_spec_is_lbr"></a>
+
+
+<pre><code><b>define</b> <a href="#0x1_LBR_spec_is_lbr">spec_is_lbr</a>&lt;CoinType&gt;(): bool {
+type&lt;CoinType&gt;() == type&lt;<a href="#0x1_LBR">LBR</a>&gt;()
+}
+</code></pre>
+
+
+
+<a name="0x1_LBR_Specification_unpack"></a>
+
+### Function `unpack`
+
+
+<pre><code><b>public</b> <b>fun</b> <b>unpack</b>(coin: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="#0x1_LBR_LBR">LBR::LBR</a>&gt;): (<a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin1.md#0x1_Coin1_Coin1">Coin1::Coin1</a>&gt;, <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;<a href="Coin2.md#0x1_Coin2_Coin2">Coin2::Coin2</a>&gt;)
+</code></pre>
+
+
+
+
+<pre><code><b>include</b> <a href="#0x1_LBR_UnpackAbortsIf">UnpackAbortsIf</a>;
+<b>ensures</b> <a href="Libra.md#0x1_Libra_spec_market_cap">Libra::spec_market_cap</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;() == <b>old</b>(<a href="Libra.md#0x1_Libra_spec_market_cap">Libra::spec_market_cap</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;()) - coin.value;
+<b>ensures</b> result_1.value == <a href="#0x1_LBR_spec_unpack_coin1">spec_unpack_coin1</a>(coin);
+<b>ensures</b> result_2.value == <a href="#0x1_LBR_spec_unpack_coin2">spec_unpack_coin2</a>(coin);
+</code></pre>
+
+
+
+
+<a name="0x1_LBR_UnpackAbortsIf"></a>
+
+
+<pre><code><b>schema</b> <a href="#0x1_LBR_UnpackAbortsIf">UnpackAbortsIf</a> {
+    coin: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;;
+    <b>include</b> <a href="LibraTimestamp.md#0x1_LibraTimestamp_AbortsIfNotOperating">LibraTimestamp::AbortsIfNotOperating</a>;
+    <a name="0x1_LBR_reserve$10"></a>
+    <b>let</b> reserve = <b>global</b>&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="#0x1_LBR_reserve_address">reserve_address</a>());
+    <b>include</b> <a href="Libra.md#0x1_Libra_BurnNowAbortsIf">Libra::BurnNowAbortsIf</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;{preburn: reserve.preburn_cap};
+}
+</code></pre>
+
+
+> TODO(wrwg): It appears the next couple of aborts inclusions are redundant, i.e. they can be
+> removed but still no abort is reported. It is unclear why this is the case. For example,
+> the coin value could be so larged that multiply overflows, or the reserve could not have backing.
+> indicating the the solver determines their conditions can never become true.
+
+
+<pre><code><b>schema</b> <a href="#0x1_LBR_UnpackAbortsIf">UnpackAbortsIf</a> {
+    <b>include</b> <a href="FixedPoint32.md#0x1_FixedPoint32_MultiplyAbortsIf">FixedPoint32::MultiplyAbortsIf</a>{val: coin.value, multiplier: reserve.coin1.ratio};
+    <b>include</b> <a href="FixedPoint32.md#0x1_FixedPoint32_MultiplyAbortsIf">FixedPoint32::MultiplyAbortsIf</a>{val: coin.value, multiplier: reserve.coin2.ratio};
+    <b>include</b> <a href="Libra.md#0x1_Libra_WithdrawAbortsIf">Libra::WithdrawAbortsIf</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;{coin: reserve.coin1.backing, amount: <a href="#0x1_LBR_spec_unpack_coin1">spec_unpack_coin1</a>(coin)};
+    <b>include</b> <a href="Libra.md#0x1_Libra_WithdrawAbortsIf">Libra::WithdrawAbortsIf</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;{coin: reserve.coin2.backing, amount: <a href="#0x1_LBR_spec_unpack_coin2">spec_unpack_coin2</a>(coin)};
+}
+</code></pre>
+
+
+
+
+<a name="0x1_LBR_spec_unpack_coin1"></a>
+
+
+<pre><code><b>define</b> <a href="#0x1_LBR_spec_unpack_coin1">spec_unpack_coin1</a>(coin: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;): u64 {
+<b>let</b> reserve = <b>global</b>&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="#0x1_LBR_reserve_address">reserve_address</a>());
+<a href="FixedPoint32.md#0x1_FixedPoint32_spec_multiply_u64">FixedPoint32::spec_multiply_u64</a>(coin.value, reserve.coin1.ratio)
+}
+</code></pre>
+
+
+
+
+<a name="0x1_LBR_spec_unpack_coin2"></a>
+
+
+<pre><code><b>define</b> <a href="#0x1_LBR_spec_unpack_coin2">spec_unpack_coin2</a>(coin: <a href="Libra.md#0x1_Libra">Libra</a>&lt;<a href="#0x1_LBR">LBR</a>&gt;): u64 {
+<b>let</b> reserve = <b>global</b>&lt;<a href="#0x1_LBR_Reserve">Reserve</a>&gt;(<a href="#0x1_LBR_reserve_address">reserve_address</a>());
+<a href="FixedPoint32.md#0x1_FixedPoint32_spec_multiply_u64">FixedPoint32::spec_multiply_u64</a>(coin.value, reserve.coin2.ratio)
+}
+</code></pre>

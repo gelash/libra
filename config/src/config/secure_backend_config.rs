@@ -41,6 +41,10 @@ pub struct VaultConfig {
     /// a secret, S, without a namespace would be available in secret/data/S, with a namespace, N, it
     /// would be in secret/data/N/S.
     pub namespace: Option<String>,
+    /// Vault leverages leases on many tokens, specify this to automatically have your lease
+    /// renewed up to that many seconds more. If this is not specified, the lease will not
+    /// automatically be renewed.
+    pub renew_ttl_secs: Option<u32>,
     /// Vault's URL, note: only HTTP is currently supported.
     pub server: String,
     /// The authorization token for accessing secrets
@@ -105,7 +109,7 @@ impl Default for OnDiskStorageConfig {
         Self {
             namespace: None,
             path: PathBuf::from("secure_storage.json"),
-            data_dir: PathBuf::from("/opt/libra/data/common"),
+            data_dir: PathBuf::from("/opt/libra/data"),
         }
     }
 }
@@ -137,24 +141,24 @@ impl From<&SecureBackend> for Storage {
     fn from(backend: &SecureBackend) -> Self {
         match backend {
             SecureBackend::GitHub(config) => {
-                let storage = GitHubStorage::new(
+                let storage = Storage::from(GitHubStorage::new(
                     config.repository_owner.clone(),
                     config.repository.clone(),
                     config.token.read_token().expect("Unable to read token"),
-                );
+                ));
                 if let Some(namespace) = &config.namespace {
-                    Storage::from(NamespacedStorage::new(Box::new(storage), namespace.clone()))
+                    Storage::from(NamespacedStorage::new(storage, namespace.clone()))
                 } else {
-                    Storage::from(storage)
+                    storage
                 }
             }
             SecureBackend::InMemoryStorage => Storage::from(InMemoryStorage::new()),
             SecureBackend::OnDiskStorage(config) => {
-                let storage = OnDiskStorage::new(config.path());
+                let storage = Storage::from(OnDiskStorage::new(config.path()));
                 if let Some(namespace) = &config.namespace {
-                    Storage::from(NamespacedStorage::new(Box::new(storage), namespace.clone()))
+                    Storage::from(NamespacedStorage::new(storage, namespace.clone()))
                 } else {
-                    Storage::from(storage)
+                    storage
                 }
             }
             SecureBackend::Vault(config) => Storage::from(VaultStorage::new(
@@ -165,6 +169,7 @@ impl From<&SecureBackend> for Storage {
                     .ca_certificate
                     .as_ref()
                     .map(|_| config.ca_certificate().unwrap()),
+                config.renew_ttl_secs,
             )),
         }
     }
@@ -187,6 +192,7 @@ mod tests {
                 server: "127.0.0.1:8200".to_string(),
                 ca_certificate: None,
                 token: Token::FromConfig("test".to_string()),
+                renew_ttl_secs: None,
             },
         };
 
@@ -211,6 +217,7 @@ vault:
                 server: "127.0.0.1:8200".to_string(),
                 ca_certificate: None,
                 token: Token::FromDisk(PathBuf::from("/token")),
+                renew_ttl_secs: None,
             },
         };
 

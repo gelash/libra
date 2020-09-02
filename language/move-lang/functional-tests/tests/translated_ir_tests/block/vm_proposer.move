@@ -2,5 +2,4 @@
 //! proposer-address:  0x0
 //! block-time: 1000000
 
-// check: ABORTED
-// check: 5001
+// check: UNEXPECTED_ERROR_FROM_KNOWN_MOVE_FUNCTION

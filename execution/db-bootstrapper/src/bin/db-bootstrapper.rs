@@ -3,6 +3,7 @@
 
 use anyhow::{ensure, format_err, Context, Result};
 use executor::db_bootstrapper::calculate_genesis;
+use libra_temppath::TempPath;
 use libra_types::{transaction::Transaction, waypoint::Waypoint};
 use libra_vm::LibraVM;
 use libradb::LibraDB;
@@ -34,23 +35,43 @@ fn main() -> Result<()> {
 
     let genesis_txn = load_genesis_txn(&opt.genesis_txn_file)
         .with_context(|| format_err!("Failed loading genesis txn."))?;
-    let db = DbReaderWriter::new(
-        LibraDB::open(
-            &opt.db_dir,
-            false, /* readonly */
-            None,  /* pruner */
-        )
-        .with_context(|| format_err!("Failed to open DB."))?,
+    assert!(
+        matches!(genesis_txn, Transaction::GenesisTransaction(_)),
+        "Not a GenesisTransaction"
     );
+
+    let tmpdir;
+    let db = if opt.commit {
+        LibraDB::open(&opt.db_dir, false, None /* pruner */)
+    } else {
+        // When not committing, we open the DB as secondary so the tool is usable along side a
+        // running node on the same DB. Using a TempPath since it won't run for long.
+        tmpdir = TempPath::new();
+        LibraDB::open_as_secondary(opt.db_dir.as_path(), tmpdir.path())
+    }
+    .with_context(|| format_err!("Failed to open DB."))?;
+    let db = DbReaderWriter::new(db);
 
     let tree_state = db
         .reader
         .get_latest_tree_state()
         .with_context(|| format_err!("Failed to get latest tree state."))?;
+    println!("Got DB state successfully: {}", tree_state.describe());
+    if let Some(waypoint) = opt.waypoint_to_verify {
+        ensure!(
+            waypoint.version() == tree_state.num_transactions,
+            "Trying to generate waypoint at version {}, but DB has {} transactions.",
+            waypoint.version(),
+            tree_state.num_transactions,
+        )
+    }
+
     let committer = calculate_genesis::<LibraVM>(&db, tree_state, &genesis_txn)
         .with_context(|| format_err!("Failed to calculate genesis."))?;
-    println!("Successfully calculated genesis.");
-    println!("{:?}", committer.waypoint());
+    println!(
+        "Successfully calculated genesis. Got waypoint: {}",
+        committer.waypoint()
+    );
 
     if let Some(waypoint) = opt.waypoint_to_verify {
         ensure!(

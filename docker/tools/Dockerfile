@@ -1,4 +1,4 @@
-FROM debian:buster AS toolchain
+FROM debian:buster-20200803@sha256:a44ab0cca6cd9411032d180bc396f19bc98f71972d2398d50460145cab81c5ab AS toolchain
 
 # To use http/https proxy while building, use:
 # docker build --build-arg https_proxy=http://fwdproxy:8080 --build-arg http_proxy=http://fwdproxy:8080
@@ -12,6 +12,9 @@ WORKDIR /libra
 COPY rust-toolchain /libra/rust-toolchain
 RUN rustup install $(cat rust-toolchain)
 
+COPY cargo-toolchain /libra/cargo-toolchain
+RUN rustup install $(cat cargo-toolchain)
+
 FROM toolchain AS builder
 
 COPY . /libra
@@ -21,9 +24,19 @@ RUN ./docker/build-common.sh
 ### Production Image ###
 FROM debian:buster-slim AS prod
 
-RUN apt-get update && apt-get -y install socat && apt-get clean && rm -r /var/lib/apt/lists/*
+RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list.d/bullseye.list && \
+    echo "Package: *\nPin: release n=bullseye\nPin-Priority: 50" > /etc/apt/preferences.d/bullseye
 
-COPY --from=builder /libra/target/release/libra-management /usr/local/bin
+RUN apt-get update && \
+    apt-get -y install socat python3-botocore/bullseye awscli/bullseye && \
+    apt-get clean && \
+    rm -r /var/lib/apt/lists/*
+
+COPY --from=builder /libra/target/release/libra-genesis-tool /usr/local/bin
+COPY --from=builder /libra/target/release/libra-operational-tool /usr/local/bin
+COPY --from=builder /libra/target/release/db-bootstrapper /usr/local/bin
+COPY --from=builder /libra/target/release/db-backup /usr/local/bin
+COPY --from=builder /libra/target/release/db-restore /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REV

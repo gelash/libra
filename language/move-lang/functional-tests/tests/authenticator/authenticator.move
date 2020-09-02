@@ -41,7 +41,7 @@ fun main() {
 }
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 // empty policy should  be rejected
 //! new-transaction
@@ -54,8 +54,7 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 7001
+// check: "Keep(ABORTED { code: 7,"
 
 // bad threshold should be rejected (threshold 1 for empty keys)
 //! new-transaction
@@ -68,8 +67,7 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 7002
+// check: "Keep(ABORTED { code: 263,"
 
 //! new-transaction
 script {
@@ -88,8 +86,8 @@ fun main() {
     Authenticator::create_multi_ed25519(keys, 3);
 }
 }
-// check: ABORTED
-// check: 7003
+
+// check: "Keep(ABORTED { code: 519,"
 
 // bad threshold should be rejected (threshold 2 for 1 key)
 //! new-transaction
@@ -106,8 +104,7 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 7002
+// check: "Keep(ABORTED { code: 263,"
 
 // bad threshold should be rejected (threshold 0 for 1 address)
 //! new-transaction
@@ -124,8 +121,7 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 7001
+// check: "Keep(ABORTED { code: 7,"
 
 // 1-of-1 multi-ed25519 should have a different auth key than ed25519 with the same public key
 //! new-transaction
@@ -155,4 +151,4 @@ fun main() {
 }
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"

@@ -1,21 +1,26 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use executor::{db_bootstrapper::bootstrap_db_if_empty, Executor};
+use executor::{
+    db_bootstrapper::{generate_waypoint, maybe_bootstrap},
+    Executor,
+};
 use executor_types::BlockExecutor;
 use libra_config::{config::NodeConfig, utils::get_genesis_txn};
 use libra_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    hash::{CryptoHash, HashValue},
+    hash::HashValue,
     PrivateKey, SigningKey, Uniform,
 };
 use libra_logger::prelude::*;
 use libra_types::{
     account_address::AccountAddress,
     account_config::{
-        association_address, coin1_tag, testnet_dd_account_address, AccountResource, COIN1_NAME,
+        coin1_tag, testnet_dd_account_address, treasury_compliance_account_address,
+        AccountResource, COIN1_NAME,
     },
     block_info::BlockInfo,
+    chain_id::ChainId,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     transaction::{
         authenticator::AuthenticationKey, RawTransaction, Script, SignedTransaction, Transaction,
@@ -34,8 +39,7 @@ use storage_client::StorageClient;
 use storage_interface::{DbReader, DbReaderWriter};
 use storage_service::start_storage_service_with_db;
 use transaction_builder::{
-    encode_create_testing_account_script, encode_testnet_mint_script,
-    encode_transfer_with_metadata_script,
+    encode_create_parent_vasp_account_script, encode_peer_to_peer_with_metadata_script,
 };
 
 struct AccountData {
@@ -107,20 +111,22 @@ impl TransactionGenerator {
     }
 
     fn gen_account_creations(&self, block_size: usize) {
-        let assoc_account = association_address();
+        let tc_account = treasury_compliance_account_address();
 
         for (i, block) in self.accounts.chunks(block_size).enumerate() {
             let mut transactions = Vec::with_capacity(block_size);
             for (j, account) in block.iter().enumerate() {
                 let txn = create_transaction(
-                    assoc_account,
-                    1 + (i * block_size + j) as u64,
+                    tc_account,
+                    (i * block_size + j) as u64,
                     &self.genesis_key,
                     self.genesis_key.public_key(),
-                    encode_create_testing_account_script(
+                    encode_create_parent_vasp_account_script(
                         coin1_tag(),
+                        0,
                         account.address,
                         account.auth_key_prefix(),
+                        vec![],
                         false, /* add all currencies */
                     ),
                 );
@@ -147,7 +153,13 @@ impl TransactionGenerator {
                     (i * block_size + j) as u64,
                     &self.genesis_key,
                     self.genesis_key.public_key(),
-                    encode_testnet_mint_script(coin1_tag(), account.address, init_account_balance),
+                    encode_peer_to_peer_with_metadata_script(
+                        coin1_tag(),
+                        account.address,
+                        init_account_balance,
+                        vec![],
+                        vec![],
+                    ),
                 );
                 transactions.push(txn);
             }
@@ -176,7 +188,7 @@ impl TransactionGenerator {
                     sender.sequence_number,
                     &sender.private_key,
                     sender.public_key.clone(),
-                    encode_transfer_with_metadata_script(
+                    encode_peer_to_peer_with_metadata_script(
                         coin1_tag(),
                         receiver.address,
                         1, /* amount */
@@ -300,10 +312,13 @@ fn create_storage_service_and_executor(
         )
         .expect("DB should open."),
     );
-    bootstrap_db_if_empty::<LibraVM>(&db_rw, get_genesis_txn(config).unwrap()).unwrap();
+    let waypoint = generate_waypoint::<LibraVM>(&db_rw, get_genesis_txn(config).unwrap()).unwrap();
+    maybe_bootstrap::<LibraVM>(&db_rw, get_genesis_txn(config).unwrap(), waypoint).unwrap();
 
     let _handle = start_storage_service_with_db(config, db.clone());
-    let executor = Executor::new(StorageClient::new(&config.storage.address).into());
+    let executor = Executor::new(
+        StorageClient::new(&config.storage.address, config.storage.timeout_ms).into(),
+    );
 
     (db, executor)
 }
@@ -361,10 +376,8 @@ fn create_transaction(
     public_key: Ed25519PublicKey,
     program: Script,
 ) -> Transaction {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    let expiration_time = std::time::Duration::from_secs(now.as_secs() + 3600);
+    let now = libra_time::duration_since_epoch();
+    let expiration_time = now.as_secs() + 3600;
 
     let raw_txn = RawTransaction::new_script(
         sender,
@@ -374,9 +387,10 @@ fn create_transaction(
         0,                     /* gas_unit_price */
         COIN1_NAME.to_owned(), /* gas_currency_code */
         expiration_time,
+        ChainId::test(),
     );
 
-    let signature = private_key.sign_message(&raw_txn.hash());
+    let signature = private_key.sign(&raw_txn);
     let signed_txn = SignedTransaction::new(raw_txn, public_key, signature);
     Transaction::UserTransaction(signed_txn)
 }

@@ -29,7 +29,7 @@ use spec_lang::{
 use crate::cli::Options;
 // DEBUG
 // use backtrace::Backtrace;
-use spec_lang::env::NodeId;
+use spec_lang::env::{ConditionTag, NodeId};
 use stackless_bytecode_generator::{
     function_target::FunctionTarget, function_target_pipeline::FunctionTargetsHolder,
 };
@@ -66,12 +66,16 @@ pub enum BoogieErrorKind {
     Precondition,
     Postcondition,
     Assertion,
+    Inconclusive,
 }
 
 impl BoogieErrorKind {
     fn is_from_verification(self) -> bool {
         use BoogieErrorKind::*;
-        matches!(self, Assertion | Precondition | Postcondition)
+        matches!(
+            self,
+            Assertion | Precondition | Postcondition | Inconclusive
+        )
     }
 }
 
@@ -118,6 +122,7 @@ impl<'env> BoogieWrapper<'env> {
                 debug!("analyzing boogie output");
                 let out = String::from_utf8_lossy(&output.stdout).to_string();
                 let mut errors = self.extract_verification_errors(&out);
+                errors.extend(self.extract_inconclusive_errors(&out));
                 errors.extend(self.extract_compilation_errors(&out));
                 return Ok(BoogieOutput {
                     errors,
@@ -138,6 +143,7 @@ impl<'env> BoogieWrapper<'env> {
     ) -> anyhow::Result<()> {
         let BoogieOutput { errors, all_output } = self.call_boogie(bench_repeat, boogie_file)?;
         let boogie_log_file = self.options.get_boogie_log_file(boogie_file);
+        let log_file_existed = std::path::Path::new(&boogie_log_file).exists();
         debug!("writing boogie log to {}", boogie_log_file);
         fs::write(&boogie_log_file, &all_output)?;
 
@@ -157,6 +163,10 @@ impl<'env> BoogieWrapper<'env> {
         // Add errors for functions with smoke tests
         self.add_negative_errors(negative_cond_errors);
 
+        if !log_file_existed && !self.options.backend.keep_artifacts {
+            std::fs::remove_file(boogie_log_file).unwrap_or_default();
+        }
+
         Ok(())
     }
 
@@ -175,7 +185,7 @@ impl<'env> BoogieWrapper<'env> {
 
         // Check whether the condition which failed was a negative one.
         self.env
-            .get_condition_info(&source_loc)
+            .get_condition_info(&source_loc, ConditionTag::NegativeTest)
             .filter(|info| info.negative_cond)?;
         Some(source_loc)
     }
@@ -183,7 +193,7 @@ impl<'env> BoogieWrapper<'env> {
     /// Go over all negative conditions and check whether errors occurred for them.
     /// For those which did not occur, report error.
     fn add_negative_errors(&self, negative_cond_errors: BTreeSet<Loc>) {
-        self.env.with_condition_infos(|loc, info| {
+        self.env.with_condition_infos(|(loc, _), info| {
             if !info.negative_cond || negative_cond_errors.contains(loc) {
                 // Not a negative condition, or expected error happened.
                 return;
@@ -219,20 +229,29 @@ impl<'env> BoogieWrapper<'env> {
         // Create the error
         let (show_trace, message, call_loc) = loc_opt
             .as_ref()
-            .and_then(|loc| self.env.get_condition_info(loc))
-            .map(|info| {
-                if let Some(msg) = info.message_if_requires.as_ref() {
-                    // Check whether the Boogie error indicates a precondition, or if this is
-                    // the only message we have.
-                    if error.kind == BoogieErrorKind::Precondition || info.message.is_empty() {
-                        // Extract the location of the call site.
-                        let call_loc = error
-                            .context_position
-                            .and_then(|p| self.to_proper_source_location(self.get_locations(p).1));
-                        return (!info.omit_trace, msg.clone(), call_loc);
+            .and_then(|loc| {
+                if error.kind == BoogieErrorKind::Inconclusive {
+                    Some((false, error.message.clone(), None))
+                } else {
+                    let requires_info = self.env.get_condition_info(&loc, ConditionTag::Requires);
+                    let ensures_info = self.env.get_condition_info(&loc, ConditionTag::Ensures);
+                    if let Some(info) = requires_info {
+                        // Check whether the Boogie error indicates a precondition, or if this is
+                        // the only info we have.
+                        if error.kind == BoogieErrorKind::Precondition || ensures_info.is_none() {
+                            // Extract the location of the call site.
+                            let call_loc = error.context_position.and_then(|p| {
+                                self.to_proper_source_location(self.get_locations(p).1)
+                            });
+                            return Some((!info.omit_trace, info.message, call_loc));
+                        }
+                    }
+                    if let Some(info) = ensures_info {
+                        Some((!info.omit_trace, info.message, None))
+                    } else {
+                        None
                     }
                 }
-                (!info.omit_trace, info.message, None)
             })
             .unwrap_or_else(|| (true, error.message.clone(), None));
         let mut diag = Diagnostic::new(
@@ -299,19 +318,14 @@ impl<'env> BoogieWrapper<'env> {
                     //    source_pos.1.line, source_pos.1.column
                     //);
                     // END DEBUG
-                    let aborts_here = error
-                        .model
-                        .as_ref()
-                        .map(|model| {
-                            model
-                                .tracked_aborts
-                                .get(&(source_pos.0.clone(), source_pos.1.line))
-                                .is_some()
-                        })
-                        .unwrap_or(false);
-                    if aborts_here {
+                    let abort_marker = error.model.as_ref().and_then(|model| {
+                        model
+                            .tracked_aborts
+                            .get(&(source_pos.0.clone(), source_pos.1.line))
+                    });
+                    if let Some(m) = abort_marker {
                         kind = &TraceKind::Aborted;
-                        aborted = Some(source_loc.clone());
+                        aborted = Some((source_loc.clone(), m.code));
                     }
                     Some((orig_pos, source_loc, source_pos, kind, msg))
                 })
@@ -349,14 +363,27 @@ impl<'env> BoogieWrapper<'env> {
                         .collect_vec()
                 })
                 .collect_vec();
-            if let Some(abort_loc) = aborted {
-                // Patch the diag for aborted case. In this case, none of the aborts_if clauses
-                // covered the abort case, and the error message can be misleading.
-                diag.message = "abort not covered by any of the `aborts_if` clauses".to_string();
+            if let Some((abort_loc, code)) = aborted {
+                // Patch the diag for aborted case if its the generic one. In this case, none of
+                // the aborts_if clauses covered the abort case, and the error message can be
+                // misleading.
+                if diag
+                    .message
+                    .trim()
+                    .starts_with("A postcondition might not hold")
+                {
+                    diag.message =
+                        "abort not covered by any of the `aborts_if` clauses".to_string();
+                }
+                let reason = if code == -1 {
+                    "with execution failure".to_string()
+                } else {
+                    format!("with code `0x{:X}`", code)
+                };
                 diag.secondary_labels = vec![Label::new(
                     abort_loc.file_id(),
                     abort_loc.span(),
-                    "abort happened here",
+                    &format!("abort happened here {}", reason),
                 )];
             }
             diag = diag.with_notes(trace);
@@ -526,7 +553,55 @@ impl<'env> BoogieWrapper<'env> {
             Regex::new(r"(?m)^    .*\((?P<line>\d+),(?P<col>\d+)\): (?P<msg>.*)$").unwrap();
         let mut errors = vec![];
         let mut at: usize = 0;
-        loop {
+        while let Some(cap) = verification_diag_start.captures(&out[at..]) {
+            let msg = cap.name("msg").unwrap().as_str();
+            at += cap.get(0).unwrap().end();
+            // Check whether there is a `Related` message which points to the pre/post condition.
+            // If so, this has the real position.
+            let (pos, context_pos) =
+                if let Some(cap1) = verification_diag_related.captures(&out[at..]) {
+                    let call_line = cap.name("line").unwrap().as_str();
+                    let call_col = cap.name("col").unwrap().as_str();
+                    at += cap1.get(0).unwrap().end();
+                    let line = cap1.name("line").unwrap().as_str();
+                    let col = cap1.name("col").unwrap().as_str();
+                    (
+                        make_position(line, col),
+                        Some(make_position(call_line, call_col)),
+                    )
+                } else {
+                    let line = cap.name("line").unwrap().as_str();
+                    let col = cap.name("col").unwrap().as_str();
+                    (make_position(line, col), None)
+                };
+            let mut trace = vec![];
+            if let Some(m) = verification_diag_trace.find(&out[at..]) {
+                at += m.end();
+                while let Some(cap) = verification_diag_trace_entry.captures(&out[at..]) {
+                    let line = cap.name("line").unwrap().as_str();
+                    let col = cap.name("col").unwrap().as_str();
+                    let msg = cap.name("msg").unwrap().as_str();
+                    let trace_kind = if msg.ends_with("$Entry") {
+                        TraceKind::EnterFunction
+                    } else if msg.ends_with("$Return") {
+                        TraceKind::ExitFunction
+                    } else if msg.contains("_update_inv$") {
+                        TraceKind::UpdateInvariant
+                    } else if msg.contains("$Pack_") {
+                        TraceKind::Pack
+                    } else {
+                        TraceKind::Regular
+                    };
+                    trace.push((make_position(line, col), trace_kind, msg.to_string()));
+                    at += cap.get(0).unwrap().end();
+                    if !out[at..].starts_with("\n  ") && !out[at..].starts_with("\r\n  ") {
+                        // Don't read further if this line does not start with an indent,
+                        // as all trace entries do. Otherwise we would match the trace entry
+                        // for the next error.
+                        break;
+                    }
+                }
+            }
             let model = model_region.captures(&out[at..]).and_then(|cap| {
                 at += cap.get(0).unwrap().end();
                 match Model::parse(self, cap.name("mod").unwrap().as_str()) {
@@ -544,75 +619,53 @@ impl<'env> BoogieWrapper<'env> {
                     }
                 }
             });
-
-            if let Some(cap) = verification_diag_start.captures(&out[at..]) {
-                let msg = cap.name("msg").unwrap().as_str();
-                at += cap.get(0).unwrap().end();
-                // Check whether there is a `Related` message which points to the pre/post condition.
-                // If so, this has the real position.
-                let (pos, context_pos) =
-                    if let Some(cap1) = verification_diag_related.captures(&out[at..]) {
-                        let call_line = cap.name("line").unwrap().as_str();
-                        let call_col = cap.name("col").unwrap().as_str();
-                        at += cap1.get(0).unwrap().end();
-                        let line = cap1.name("line").unwrap().as_str();
-                        let col = cap1.name("col").unwrap().as_str();
-                        (
-                            make_position(line, col),
-                            Some(make_position(call_line, call_col)),
-                        )
-                    } else {
-                        let line = cap.name("line").unwrap().as_str();
-                        let col = cap.name("col").unwrap().as_str();
-                        (make_position(line, col), None)
-                    };
-                let mut trace = vec![];
-                if let Some(m) = verification_diag_trace.find(&out[at..]) {
-                    at += m.end();
-                    while let Some(cap) = verification_diag_trace_entry.captures(&out[at..]) {
-                        let line = cap.name("line").unwrap().as_str();
-                        let col = cap.name("col").unwrap().as_str();
-                        let msg = cap.name("msg").unwrap().as_str();
-                        let trace_kind = if msg.ends_with("$Entry") {
-                            TraceKind::EnterFunction
-                        } else if msg.ends_with("$Return") {
-                            TraceKind::ExitFunction
-                        } else if msg.contains("_update_inv$") {
-                            TraceKind::UpdateInvariant
-                        } else if msg.contains("$Pack_") {
-                            TraceKind::Pack
-                        } else {
-                            TraceKind::Regular
-                        };
-                        trace.push((make_position(line, col), trace_kind, msg.to_string()));
-                        at += cap.get(0).unwrap().end();
-                        if !out[at..].starts_with("\n  ") && !out[at..].starts_with("\r\n  ") {
-                            // Don't read further if this line does not start with an indent,
-                            // as all trace entries do. Otherwise we would match the trace entry
-                            // for the next error.
-                            break;
-                        }
-                    }
-                }
-                errors.push(BoogieError {
-                    kind: if msg.contains("assertion might not hold") {
-                        BoogieErrorKind::Assertion
-                    } else if msg.contains("precondition") {
-                        BoogieErrorKind::Precondition
-                    } else {
-                        BoogieErrorKind::Postcondition
-                    },
-                    position: pos,
-                    context_position: context_pos,
-                    message: msg.to_string(),
-                    execution_trace: trace,
-                    model,
-                });
-            } else {
-                break;
-            }
+            errors.push(BoogieError {
+                kind: if msg.contains("assertion might not hold") {
+                    BoogieErrorKind::Assertion
+                } else if msg.contains("precondition") {
+                    BoogieErrorKind::Precondition
+                } else {
+                    BoogieErrorKind::Postcondition
+                },
+                position: pos,
+                context_position: context_pos,
+                message: msg.to_string(),
+                execution_trace: trace,
+                model,
+            });
         }
         errors
+    }
+
+    /// Extracts inconclusive (timeout) errors.
+    fn extract_inconclusive_errors(&self, out: &str) -> Vec<BoogieError> {
+        let diag_re =
+            Regex::new(r"(?m)^.*\((?P<line>\d+),(?P<col>\d+)\).*Verification.*(inconclusive|out of resource|timed out).*$")
+                .unwrap();
+        diag_re
+            .captures_iter(&out)
+            .map(|cap| {
+                let line = cap.name("line").unwrap().as_str();
+                let col = cap.name("col").unwrap().as_str();
+                let msg = cap.get(0).unwrap().as_str();
+                BoogieError {
+                    kind: BoogieErrorKind::Inconclusive,
+                    position: make_position(line, col),
+                    context_position: None,
+                    message: if msg.contains("out of resource") || msg.contains("timed out") {
+                        let timeout = self.options.adjust_timeout(self.options.backend.vc_timeout);
+                        format!(
+                            "verification out of resources/timeout (global timeout set to {}s)",
+                            timeout
+                        )
+                    } else {
+                        "verification inconclusive".to_string()
+                    },
+                    execution_trace: vec![],
+                    model: None,
+                }
+            })
+            .collect_vec()
     }
 
     /// Extracts compilation errors. This captures any kind of errors different than the
@@ -812,7 +865,7 @@ impl Model {
         map_entry: &ModelValue,
     ) -> Result<(AbortDescriptor, Loc), ModelParseError> {
         if let ModelValue::List(args) = map_entry {
-            if args.len() != 2 {
+            if args.len() != 3 {
                 return Err(Self::invalid_track_info());
             }
             let loc = Self::extract_loc(wrapper, args)?;
@@ -821,10 +874,14 @@ impl Model {
                 .get_enclosing_function(loc.clone())
                 .ok_or_else(Self::invalid_track_info)?;
             let func_target = wrapper.targets.get_target(&func_env);
+            let code = args[2]
+                .extract_i128()
+                .ok_or_else(Self::invalid_track_info)?;
             Ok((
                 AbortDescriptor {
                     module_id: func_target.func_env.module_env.get_id(),
                     func_id: func_target.get_id(),
+                    code,
                 },
                 loc,
             ))
@@ -933,7 +990,7 @@ impl Model {
                 for (var, val) in vars {
                     let var_name = func_target.get_local_name(var.var_idx);
                     if func_target.symbol_pool().string(var_name).contains("$$") {
-                        // Do not show temporaries generated by the move compiler.
+                        // Do not show temporaries generated by the Move compiler.
                         continue;
                     }
                     if locals_shown.insert((loc.clone(), var.clone())) {
@@ -1096,6 +1153,23 @@ impl ModelValue {
         }
     }
 
+    /// Extract a i128 from a literal.
+    fn extract_i128(&self) -> Option<i128> {
+        if let Some(value) = self.extract_list("-").and_then(|values| {
+            if values.len() == 1 {
+                values[0].extract_i128().map(|value| -value)
+            } else {
+                None
+            }
+        }) {
+            Some(value)
+        } else if let Ok(n) = self.extract_literal()?.parse::<i128>() {
+            Some(n)
+        } else {
+            None
+        }
+    }
+
     /// Extract the value of a primitive.
     fn extract_primitive(&self, ctor: &str) -> Option<&String> {
         let args = self.extract_list(ctor)?;
@@ -1151,7 +1225,7 @@ impl ModelValue {
             Type::Primitive(PrimitiveType::Bool) => Some(PrettyDoc::text(
                 self.extract_primitive("$Boolean")?.to_string(),
             )),
-            Type::Primitive(PrimitiveType::Address) => {
+            Type::Primitive(PrimitiveType::Address) | Type::Primitive(PrimitiveType::Signer) => {
                 let addr = BigInt::parse_bytes(
                     &self.extract_primitive("$Address")?.clone().into_bytes(),
                     10,
@@ -1318,6 +1392,7 @@ impl LocalDescriptor {
 struct AbortDescriptor {
     module_id: ModuleId,
     func_id: FunId,
+    code: i128,
 }
 
 /// Represents an expression descriptor.

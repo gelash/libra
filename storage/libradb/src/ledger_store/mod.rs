@@ -34,6 +34,7 @@ use schemadb::{ReadOptions, SchemaIterator, DB};
 use std::{ops::Deref, sync::Arc};
 use storage_interface::{StartupInfo, TreeState};
 
+#[derive(Debug)]
 pub(crate) struct LedgerStore {
     db: Arc<DB>,
 
@@ -94,14 +95,22 @@ impl LedgerStore {
         })
     }
 
-    /// Gets ledger info at specified version and ensures it's an epoch change.
+    /// Gets ledger info at specified version and ensures it's an epoch ending.
     pub fn get_epoch_ending_ledger_info(
         &self,
         version: Version,
     ) -> Result<LedgerInfoWithSignatures> {
-        let li = self.db.get::<LedgerInfoSchema>(&version)?.ok_or_else(|| {
-            LibraDbError::NotFound(format!("Epoch change LedgerInfo at version {}", version))
-        })?;
+        let epoch = self.get_epoch(version)?;
+        let li = self
+            .db
+            .get::<LedgerInfoSchema>(&epoch)?
+            .ok_or_else(|| LibraDbError::NotFound(format!("LedgerInfo for epoch {}.", epoch)))?;
+        ensure!(
+            li.ledger_info().version() == version,
+            "Epoch {} didn't end at version {}",
+            epoch,
+            version,
+        );
         li.ledger_info()
             .next_epoch_state()
             .ok_or_else(|| format_err!("Not an epoch change at version {}", version))?;
@@ -155,9 +164,13 @@ impl LedgerStore {
     ) -> Result<TreeState> {
         Ok(TreeState::new(
             num_transactions,
-            Accumulator::get_frozen_subtree_hashes(self, num_transactions)?,
+            self.get_frozen_subtree_hashes(num_transactions)?,
             transaction_info.state_root_hash(),
         ))
+    }
+
+    pub fn get_frozen_subtree_hashes(&self, num_transactions: LeafCount) -> Result<Vec<HashValue>> {
+        Accumulator::get_frozen_subtree_hashes(self, num_transactions)
     }
 
     pub fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
@@ -222,11 +235,10 @@ impl LedgerStore {
 
     /// Gets an iterator that yields `num_transaction_infos` transaction infos starting from
     /// `start_version`.
-    #[cfg(test)]
-    fn get_transaction_info_iter(
+    pub fn get_transaction_info_iter(
         &self,
         start_version: Version,
-        num_transaction_infos: u64,
+        num_transaction_infos: usize,
     ) -> Result<TransactionInfoIter> {
         let mut iter = self
             .db
@@ -236,7 +248,7 @@ impl LedgerStore {
             inner: iter,
             expected_next_version: start_version,
             end_version: start_version
-                .checked_add(num_transaction_infos)
+                .checked_add(num_transaction_infos as u64)
                 .ok_or_else(|| format_err!("Too many transaction infos requested."))?,
         })
     }
@@ -350,7 +362,7 @@ impl LedgerStore {
     }
 }
 
-type Accumulator = MerkleAccumulator<LedgerStore, TransactionAccumulatorHasher>;
+pub(crate) type Accumulator = MerkleAccumulator<LedgerStore, TransactionAccumulatorHasher>;
 
 impl HashReader for LedgerStore {
     fn get(&self, position: Position) -> Result<HashValue> {

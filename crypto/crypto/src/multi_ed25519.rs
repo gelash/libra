@@ -5,6 +5,8 @@
 //! over the ed25519 twisted Edwards curve as defined in [RFC8032](https://tools.ietf.org/html/rfc8032).
 //!
 //! Signature verification also checks and rejects non-canonical signatures.
+#[cfg(feature = "vanilla")]
+use vanilla_ed25519_dalek as ed25519_dalek;
 
 use crate::{
     ed25519::{
@@ -13,11 +15,11 @@ use crate::{
     },
     hash::{CryptoHash, CryptoHasher},
     traits::*,
-    HashValue,
 };
 use anyhow::{anyhow, Result};
 use core::convert::TryFrom;
 use libra_crypto_derive::{DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
+use mirai_annotations::*;
 use rand::Rng;
 use serde::Serialize;
 use std::{convert::TryInto, fmt};
@@ -41,6 +43,11 @@ pub struct MultiEd25519PublicKey {
     public_keys: Vec<Ed25519PublicKey>,
     threshold: u8,
 }
+
+#[cfg(mirai)]
+use crate::tags::ValidatedPublicKeyTag;
+#[cfg(not(mirai))]
+struct ValidatedPublicKeyTag {}
 
 /// Vector of the multi-key signatures along with a 32bit [u8; 4] bitmap required to map signatures
 /// with their corresponding public keys.
@@ -139,27 +146,7 @@ impl SigningKey for MultiEd25519PrivateKey {
     type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SignatureMaterial = MultiEd25519Signature;
 
-    // Sign a message with the minimum amount of keys to meet threshold (starting from left-most keys).
-    fn sign_message(&self, message: &HashValue) -> MultiEd25519Signature {
-        let mut signatures: Vec<Ed25519Signature> = Vec::with_capacity(self.threshold as usize);
-        let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
-        signatures.extend(
-            self.private_keys
-                .iter()
-                .take(self.threshold as usize)
-                .enumerate()
-                .map(|(i, item)| {
-                    bitmap_set_bit(&mut bitmap, i);
-                    item.sign_message(message)
-                }),
-        );
-        MultiEd25519Signature { signatures, bitmap }
-    }
-
-    fn sign<T: CryptoHash + Serialize>(
-        &self,
-        message: &T,
-    ) -> Result<MultiEd25519Signature, CryptoMaterialError> {
+    fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> MultiEd25519Signature {
         let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
         let signatures: Vec<Ed25519Signature> = self
             .private_keys
@@ -170,9 +157,9 @@ impl SigningKey for MultiEd25519PrivateKey {
                 bitmap_set_bit(&mut bitmap, i);
                 item.sign(message)
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
 
-        Ok(MultiEd25519Signature { signatures, bitmap })
+        MultiEd25519Signature { signatures, bitmap }
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
@@ -318,9 +305,13 @@ impl TryFrom<&[u8]> for MultiEd25519PublicKey {
             .chunks_exact(ED25519_PUBLIC_KEY_LENGTH)
             .map(Ed25519PublicKey::try_from)
             .collect();
-        public_keys.map(|public_keys| MultiEd25519PublicKey {
-            public_keys,
-            threshold,
+        public_keys.map(|public_keys| {
+            let public_key = MultiEd25519PublicKey {
+                public_keys,
+                threshold,
+            };
+            add_tag!(&public_key, ValidatedPublicKeyTag);
+            public_key
         })
     }
 }
@@ -488,16 +479,13 @@ impl Signature for MultiEd25519Signature {
     type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SigningKeyMaterial = MultiEd25519PrivateKey;
 
-    /// Checks that `self` is valid for `message` using `public_key`.
-    fn verify(&self, message: &HashValue, public_key: &MultiEd25519PublicKey) -> Result<()> {
-        self.verify_arbitrary_msg(message.as_ref(), public_key)
-    }
-
-    fn verify_struct_msg<T: CryptoHash + Serialize>(
+    fn verify<T: CryptoHash + Serialize>(
         &self,
         message: &T,
         public_key: &MultiEd25519PublicKey,
     ) -> Result<()> {
+        // Public keys should be validated to be safe against small subgroup attacks, etc.
+        precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         let mut bytes = <T as CryptoHash>::Hasher::seed().to_vec();
         lcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)?;
@@ -512,6 +500,8 @@ impl Signature for MultiEd25519Signature {
         message: &[u8],
         public_key: &MultiEd25519PublicKey,
     ) -> Result<()> {
+        // Public keys should be validated to be safe against small subgroup attacks, etc.
+        precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         let last_bit = bitmap_last_set_bit(self.bitmap);
         if last_bit == None || last_bit.unwrap() as usize > public_key.length() {
             return Err(anyhow!(

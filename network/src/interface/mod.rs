@@ -69,11 +69,12 @@ where
         max_concurrent_reqs: usize,
         max_concurrent_notifs: usize,
         channel_size: usize,
+        max_frame_size: usize,
     ) -> (
         libra_channel::Sender<ProtocolId, NetworkRequest>,
         libra_channel::Receiver<ProtocolId, NetworkNotification>,
     ) {
-        let peer_id = connection.metadata.peer_id();
+        let peer_id = connection.metadata.peer_id;
 
         // Setup and start Peer actor.
         let (peer_reqs_tx, peer_reqs_rx) = channel::new(
@@ -110,6 +111,7 @@ where
             peer_notifs_tx,
             peer_rpc_notifs_tx,
             peer_ds_notifs_tx,
+            max_frame_size,
         );
         executor.spawn(peer.start());
 
@@ -302,7 +304,10 @@ where
                 }
             }
             _ => {
-                unreachable!("Unexpected notification received from Peer actor");
+                warn!(
+                    "Unexpected notification received from Peer actor: {:?}",
+                    notif
+                );
             }
         }
     }

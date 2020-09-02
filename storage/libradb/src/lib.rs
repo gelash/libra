@@ -21,6 +21,7 @@ mod change_set;
 mod event_store;
 mod ledger_counters;
 mod ledger_store;
+mod metrics;
 mod pruner;
 mod state_store;
 mod system_store;
@@ -34,12 +35,18 @@ mod libradb_test;
 pub use libradb_test::test_save_blocks_impl;
 
 use crate::{
-    backup::BackupHandler,
+    backup::{backup_handler::BackupHandler, restore_handler::RestoreHandler},
     change_set::{ChangeSet, SealedChangeSet},
     errors::LibraDbError,
     event_store::EventStore,
     ledger_counters::LedgerCounters,
     ledger_store::LedgerStore,
+    metrics::{
+        LIBRA_STORAGE_API_LATENCY_SECONDS, LIBRA_STORAGE_CF_SIZE_BYTES,
+        LIBRA_STORAGE_COMMITTED_TXNS, LIBRA_STORAGE_LATEST_TXN_VERSION,
+        LIBRA_STORAGE_LEDGER_VERSION, LIBRA_STORAGE_NEXT_BLOCK_EPOCH,
+        LIBRA_STORAGE_OTHER_TIMERS_SECONDS,
+    },
     pruner::Pruner,
     schema::*,
     state_store::StateStore,
@@ -48,13 +55,9 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use itertools::{izip, zip_eq};
-use jellyfish_merkle::{restore::JellyfishMerkleRestore, TreeReader, TreeWriter};
 use libra_crypto::hash::{CryptoHash, HashValue, SPARSE_MERKLE_PLACEHOLDER_HASH};
 use libra_logger::prelude::*;
-use libra_metrics::{
-    register_int_counter, register_int_gauge, register_int_gauge_vec, IntCounter, IntGauge,
-    IntGaugeVec, OpMetrics,
-};
+use libra_metrics::OpMetrics;
 use libra_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
@@ -64,7 +67,7 @@ use libra_types::{
     ledger_info::LedgerInfoWithSignatures,
     proof::{
         AccountStateProof, AccumulatorConsistencyProof, EventProof, SparseMerkleProof,
-        SparseMerkleRangeProof, TransactionListProof,
+        TransactionListProof,
     },
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit, TransactionWithProof,
@@ -72,39 +75,11 @@ use libra_types::{
     },
 };
 use once_cell::sync::Lazy;
-use schemadb::{DB, DEFAULT_CF_NAME};
+use schemadb::{ColumnFamilyName, DB, DEFAULT_CF_NAME};
 use std::{iter::Iterator, path::Path, sync::Arc, time::Instant};
-use storage_interface::{DbReader, DbWriter, StartupInfo, TreeState};
+use storage_interface::{DbReader, DbWriter, Order, StartupInfo, TreeState};
 
 static OP_COUNTER: Lazy<OpMetrics> = Lazy::new(|| OpMetrics::new_and_registered("storage"));
-
-pub static LIBRA_STORAGE_CF_SIZE_BYTES: Lazy<IntGaugeVec> = Lazy::new(|| {
-    register_int_gauge_vec!(
-        // metric name
-        "libra_storage_cf_size_bytes",
-        // metric description
-        "Libra storage Column Family size in bytes",
-        // metric labels (dimensions)
-        &["cf_name"]
-    )
-    .unwrap()
-});
-
-pub static LIBRA_STORAGE_COMMITTED_TXNS: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "libra_storage_committed_txns",
-        "Libra storage committed transactions"
-    )
-    .unwrap()
-});
-
-pub static LIBRA_STORAGE_LATEST_TXN_VERSION: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!(
-        "libra_storage_latest_transaction_version",
-        "Libra storage latest transaction version"
-    )
-    .unwrap()
-});
 
 const MAX_LIMIT: u64 = 1000;
 
@@ -122,6 +97,7 @@ fn error_if_too_many_requested(num_requested: u64, max_allowed: u64) -> Result<(
 
 /// This holds a handle to the underlying DB responsible for physical storage and provides APIs for
 /// access to the core Libra data structures.
+#[derive(Debug)]
 pub struct LibraDB {
     db: Arc<DB>,
     ledger_store: Arc<LedgerStore>,
@@ -133,12 +109,8 @@ pub struct LibraDB {
 }
 
 impl LibraDB {
-    pub fn open<P: AsRef<Path> + Clone>(
-        db_root_path: P,
-        readonly: bool,
-        prune_window: Option<u64>,
-    ) -> Result<Self> {
-        let column_families = vec![
+    fn column_families() -> Vec<ColumnFamilyName> {
+        vec![
             /* LedgerInfo CF = */ DEFAULT_CF_NAME,
             EPOCH_BY_VERSION_CF_NAME,
             EVENT_ACCUMULATOR_CF_NAME,
@@ -151,24 +123,13 @@ impl LibraDB {
             TRANSACTION_ACCUMULATOR_CF_NAME,
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
-        ];
+        ]
+    }
 
-        let path = db_root_path.as_ref().join("libradb");
-        let instant = Instant::now();
+    fn new_with_db(db: DB, prune_window: Option<u64>) -> Self {
+        let db = Arc::new(db);
 
-        let db = Arc::new(if readonly {
-            DB::open_readonly(path.clone(), "libradb_ro", column_families)?
-        } else {
-            DB::open(path.clone(), "libradb", column_families)?
-        });
-
-        info!(
-            "Opened LibraDB at {:?} in {} ms",
-            path,
-            instant.elapsed().as_millis()
-        );
-
-        Ok(LibraDB {
+        LibraDB {
             db: Arc::clone(&db),
             event_store: EventStore::new(Arc::clone(&db)),
             ledger_store: Arc::new(LedgerStore::new(Arc::clone(&db))),
@@ -176,7 +137,53 @@ impl LibraDB {
             transaction_store: Arc::new(TransactionStore::new(Arc::clone(&db))),
             system_store: SystemStore::new(Arc::clone(&db)),
             pruner: prune_window.map(|n| Pruner::new(Arc::clone(&db), n)),
-        })
+        }
+    }
+
+    pub fn open<P: AsRef<Path> + Clone>(
+        db_root_path: P,
+        readonly: bool,
+        prune_window: Option<u64>,
+    ) -> Result<Self> {
+        ensure!(
+            prune_window.is_none() || !readonly,
+            "Do not set prune_window when opening readonly.",
+        );
+
+        let path = db_root_path.as_ref().join("libradb");
+        let instant = Instant::now();
+
+        let db = if readonly {
+            DB::open_readonly(path.clone(), "libradb_ro", Self::column_families())?
+        } else {
+            DB::open(path.clone(), "libradb", Self::column_families())?
+        };
+
+        info!(
+            "Opened LibraDB at {:?} in {} ms",
+            path,
+            instant.elapsed().as_millis()
+        );
+
+        Ok(Self::new_with_db(db, prune_window))
+    }
+
+    pub fn open_as_secondary<P: AsRef<Path> + Clone>(
+        db_root_path: P,
+        secondary_path: P,
+    ) -> Result<Self> {
+        let primary_path = db_root_path.as_ref().join("libradb");
+        let secondary_path = secondary_path.as_ref().to_path_buf();
+
+        Ok(Self::new_with_db(
+            DB::open_as_secondary(
+                primary_path,
+                secondary_path,
+                "libradb_sec",
+                Self::column_families(),
+            )?,
+            None, // prune_window
+        ))
     }
 
     /// This opens db in non-readonly mode, without the pruner.
@@ -291,40 +298,17 @@ impl LibraDB {
         )
     }
 
-    pub fn restore_account_state(
-        &self,
-        iter: impl Iterator<Item = (Vec<(HashValue, AccountStateBlob)>, SparseMerkleRangeProof)>,
-        version: Version,
-        expected_root_hash: HashValue,
-    ) -> Result<()> {
-        let mut restore =
-            JellyfishMerkleRestore::new(&*self.state_store, version, expected_root_hash)?;
-        for (chunk, proof) in iter {
-            restore.add_chunk(chunk, proof)?;
-        }
-        restore.finish()?;
-        Ok(())
-    }
-
-    pub fn get_state_restore_receiver(
-        &self,
-        version: Version,
-        expected_root_hash: HashValue,
-    ) -> Result<JellyfishMerkleRestore<impl TreeReader + TreeWriter>> {
-        JellyfishMerkleRestore::new(&*self.state_store, version, expected_root_hash)
-    }
-
     // ================================== Private APIs ==================================
     fn get_events_by_event_key(
         &self,
         event_key: &EventKey,
         start_seq_num: u64,
-        ascending: bool,
+        order: Order,
         limit: u64,
         ledger_version: Version,
     ) -> Result<Vec<EventWithProof>> {
         error_if_too_many_requested(limit, MAX_LIMIT)?;
-        let get_latest = !ascending && start_seq_num == u64::max_value();
+        let get_latest = order == Order::Descending && start_seq_num == u64::max_value();
 
         let cursor = if get_latest {
             // Caller wants the latest, figure out the latest seq_num.
@@ -337,7 +321,7 @@ impl LibraDB {
         };
 
         // Convert requested range and order to a range in ascending order.
-        let (first_seq, real_limit) = get_first_seq_num_and_limit(ascending, cursor, limit)?;
+        let (first_seq, real_limit) = get_first_seq_num_and_limit(order, cursor, limit)?;
 
         // Query the index.
         let mut event_keys = self.event_store.lookup_events_by_key(
@@ -353,7 +337,7 @@ impl LibraDB {
         // For example, if the latest sequence number is 100, and the caller is asking for 110 to
         // 90, we will get 90 to 100 from the index lookup above. Seeing that the last item
         // is 100 instead of 110 tells us 110 is out of bound.
-        if !ascending {
+        if order == Order::Descending {
             if let Some((seq_num, _, _)) = event_keys.last() {
                 if *seq_num < cursor {
                     event_keys = Vec::new();
@@ -380,7 +364,7 @@ impl LibraDB {
                 Ok(EventWithProof::new(ver, idx, event, proof))
             })
             .collect::<Result<Vec<_>>>()?;
-        if !ascending {
+        if order == Order::Descending {
             events_with_proof.reverse();
         }
 
@@ -453,7 +437,7 @@ impl LibraDB {
                     s,
                     e,
                     t.gas_used(),
-                    t.major_status(),
+                    t.status().clone(),
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -472,6 +456,9 @@ impl LibraDB {
     fn commit(&self, sealed_cs: SealedChangeSet) -> Result<()> {
         self.db.write_schemas(sealed_cs.batch)?;
 
+        let _timer = LIBRA_STORAGE_OTHER_TIMERS_SECONDS
+            .with_label_values(&["get_approximate_cf_sizes"])
+            .start_timer();
         match self.db.get_approximate_sizes_cf() {
             Ok(cf_sizes) => {
                 for (cf_name, size) in cf_sizes {
@@ -503,6 +490,10 @@ impl DbReader for LibraDB {
         start_epoch: u64,
         end_epoch: u64,
     ) -> Result<EpochChangeProof> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_epoch_ending_ledger_infos"])
+            .start_timer();
+
         let (ledger_info_with_sigs, more) =
             Self::get_epoch_ending_ledger_infos(&self, start_epoch, end_epoch)?;
         Ok(EpochChangeProof::new(ledger_info_with_sigs, more))
@@ -512,6 +503,10 @@ impl DbReader for LibraDB {
         &self,
         address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_latest_account_state"])
+            .start_timer();
+
         let ledger_info_with_sigs = self.ledger_store.get_latest_ledger_info()?;
         let version = ledger_info_with_sigs.ledger_info().version();
         let (blob, _proof) = self
@@ -521,6 +516,10 @@ impl DbReader for LibraDB {
     }
 
     fn get_latest_ledger_info(&self) -> Result<LedgerInfoWithSignatures> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_latest_ledger_info"])
+            .start_timer();
+
         self.ledger_store.get_latest_ledger_info()
     }
 
@@ -533,6 +532,10 @@ impl DbReader for LibraDB {
         ledger_version: Version,
         fetch_events: bool,
     ) -> Result<Option<TransactionWithProof>> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_txn_by_account"])
+            .start_timer();
+
         self.transaction_store
             .lookup_transaction_by_account(address, seq_num, ledger_version)?
             .map(|version| self.get_transaction_with_proof(version, ledger_version, fetch_events))
@@ -550,6 +553,10 @@ impl DbReader for LibraDB {
         ledger_version: Version,
         fetch_events: bool,
     ) -> Result<TransactionListWithProof> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_transactions"])
+            .start_timer();
+
         error_if_too_many_requested(limit, MAX_LIMIT)?;
 
         if start_version > ledger_version || limit == 0 {
@@ -594,24 +601,32 @@ impl DbReader for LibraDB {
         &self,
         event_key: &EventKey,
         start: u64,
-        ascending: bool,
+        order: Order,
         limit: u64,
     ) -> Result<Vec<(u64, ContractEvent)>> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_events"])
+            .start_timer();
+
         let version = self
             .ledger_store
             .get_latest_ledger_info()?
             .ledger_info()
             .version();
         let events = self
-            .get_events_by_event_key(event_key, start, ascending, limit, version)?
+            .get_events_by_event_key(event_key, start, order, limit, version)?
             .into_iter()
             .map(|e| (e.transaction_version, e.event))
             .collect();
         Ok(events)
     }
 
-    /// Gets ledger info at specified version and ensures it's an epoch change.
+    /// Gets ledger info at specified version and ensures it's an epoch ending.
     fn get_epoch_ending_ledger_info(&self, version: u64) -> Result<LedgerInfoWithSignatures> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_epoch_ending_ledger_info"])
+            .start_timer();
+
         self.ledger_store.get_epoch_ending_ledger_info(version)
     }
 
@@ -620,6 +635,10 @@ impl DbReader for LibraDB {
         known_version: u64,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_state_proof_with_ledger_info"])
+            .start_timer();
+
         let ledger_info = ledger_info_with_sigs.ledger_info();
         let known_epoch = self.ledger_store.get_epoch(known_version)?;
         let epoch_change_proof = if known_epoch < ledger_info.next_block_epoch() {
@@ -644,6 +663,10 @@ impl DbReader for LibraDB {
         EpochChangeProof,
         AccumulatorConsistencyProof,
     )> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_state_proof"])
+            .start_timer();
+
         let ledger_info_with_sigs = self.ledger_store.get_latest_ledger_info()?;
         let (epoch_change_proof, ledger_consistency_proof) =
             self.get_state_proof_with_ledger_info(known_version, ledger_info_with_sigs.clone())?;
@@ -660,19 +683,25 @@ impl DbReader for LibraDB {
         version: Version,
         ledger_version: Version,
     ) -> Result<AccountStateWithProof> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_account_state_with_proof"])
+            .start_timer();
+
         ensure!(
             version <= ledger_version,
             "The queried version {} should be equal to or older than ledger version {}.",
             version,
             ledger_version
         );
-        let latest_version = self.get_latest_version()?;
-        ensure!(
-            ledger_version <= latest_version,
-            "The ledger version {} is greater than the latest version currently in ledger: {}",
-            ledger_version,
-            latest_version
-        );
+        {
+            let latest_version = self.get_latest_version()?;
+            ensure!(
+                ledger_version <= latest_version,
+                "ledger_version specified {} is greater than committed version {}.",
+                ledger_version,
+                latest_version
+            );
+        }
 
         let txn_info_with_proof = self
             .ledger_store
@@ -688,6 +717,10 @@ impl DbReader for LibraDB {
     }
 
     fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_startup_info"])
+            .start_timer();
+
         self.ledger_store.get_startup_info()
     }
 
@@ -696,16 +729,28 @@ impl DbReader for LibraDB {
         address: AccountAddress,
         version: Version,
     ) -> Result<(Option<AccountStateBlob>, SparseMerkleProof)> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_account_state_with_proof_by_version"])
+            .start_timer();
+
         self.state_store
             .get_account_state_with_proof_by_version(address, version)
     }
 
     fn get_latest_state_root(&self) -> Result<(Version, HashValue)> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_latest_state_root"])
+            .start_timer();
+
         let (version, txn_info) = self.ledger_store.get_latest_transaction_info()?;
         Ok((version, txn_info.state_root_hash()))
     }
 
     fn get_latest_tree_state(&self) -> Result<TreeState> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_latest_tree_state"])
+            .start_timer();
+
         let tree_state = match self.ledger_store.get_latest_transaction_info_option()? {
             Some((version, txn_info)) => self.ledger_store.get_tree_state(version + 1, txn_info)?,
             None => TreeState::new(
@@ -721,12 +766,20 @@ impl DbReader for LibraDB {
     }
 
     fn get_block_timestamp(&self, version: u64) -> Result<u64> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["get_block_timestamp"])
+            .start_timer();
+
         let ts = match self.transaction_store.get_block_metadata(version)? {
             Some((_v, block_meta)) => block_meta.into_inner()?.1,
             // genesis timestamp is 0
             None => 0,
         };
         Ok(ts)
+    }
+
+    fn get_latest_transaction_info_option(&self) -> Result<Option<(Version, TransactionInfo)>> {
+        self.ledger_store.get_latest_transaction_info_option()
     }
 }
 
@@ -742,6 +795,10 @@ impl DbWriter for LibraDB {
         first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
     ) -> Result<()> {
+        let _timer = LIBRA_STORAGE_API_LATENCY_SECONDS
+            .with_label_values(&["save_transactions"])
+            .start_timer();
+
         let num_txns = txns_to_commit.len() as u64;
         // ledger_info_with_sigs could be None if we are doing state synchronization. In this case
         // txns_to_commit should not be empty. Otherwise it is okay to commit empty blocks.
@@ -781,10 +838,21 @@ impl DbWriter for LibraDB {
 
         // Persist.
         let (sealed_cs, counters) = self.seal_change_set(first_version, num_txns, cs)?;
-        self.commit(sealed_cs)?;
+        {
+            let _timer = LIBRA_STORAGE_OTHER_TIMERS_SECONDS
+                .with_label_values(&["save_transactions_commit"])
+                .start_timer();
+            self.commit(sealed_cs)?;
+        }
+
         // Once everything is successfully persisted, update the latest in-memory ledger info.
         if let Some(x) = ledger_info_with_sigs {
             self.ledger_store.set_latest_ledger_info(x.clone());
+
+            self.wake_pruner(x.ledger_info().version());
+
+            LIBRA_STORAGE_LEDGER_VERSION.set(x.ledger_info().version() as i64);
+            LIBRA_STORAGE_NEXT_BLOCK_EPOCH.set(x.ledger_info().next_block_epoch() as i64);
         }
 
         // Only increment counter if commit succeeds and there are at least one transaction written
@@ -798,8 +866,6 @@ impl DbWriter for LibraDB {
             counters
                 .expect("Counters should be bumped with transactions being saved.")
                 .bump_op_counters();
-
-            self.wake_pruner(last_version);
         }
 
         Ok(())
@@ -807,14 +873,31 @@ impl DbWriter for LibraDB {
 }
 
 // Convert requested range and order to a range in ascending order.
-fn get_first_seq_num_and_limit(ascending: bool, cursor: u64, limit: u64) -> Result<(u64, u64)> {
+fn get_first_seq_num_and_limit(order: Order, cursor: u64, limit: u64) -> Result<(u64, u64)> {
     ensure!(limit > 0, "limit should > 0, got {}", limit);
 
-    Ok(if ascending {
+    Ok(if order == Order::Ascending {
         (cursor, limit)
     } else if limit <= cursor {
         (cursor - limit + 1, limit)
     } else {
         (0, cursor + 1)
     })
+}
+
+pub trait GetRestoreHandler {
+    /// Gets an instance of `RestoreHandler` for data restore purpose.
+    fn get_restore_handler(&self) -> RestoreHandler;
+}
+
+impl GetRestoreHandler for Arc<LibraDB> {
+    fn get_restore_handler(&self) -> RestoreHandler {
+        RestoreHandler::new(
+            Arc::clone(&self.db),
+            Arc::clone(self),
+            Arc::clone(&self.ledger_store),
+            Arc::clone(&self.transaction_store),
+            Arc::clone(&self.state_store),
+        )
+    }
 }

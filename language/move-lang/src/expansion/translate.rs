@@ -804,12 +804,31 @@ fn spec_member(
     use E::SpecBlockMember_ as EM;
     use P::SpecBlockMember_ as PM;
     let em = match pm {
-        PM::Condition { kind, exp } => {
+        PM::Condition {
+            kind,
+            properties: pproperties,
+            exp,
+            additional_exps,
+        } => {
+            let properties = pproperties
+                .into_iter()
+                .map(|p| pragma_property(context, p))
+                .collect();
             let exp = exp_(context, exp);
-            EM::Condition { kind, exp }
+            let additional_exps = additional_exps
+                .into_iter()
+                .map(|e| exp_(context, e))
+                .collect();
+            EM::Condition {
+                kind,
+                properties,
+                exp,
+                additional_exps,
+            }
         }
         PM::Function {
             name,
+            uninterpreted,
             signature,
             body,
         } => {
@@ -818,6 +837,7 @@ fn spec_member(
             let signature = function_signature(context, signature);
             context.set_to_outer_scope(old_aliases);
             EM::Function {
+                uninterpreted,
                 name,
                 signature,
                 body,
@@ -839,6 +859,10 @@ fn spec_member(
                 type_parameters,
                 type_: t,
             }
+        }
+        PM::Let { name, def: pdef } => {
+            let def = exp_(context, pdef);
+            EM::Let { name, def }
         }
         PM::Include { exp: pexp } => EM::Include {
             exp: exp_(context, pexp),
@@ -1416,12 +1440,22 @@ fn unbound_names_spec_block(unbound: &mut BTreeSet<Name>, sp!(_, sb_): &E::SpecB
 
 fn unbound_names_spec_block_member(unbound: &mut BTreeSet<Name>, sp!(_, m_): &E::SpecBlockMember) {
     use E::SpecBlockMember_ as M;
-    match m_ {
-        M::Condition { exp, .. } => unbound_names_exp(unbound, exp),
+    match &m_ {
+        M::Condition {
+            exp,
+            additional_exps,
+            ..
+        } => {
+            unbound_names_exp(unbound, exp);
+            additional_exps
+                .iter()
+                .for_each(|e| unbound_names_exp(unbound, e));
+        }
         // No unbound names
-        // And will error in the move prover
+        // And will error in the Move prover
         M::Function { .. }
         | M::Variable { .. }
+        | M::Let { .. }
         | M::Include { .. }
         | M::Apply { .. }
         | M::Pragma { .. } => (),

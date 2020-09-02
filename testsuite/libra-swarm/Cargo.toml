@@ -10,9 +10,9 @@ publish = false
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.31"
-ctrlc = { version = "3.1.4", default-features = false }
-structopt = "0.3.15"
+anyhow = "1.0.32"
+ctrlc = { version = "3.1.6", default-features = false }
+structopt = "0.3.17"
 thiserror = "1.0.20"
 config-builder = { path = "../../config/config-builder", version = "0.1.0" }
 libra-config = { path = "../../config", version = "0.1.0", features = ["fuzzing"] }
@@ -21,6 +21,7 @@ generate-key = { path = "../../config/generate-key", version = "0.1.0" }
 libra-crypto = { path = "../../crypto/crypto", version = "0.1.0", features = ["cloneable-private-keys"] }
 libra-logger = { path = "../../common/logger", version = "0.1.0" }
 libra-management = {path = "../../config/management", version = "0.1.0", features = ["testing"] }
+libra-genesis-tool = {path = "../../config/management/genesis", version = "0.1.0", features = ["testing"] }
 libra-secure-storage = { path = "../../secure/storage", version = "0.1.0", features = ["testing"] }
 libra-temppath = { path = "../../common/temppath", version = "0.1.0" }
 libra-types = { path = "../../types", version = "0.1.0" }

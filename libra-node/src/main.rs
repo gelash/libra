@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 use libra_config::config::NodeConfig;
+use libra_logger::prelude::*;
 use libra_types::PeerId;
 use std::{
     path::PathBuf,
@@ -31,7 +32,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 fn main() {
     let args = Args::from_args();
 
-    let mut config = NodeConfig::load(args.config).expect("Failed to load node config");
+    let config = NodeConfig::load(args.config).expect("Failed to load node config");
     println!("Using node config {:?}", &config);
     crash_handler::setup_panic_handler();
 
@@ -42,6 +43,9 @@ fn main() {
             .level(config.logger.level)
             .init();
         libra_logger::init_struct_log_from_env().expect("Failed to initialize structured logging");
+
+        // Let's now log some important information, since the logger is set up
+        sl_info!(StructuredLogEntry::new_named("config", "startup").data("config", &config));
     }
 
     if config.metrics.enabled {
@@ -55,9 +59,18 @@ fn main() {
             setup_metrics(peer_id, &config);
         }
     }
+    if fail::has_failpoints() {
+        warn!("Failpoints is enabled");
+        if let Some(failpoints) = &config.failpoints {
+            for (point, actions) in failpoints {
+                fail::cfg(point, actions).expect("fail to set actions for failpoint");
+            }
+        }
+    } else if config.failpoints.is_some() {
+        warn!("failpoints is set in config, but the binary doesn't compile with this feature");
+    }
 
-    let _node_handle = libra_node::main_node::setup_environment(&mut config);
-
+    let _node_handle = libra_node::main_node::setup_environment(&config);
     let term = Arc::new(AtomicBool::new(false));
 
     while !term.load(Ordering::Acquire) {

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use tokio::io::AsyncReadExt;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct EnvVar {
     pub key: String,
     pub value: String,
@@ -35,7 +35,7 @@ impl EnvVar {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub struct Commands {
     /// Command line to create backup.
     /// input env vars:
@@ -56,9 +56,17 @@ pub struct Commands {
     ///     $FILE_NAME
     /// expected stdout to stream out bytes of the file.
     pub open_for_read: String,
+    /// Command line to save a line of metadata
+    /// input env vars:
+    ///     $FILE_NAME
+    /// stdin will be fed with a line of text with a trailing newline.
+    pub save_metadata_line: String,
+    /// Command line to list all existing metadata file handles.
+    /// expected stdout to stream out lines of file handles.
+    pub list_metadata_files: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub struct CommandAdapterConfig {
     /// Command lines that implements `BackupStorage` APIs.
     pub commands: Commands,

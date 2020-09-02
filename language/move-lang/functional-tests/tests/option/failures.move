@@ -8,7 +8,7 @@ fun main() {
 }
 }
 
-// check: NATIVE_FUNCTION_ERROR
+// check: "Keep(ABORTED { code: 263,"
 
 
 //! new-transaction
@@ -20,8 +20,7 @@ fun main() {
 }
 }
 
-// check: NATIVE_FUNCTION_ERROR
-
+// check: "Keep(ABORTED { code: 263,"
 
 //! new-transaction
 script {
@@ -32,7 +31,7 @@ fun main() {
 }
 }
 
-// check: NATIVE_FUNCTION_ERROR
+// check: "Keep(ABORTED { code: 263,"
 
 
 //! new-transaction
@@ -44,7 +43,7 @@ fun main() {
 }
 }
 
-// check: NATIVE_FUNCTION_ERROR
+// check: "Keep(ABORTED { code: 263,"
 
 
 //! new-transaction
@@ -56,5 +55,4 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 99
+// check: "Keep(ABORTED { code: 7,"

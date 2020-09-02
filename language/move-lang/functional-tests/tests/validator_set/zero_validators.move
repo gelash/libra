@@ -5,17 +5,17 @@
 //! block-time: 3
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main() {
         LibraSystem::get_validator_config({{vivian}});
     }
 }
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -29,27 +29,14 @@ script {
         };
     }
 }
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
-script {
-    use 0x1::LibraSystem;
-    fun main(account: &signer) {
-        LibraSystem::update_and_reconfigure(account);
-        let num_validators = LibraSystem::validator_set_size();
-        assert(num_validators == 0, 98);
-    }
-}
-// check: EXECUTED
-
-//! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main() {
         LibraSystem::get_validator_config({{vivian}});
     }
 }
-// check: ABORTED
-// check: 33
+// check: "Keep(ABORTED { code: 775,"

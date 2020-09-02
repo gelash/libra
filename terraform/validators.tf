@@ -197,24 +197,11 @@ resource "aws_instance" "validator" {
   }
 }
 
-resource "random_id" "chain_id" {
-  byte_length = 2
-}
-
 locals {
   seed_peer_ip           = aws_instance.validator.0.private_ip
   validator_command      = var.log_to_file || var.enable_logstash ? jsonencode(["bash", "-c", "/docker-run-dynamic.sh >> ${var.log_path} 2>&1"]) : ""
   aws_elasticsearch_host = var.enable_logstash ? join(",", aws_elasticsearch_domain.logging.*.endpoint) : ""
   logstash_config        = "input { file { path => '${var.structlog_path}'\\n codec => 'json'\\n}}\\n filter {  json {  \\nsource => 'message'\\n}}\\n output {  amazon_es { \\nhosts => ['https://${local.aws_elasticsearch_host}']\\nregion => 'us-west-2'\\nindex => 'validator-logs-%%{+YYYY.MM.dd}'\\n}}"
-  chain_id               = "ecs-${terraform.workspace}-${random_id.chain_id.hex}"
-}
-
-data "template_file" "validator_config" {
-  template = file("templates/validator.yaml")
-
-  vars = {
-    chain_id = local.chain_id
-  }
 }
 
 data "template_file" "ecs_task_definition" {
@@ -230,7 +217,7 @@ data "template_file" "ecs_task_definition" {
     command      = local.validator_command
     capabilities = jsonencode(var.validator_linux_capabilities)
 
-    cfg_base_config               = jsonencode(data.template_file.validator_config.rendered)
+    cfg_chain_id                  = var.chain_id
     cfg_listen_addr               = var.validator_use_public_ip == true ? element(aws_instance.validator.*.public_ip, count.index) : element(aws_instance.validator.*.private_ip, count.index)
     cfg_num_validators            = var.cfg_num_validators_override == 0 ? var.num_validators : var.cfg_num_validators_override
     cfg_num_validators_in_genesis = var.num_validators_in_genesis == 0 ? var.num_validators : var.num_validators_in_genesis

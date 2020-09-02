@@ -1,94 +1,102 @@
 //! account: alice, 1000000, 0, validator
+//! account: bob, 0, 0, address
 //! account: vivian, 1000000, 0, validator
+//! account: dave, 0, 0, address
 //! account: viola, 1000000, 0, validator
 
 //! new-transaction
+//! sender: libraroot
+//! args: 0, {{bob}}, {{bob::auth_key}}, b"bob"
+stdlib_script::create_validator_operator_account
+// check: "Keep(EXECUTED)"
+
+//! new-transaction
+//! sender: libraroot
+//! args: 0, {{dave}}, {{dave::auth_key}}, b"dave"
+stdlib_script::create_validator_operator_account
+// check: "Keep(EXECUTED)"
+
+//! new-transaction
 //! sender: alice
+script {
+    use 0x1::ValidatorConfig;
+    fun main(account: &signer) {
+        // set bob to change alice's key
+        ValidatorConfig::set_operator(account, {{bob}});
+    }
+}
+
+// check: "Keep(EXECUTED)"
+
+//! new-transaction
+//! sender: vivian
+script {
+    use 0x1::ValidatorConfig;
+    fun main(account: &signer) {
+        // set dave to change vivian's key
+        ValidatorConfig::set_operator(account, {{dave}});
+    }
+}
+
+// check: "Keep(EXECUTED)"
+
+//! new-transaction
+//! sender: bob
 script{
     use 0x1::ValidatorConfig;
     // rotate alice's pubkey
     fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{alice}},
-                                    x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-                                    x"", x"", x"", x"");
+        ValidatorConfig::set_config(account, {{alice}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
     }
 }
 
 // check: events: []
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! block-prologue
 //! proposer: vivian
 //! block-time: 2
 
 // not: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: vivian
-script{
-    use 0x1::ValidatorConfig;
-
-    // rotate vivian's pubkey and then run the block prologue. Now, reconfiguration should be triggered.
-    fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{vivian}},
-                                    x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-                                    x"", x"", x"", x"");
-    }
-}
-
-// check: EXECUTED
-
-//! new-transaction
-//! sender: association
+//! sender: dave
 script{
     use 0x1::LibraSystem;
     use 0x1::ValidatorConfig;
-
     // rotate vivian's pubkey and then run the block prologue. Now, reconfiguration should be triggered.
     fun main(account: &signer) {
-        LibraSystem::update_and_reconfigure(account);
+        assert(*ValidatorConfig::get_consensus_pubkey(&LibraSystem::get_validator_config({{vivian}})) !=
+               x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", 98);
+        ValidatorConfig::set_config(account, {{vivian}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
+        LibraSystem::update_config_and_reconfigure(account, {{vivian}});
         // check that the validator set contains Vivian's new key after reconfiguration
         assert(*ValidatorConfig::get_consensus_pubkey(&LibraSystem::get_validator_config({{vivian}})) ==
-               x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", 98);
+               x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", 99);
     }
 }
 
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! block-prologue
 //! proposer: vivian
 //! block-time: 3
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: vivian
-script{
-    use 0x1::ValidatorConfig;
-    // rotate vivian's pubkey to the same value.
-    fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{vivian}},
-                                    x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-                                    x"", x"", x"", x"");
-    }
-}
-
-// not: NewEpochEvent
-// check: EXECUTED
-
-//! new-transaction
-//! sender: association
+//! sender: dave
 script{
     use 0x1::LibraSystem;
-    // No reconfiguration should be
-    // triggered. the not "NewEpochEvent" check part tests this because reconfiguration always emits a
-    // NewEpoch event.
+    use 0x1::ValidatorConfig;
+    // rotate vivian's pubkey to the same value does not trigger the reconfiguration.
     fun main(account: &signer) {
-        LibraSystem::update_and_reconfigure(account);
+        ValidatorConfig::set_config(account, {{vivian}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
+        LibraSystem::update_config_and_reconfigure(account, {{vivian}});
     }
 }
 
 // not: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"

@@ -10,7 +10,7 @@
 //! block-time: 2
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script{
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -19,7 +19,7 @@ script{
 }
 
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! block-prologue
 //! proposer: viola
@@ -37,4 +37,4 @@ script{
     }
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"

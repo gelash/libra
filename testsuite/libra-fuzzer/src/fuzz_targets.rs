@@ -6,42 +6,78 @@ use anyhow::{format_err, Result};
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, env};
 
-/// Convenience macro to return the module name.
-macro_rules! module_name {
-    () => {
-        module_path!()
-            .rsplit("::")
-            .next()
-            .expect("module path must have at least one component")
-    };
-}
-
 // List fuzz target modules here.
-mod compiled_module;
-mod consensus_proposal;
-mod inbound_rpc_protocol;
-mod inner_signed_transaction;
+mod consensus;
+mod executor;
 mod json_rpc_service;
-mod language_transaction_execution;
-mod network_noise_initiator;
-mod network_noise_responder;
-//mod storage_save_blocks;
-mod storage_schema_decode;
-mod vm_value;
+mod mempool;
+mod move_vm;
+mod network;
+mod network_noise;
+mod safety_rules;
+mod secure_json_rpc_client;
+mod secure_storage_vault;
+mod state_sync;
+mod storage;
+mod transaction;
+mod vm;
 
 static ALL_TARGETS: Lazy<BTreeMap<&'static str, Box<dyn FuzzTargetImpl>>> = Lazy::new(|| {
+    // List fuzz targets here in this format:
     let targets: Vec<Box<dyn FuzzTargetImpl>> = vec![
-        // List fuzz targets here in this format.
-        Box::new(compiled_module::CompiledModuleTarget::default()),
-        Box::new(consensus_proposal::ConsensusProposal::default()),
-        Box::new(inbound_rpc_protocol::RpcInboundRequest::default()),
-        Box::new(inner_signed_transaction::SignedTransactionTarget::default()),
+        // Consensus
+        Box::new(consensus::ConsensusProposal::default()),
+        // Executor
+        Box::new(executor::ExecuteAndCommitBlocks::default()),
+        Box::new(executor::ExecuteAndCommitChunk::default()),
+        // JSON RPC Service
         Box::new(json_rpc_service::JsonRpcSubmitTransactionRequest::default()),
-        Box::new(network_noise_initiator::NetworkNoiseInitiator::default()),
-        Box::new(network_noise_responder::NetworkNoiseResponder::default()),
-        //        Box::new(storage_save_blocks::StorageSaveBlocks::default()),
-        Box::new(storage_schema_decode::StorageSchemaDecode::default()),
-        Box::new(vm_value::ValueTarget::default()),
+        // Mempool
+        Box::new(mempool::MempoolIncomingTransactions::default()),
+        // Move VM
+        Box::new(move_vm::ValueTarget::default()),
+        // Network
+        Box::new(network::RpcInboundRequest::default()),
+        Box::new(network::NetworkNoiseInitiator::default()),
+        Box::new(network::NetworkNoiseResponder::default()),
+        Box::new(network::NetworkNoiseStream::default()),
+        Box::new(network::NetworkHandshakeExchange::default()),
+        Box::new(network::NetworkHandshakeNegotiation::default()),
+        // Safety Rules Server (LSR)
+        Box::new(safety_rules::SafetyRulesConstructAndSignVote::default()),
+        Box::new(safety_rules::SafetyRulesInitialize::default()),
+        Box::new(safety_rules::SafetyRulesHandleMessage::default()),
+        Box::new(safety_rules::SafetyRulesSignProposal::default()),
+        Box::new(safety_rules::SafetyRulesSignTimeout::default()),
+        // Secure JSON RPC Client
+        Box::new(secure_json_rpc_client::SecureJsonRpcSubmitTransaction::default()),
+        Box::new(secure_json_rpc_client::SecureJsonRpcGetAccountState::default()),
+        Box::new(secure_json_rpc_client::SecureJsonRpcGetAccountTransaction::default()),
+        // Secure Storage Vault
+        Box::new(secure_storage_vault::VaultGenericResponse::default()),
+        Box::new(secure_storage_vault::VaultPolicyReadResponse::default()),
+        Box::new(secure_storage_vault::VaultPolicyListResponse::default()),
+        Box::new(secure_storage_vault::VaultSecretListResponse::default()),
+        Box::new(secure_storage_vault::VaultSecretReadResponse::default()),
+        Box::new(secure_storage_vault::VaultTokenCreateResponse::default()),
+        Box::new(secure_storage_vault::VaultTokenRenewResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitCreateResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitExportResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitListResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitReadResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitRestoreResponse::default()),
+        Box::new(secure_storage_vault::VaultTransitSignResponse::default()),
+        Box::new(secure_storage_vault::VaultUnsealedResponse::default()),
+        // State Sync
+        Box::new(state_sync::StateSyncMsg::default()),
+        // Storage
+        // Box::new(storage::StorageSaveBlocks::default()),
+        Box::new(storage::StorageSchemaDecode::default()),
+        // Transaction
+        Box::new(transaction::LanguageTransactionExecution::default()),
+        Box::new(transaction::SignedTransactionTarget::default()),
+        // VM
+        Box::new(vm::CompiledModuleTarget::default()),
     ];
     targets
         .into_iter()

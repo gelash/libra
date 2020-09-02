@@ -87,21 +87,21 @@ fn main() {
     disassembler_options.print_basic_blocks = !args.skip_basic_blocks;
     disassembler_options.print_locals = !args.skip_locals;
 
-    // TODO: make source mapping work with the move source language
+    // TODO: make source mapping work with the Move source language
     let no_loc = Spanned::unsafe_no_loc(()).loc;
     let mut source_mapping = if args.is_script {
         let compiled_script = CompiledScript::deserialize(&bytecode_bytes)
             .expect("Script blob can't be deserialized");
         source_map
             .or_else(|_| SourceMap::dummy_from_script(&compiled_script, no_loc))
-            .and_then(|source_map| Ok(SourceMapping::new_from_script(source_map, compiled_script)))
+            .map(|source_map| SourceMapping::new_from_script(source_map, compiled_script))
             .expect("Unable to build source mapping for compiled script")
     } else {
         let compiled_module = CompiledModule::deserialize(&bytecode_bytes)
             .expect("Module blob can't be deserialized");
         source_map
             .or_else(|_| SourceMap::dummy_from_module(&compiled_module, no_loc))
-            .and_then(|source_map| Ok(SourceMapping::new(source_map, compiled_module)))
+            .map(|source_map| SourceMapping::new(source_map, compiled_module))
             .expect("Unable to build source mapping for compiled module")
     };
 

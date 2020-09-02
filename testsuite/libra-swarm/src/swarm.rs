@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 use config_builder::SwarmConfig;
 use debug_interface::NodeDebugClient;
 use libra_config::config::{NodeConfig, RoleType};
+use libra_genesis_tool::config_builder::{FullnodeBuilder, FullnodeType, ValidatorBuilder};
 use libra_logger::prelude::*;
-use libra_management::config_builder::{FullnodeBuilder, FullnodeType, ValidatorBuilder};
 use libra_temppath::TempPath;
 use libra_types::account_address::AccountAddress;
 use std::{
@@ -19,8 +19,6 @@ use std::{
     str::FromStr,
 };
 use thiserror::Error;
-
-const LIBRA_NODE_BIN: &str = "libra-node";
 
 pub struct LibraNode {
     node: Child,
@@ -57,7 +55,7 @@ impl LibraNode {
     /// substantially longer time than the networking ports are reserved. Calling prior to
     /// reserving those ports will reduce the liklihood of issues.
     pub fn prepare() {
-        Command::new(workspace_builder::get_bin(LIBRA_NODE_BIN));
+        Command::new(workspace_builder::get_libra_node_with_failpoints());
     }
 
     pub fn launch(
@@ -75,7 +73,7 @@ impl LibraNode {
             RoleType::Validator => Some(config.validator_network.as_ref().unwrap().peer_id()),
             RoleType::FullNode => None,
         };
-        let mut node_command = Command::new(workspace_builder::get_bin(LIBRA_NODE_BIN));
+        let mut node_command = Command::new(workspace_builder::get_libra_node_with_failpoints());
         node_command
             .current_dir(workspace_builder::workspace_root())
             .arg("-f")
@@ -125,7 +123,7 @@ impl LibraNode {
         Ok(contents)
     }
 
-    fn get_metric(&mut self, metric_name: &str) -> Option<i64> {
+    pub fn get_metric(&mut self, metric_name: &str) -> Option<i64> {
         match self.debug_client.get_node_metric(metric_name) {
             Err(e) => {
                 println!(
@@ -281,7 +279,7 @@ impl LibraSwarm {
         let config_path = &swarm_config_dir.as_ref().to_path_buf();
         let builder = FullnodeBuilder::new(
             upstream_config.config_files.clone(),
-            upstream_config.faucet_key_path.clone(),
+            upstream_config.libra_root_key_path.clone(),
             node_config,
             fn_type,
         );

@@ -131,9 +131,12 @@ pub type SpecBlock = Spanned<SpecBlock_>;
 pub enum SpecBlockMember_ {
     Condition {
         kind: SpecConditionKind,
+        properties: Vec<PragmaProperty>,
         exp: Exp,
+        additional_exps: Vec<Exp>,
     },
     Function {
+        uninterpreted: bool,
         name: FunctionName,
         signature: FunctionSignature,
         body: FunctionBody,
@@ -143,6 +146,10 @@ pub enum SpecBlockMember_ {
         name: Name,
         type_parameters: Vec<(Name, Kind)>,
         type_: Type,
+    },
+    Let {
+        name: Name,
+        def: Exp,
     },
     Include {
         exp: Exp,
@@ -463,16 +470,28 @@ impl AstDebug for SpecBlock_ {
 impl AstDebug for SpecBlockMember_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            SpecBlockMember_::Condition { kind, exp } => {
+            SpecBlockMember_::Condition {
+                kind,
+                properties: _,
+                exp,
+                additional_exps,
+            } => {
                 kind.ast_debug(w);
                 exp.ast_debug(w);
+                w.list(additional_exps, ",", |w, e| {
+                    e.ast_debug(w);
+                    true
+                });
             }
             SpecBlockMember_::Function {
+                uninterpreted,
                 signature,
                 name,
                 body,
             } => {
-                if let FunctionBody_::Native = &body.value {
+                if *uninterpreted {
+                    w.write("uninterpreted ")
+                } else if let FunctionBody_::Native = &body.value {
                     w.write("native ");
                 }
                 w.write(&format!("define {}", name));
@@ -497,6 +516,10 @@ impl AstDebug for SpecBlockMember_ {
                 type_parameters.ast_debug(w);
                 w.write(": ");
                 type_.ast_debug(w);
+            }
+            SpecBlockMember_::Let { name, def } => {
+                w.write(&format!("let {} = ", name));
+                def.ast_debug(w);
             }
             SpecBlockMember_::Include { exp } => {
                 w.write("include ");

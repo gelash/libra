@@ -72,6 +72,8 @@ pub const FIELD_OFFSET_MAX: u64 = 255;
 pub const TYPE_PARAMETER_COUNT_MAX: u64 = 255;
 pub const TYPE_PARAMETER_INDEX_MAX: u64 = 65536;
 
+pub const SIGNATURE_TOKEN_DEPTH_MAX: usize = 256;
+
 /// Constants for table types in the binary.
 ///
 /// The binary contains a subset of those tables. A table specification is a tuple (table type,
@@ -189,12 +191,12 @@ pub enum Opcodes {
     LE                          = 0x25,
     GE                          = 0x26,
     ABORT                       = 0x27,
-    GET_TXN_SENDER              = 0x28,
+    NOP                         = 0x28,
     EXISTS                      = 0x29,
     MUT_BORROW_GLOBAL           = 0x2A,
     IMM_BORROW_GLOBAL           = 0x2B,
     MOVE_FROM                   = 0x2C,
-    MOVE_TO_SENDER              = 0x2D,
+    MOVE_TO                     = 0x2D,
     FREEZE_REF                  = 0x2E,
     SHL                         = 0x2F,
     SHR                         = 0x30,
@@ -212,10 +214,7 @@ pub enum Opcodes {
     MUT_BORROW_GLOBAL_GENERIC   = 0x3C,
     IMM_BORROW_GLOBAL_GENERIC   = 0x3D,
     MOVE_FROM_GENERIC           = 0x3E,
-    MOVE_TO_SENDER_GENERIC      = 0x3F,
-    NOP                         = 0x40,
-    MOVE_TO                     = 0x41,
-    MOVE_TO_GENERIC             = 0x42,
+    MOVE_TO_GENERIC             = 0x3F,
 }
 
 /// Upper limit on the binary size
@@ -223,7 +222,7 @@ pub const BINARY_SIZE_LIMIT: usize = usize::max_value();
 
 /// A wrapper for the binary vector
 #[derive(Default, Debug)]
-pub struct BinaryData {
+pub(crate) struct BinaryData {
     _binary: Vec<u8>,
 }
 
@@ -275,10 +274,12 @@ impl BinaryData {
         self._binary.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self._binary.is_empty()
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self._binary.clear();
     }
@@ -290,7 +291,7 @@ impl From<Vec<u8>> for BinaryData {
     }
 }
 
-pub fn write_u64_as_uleb128(binary: &mut BinaryData, mut val: u64) -> Result<()> {
+pub(crate) fn write_u64_as_uleb128(binary: &mut BinaryData, mut val: u64) -> Result<()> {
     loop {
         let cur = val & 0x7f;
         if cur != val {
@@ -305,22 +306,23 @@ pub fn write_u64_as_uleb128(binary: &mut BinaryData, mut val: u64) -> Result<()>
 }
 
 /// Write a `u16` in Little Endian format.
-pub fn write_u16(binary: &mut BinaryData, value: u16) -> Result<()> {
+#[allow(dead_code)]
+pub(crate) fn write_u16(binary: &mut BinaryData, value: u16) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
 /// Write a `u32` in Little Endian format.
-pub fn write_u32(binary: &mut BinaryData, value: u32) -> Result<()> {
+pub(crate) fn write_u32(binary: &mut BinaryData, value: u32) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
 /// Write a `u64` in Little Endian format.
-pub fn write_u64(binary: &mut BinaryData, value: u64) -> Result<()> {
+pub(crate) fn write_u64(binary: &mut BinaryData, value: u64) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
 /// Write a `u128` in Little Endian format.
-pub fn write_u128(binary: &mut BinaryData, value: u128) -> Result<()> {
+pub(crate) fn write_u128(binary: &mut BinaryData, value: u128) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
@@ -422,14 +424,11 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         Le => Opcodes::LE,
         Ge => Opcodes::GE,
         Abort => Opcodes::ABORT,
-        GetTxnSenderAddress => Opcodes::GET_TXN_SENDER,
+        Nop => Opcodes::NOP,
         Exists(_) => Opcodes::EXISTS,
         ExistsGeneric(_) => Opcodes::EXISTS_GENERIC,
         MoveFrom(_) => Opcodes::MOVE_FROM,
         MoveFromGeneric(_) => Opcodes::MOVE_FROM_GENERIC,
-        MoveToSender(_) => Opcodes::MOVE_TO_SENDER,
-        MoveToSenderGeneric(_) => Opcodes::MOVE_TO_SENDER_GENERIC,
-        Nop => Opcodes::NOP,
         MoveTo(_) => Opcodes::MOVE_TO,
         MoveToGeneric(_) => Opcodes::MOVE_TO_GENERIC,
     };

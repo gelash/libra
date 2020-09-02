@@ -5,7 +5,7 @@ use crate::values::*;
 use vm::errors::*;
 
 #[test]
-fn locals() -> VMResult<()> {
+fn locals() -> PartialVMResult<()> {
     const LEN: usize = 4;
     let mut locals = Locals::new(LEN);
     for i in 0..LEN {
@@ -32,7 +32,7 @@ fn locals() -> VMResult<()> {
 }
 
 #[test]
-fn struct_pack_and_unpack() -> VMResult<()> {
+fn struct_pack_and_unpack() -> PartialVMResult<()> {
     let vals = vec![Value::u8(10), Value::u64(20), Value::u128(30)];
     let s = Struct::pack(vec![Value::u8(10), Value::u64(20), Value::u128(30)], false);
     let unpacked: Vec<_> = s.unpack()?.collect();
@@ -46,7 +46,7 @@ fn struct_pack_and_unpack() -> VMResult<()> {
 }
 
 #[test]
-fn struct_borrow_field() -> VMResult<()> {
+fn struct_borrow_field() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     locals.store_loc(
         0,
@@ -73,7 +73,7 @@ fn struct_borrow_field() -> VMResult<()> {
 }
 
 #[test]
-fn struct_borrow_nested() -> VMResult<()> {
+fn struct_borrow_nested() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
 
     fn inner(x: u64) -> Value {
@@ -109,85 +109,14 @@ fn struct_borrow_nested() -> VMResult<()> {
 }
 
 #[test]
-fn global_value_non_struct() -> VMResult<()> {
-    assert!(GlobalValue::new(Value::u64(100)).is_err());
-    assert!(GlobalValue::new(Value::bool(false)).is_err());
+fn global_value_non_struct() -> PartialVMResult<()> {
+    assert!(GlobalValue::cached(Value::u64(100)).is_err());
+    assert!(GlobalValue::cached(Value::bool(false)).is_err());
 
     let mut locals = Locals::new(1);
     locals.store_loc(0, Value::u8(0))?;
     let r = locals.borrow_loc(0)?;
-    assert!(GlobalValue::new(r).is_err());
-
-    Ok(())
-}
-
-#[test]
-fn global_value() -> VMResult<()> {
-    let gv = GlobalValue::new(Value::struct_(Struct::pack(
-        vec![Value::u8(100), Value::u64(200)],
-        false,
-    )))?;
-
-    {
-        let r: StructRef = gv.borrow_global()?.value_as()?;
-        let f1: Reference = r.borrow_field(0)?.value_as()?;
-        let f2: Reference = r.borrow_field(1)?.value_as()?;
-        assert!(f1.read_ref()?.equals(&Value::u8(100))?);
-        assert!(f2.read_ref()?.equals(&Value::u64(200))?);
-    }
-
-    assert!(gv.is_clean()?);
-
-    {
-        let r: StructRef = gv.borrow_global()?.value_as()?;
-        let f1: Reference = r.borrow_field(0)?.value_as()?;
-        f1.write_ref(Value::u8(222))?;
-    }
-
-    assert!(gv.is_dirty()?);
-
-    {
-        let r: StructRef = gv.borrow_global()?.value_as()?;
-        let f1: Reference = r.borrow_field(0)?.value_as()?;
-        let f2: Reference = r.borrow_field(1)?.value_as()?;
-        assert!(f1.read_ref()?.equals(&Value::u8(222))?);
-        assert!(f2.read_ref()?.equals(&Value::u64(200))?);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn global_value_nested() -> VMResult<()> {
-    let gv: GlobalValue = GlobalValue::new(Value::struct_(Struct::pack(
-        vec![Value::struct_(Struct::pack(vec![Value::u64(100)], false))],
-        false,
-    )))?;
-
-    {
-        let r1: StructRef = gv.borrow_global()?.value_as()?;
-        let r2: StructRef = r1.borrow_field(0)?.value_as()?;
-        let r3: Reference = r2.borrow_field(0)?.value_as()?;
-        assert!(r3.read_ref()?.equals(&Value::u64(100))?);
-    }
-
-    assert!(gv.is_clean()?);
-
-    {
-        let r1: StructRef = gv.borrow_global()?.value_as()?;
-        let r2: StructRef = r1.borrow_field(0)?.value_as()?;
-        let r3: Reference = r2.borrow_field(0)?.value_as()?;
-        r3.write_ref(Value::u64(0))?;
-    }
-
-    assert!(gv.is_dirty()?);
-
-    {
-        let r1: StructRef = gv.borrow_global()?.value_as()?;
-        let r2: StructRef = r1.borrow_field(0)?.value_as()?;
-        let r3: Reference = r2.borrow_field(0)?.value_as()?;
-        assert!(r3.read_ref()?.equals(&Value::u64(0))?);
-    }
+    assert!(GlobalValue::cached(r).is_err());
 
     Ok(())
 }
@@ -197,30 +126,30 @@ fn dummy_resource() -> Value {
 }
 
 #[test]
-fn cannot_copy_resource() -> VMResult<()> {
+fn cannot_copy_resource() -> PartialVMResult<()> {
     let v = dummy_resource();
     assert!(v.copy_value().is_err());
     Ok(())
 }
 
 #[test]
-fn container_ref_cannot_read_resource() -> VMResult<()> {
-    let gv = GlobalValue::new(dummy_resource())?;
+fn container_ref_cannot_read_resource() -> PartialVMResult<()> {
+    let gv = GlobalValue::cached(dummy_resource())?;
     let r: Reference = gv.borrow_global()?.value_as()?;
     assert!(r.read_ref().is_err());
     Ok(())
 }
 
 #[test]
-fn container_ref_cannot_overwrite_resource() -> VMResult<()> {
-    let gv = GlobalValue::new(dummy_resource())?;
+fn container_ref_cannot_overwrite_resource() -> PartialVMResult<()> {
+    let gv = GlobalValue::cached(dummy_resource())?;
     let r: Reference = gv.borrow_global()?.value_as()?;
     assert!(r.write_ref(dummy_resource()).is_err());
     Ok(())
 }
 
 #[test]
-fn locals_indexed_ref_cannot_read_resource() -> VMResult<()> {
+fn locals_indexed_ref_cannot_read_resource() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     locals.store_loc(0, dummy_resource())?;
     let r: Reference = locals.borrow_loc(0)?.value_as()?;
@@ -229,7 +158,7 @@ fn locals_indexed_ref_cannot_read_resource() -> VMResult<()> {
 }
 
 #[test]
-fn locals_indexed_ref_cannot_overwrite_resource() -> VMResult<()> {
+fn locals_indexed_ref_cannot_overwrite_resource() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     locals.store_loc(0, dummy_resource())?;
     let r: Reference = locals.borrow_loc(0)?.value_as()?;
@@ -240,7 +169,7 @@ fn locals_indexed_ref_cannot_overwrite_resource() -> VMResult<()> {
 // TODO: consider adding tests for vector_indexed_ref here once we cleanup the vector APIs.
 
 #[test]
-fn locals_cannot_copy_but_can_move_resource() -> VMResult<()> {
+fn locals_cannot_copy_but_can_move_resource() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     let v = dummy_resource();
     locals.store_loc(0, v)?;
@@ -250,7 +179,7 @@ fn locals_cannot_copy_but_can_move_resource() -> VMResult<()> {
 }
 
 #[test]
-fn locals_cannot_overwrite_resource() -> VMResult<()> {
+fn locals_cannot_overwrite_resource() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     let v1 = dummy_resource();
     let v2 = dummy_resource();
@@ -260,7 +189,7 @@ fn locals_cannot_overwrite_resource() -> VMResult<()> {
 }
 
 #[test]
-fn locals_check_resources() -> VMResult<()> {
+fn locals_check_resources() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     locals.store_loc(0, dummy_resource())?;
     assert!(locals.check_resources_for_return().is_err());

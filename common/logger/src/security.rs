@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //!
-//! The security module gathers security-related logs
+//! The security module gathers security-related logs:
+//! logs to detect malicious behavior from other validators.
 //!
 //! ```
 //! use libra_logger::prelude::*;
 //!
-//! send_struct_log!(
+//! sl_error!(
 //!   security_log(security_events::INVALID_RETRIEVED_BLOCK)
 //!     .data("some_data", "the data")
 //! );
@@ -18,24 +19,15 @@ use crate::StructuredLogEntry;
 
 /// helper function to create a security log
 pub fn security_log(name: &'static str) -> StructuredLogEntry {
-    StructuredLogEntry::new_named(&name)
-        // set the category to security
-        .security()
-    // set the error description
+    StructuredLogEntry::new_named("security", &name)
 }
 
 /// Security events that are possible
 pub mod security_events {
-    // JSON-RPC server
-    // ---------------
-
-    /// Admission Control received a transaction with an invalid signature
-    pub const INVALID_TRANSACTION_AC: &str = "InvalidTransactionAC";
-
     // Mempool
     // -------
 
-    /// Mempool received a transaction with an invalid signature
+    /// Mempool received a transaction from another peer with an invalid signature
     pub const INVALID_TRANSACTION_MP: &str = "InvalidTransactionMP";
 
     /// Mempool received an invalid network event
@@ -44,11 +36,11 @@ pub mod security_events {
     // Consensus
     // ---------
 
-    /// Consensus received a transaction with an invalid signature
-    pub const INVALID_TRANSACTION_CONSENSUS: &str = "InvalidTransactionConsensus";
+    /// Consensus received an invalid message (not well-formed or incorrect signature)
+    pub const CONSENSUS_INVALID_MESSAGE: &str = "ConsensusInvalidMessage";
 
-    /// Consensus received an invalid vote
-    pub const DUPLICATE_CONSENSUS_VOTE: &str = "DuplicateConsensusVote";
+    /// Consensus received an equivocating vote
+    pub const CONSENSUS_EQUIVOCATING_VOTE: &str = "ConsensusEquivocatingVote";
 
     /// Consensus received an invalid proposal
     pub const INVALID_CONSENSUS_PROPOSAL: &str = "InvalidConsensusProposal";
@@ -68,11 +60,11 @@ pub mod security_events {
     /// A block being committed or executed is invalid
     pub const INVALID_BLOCK: &str = "InvalidBlock";
 
-    // Executor
-    // --------
+    // State-Sync
+    // ----------
 
-    /// Executor received an invalid transactions chunk
-    pub const INVALID_CHUNK_EXECUTOR: &str = "InvalidChunkExecutor";
+    /// Invalid chunk of transactions received
+    pub const STATE_SYNC_INVALID_CHUNK: &str = "InvalidChunk";
 
     // Health Checker
     // --------------
@@ -89,6 +81,6 @@ pub mod security_events {
     /// Network identified an invalid peer
     pub const INVALID_NETWORK_PEER: &str = "InvalidNetworkPeer";
 
-    /// Network discovery received an invalid DiscoveryMsg
-    pub const INVALID_DISCOVERY_MSG: &str = "InvalidDiscoveryMsg";
+    /// Network couldn't negotiate
+    pub const INVALID_NETWORK_HANDSHAKE_MSG: &str = "InvalidNetworkHandshakeMsg";
 }

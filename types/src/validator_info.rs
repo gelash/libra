@@ -2,19 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, validator_config::ValidatorConfig};
+use libra_crypto::ed25519::Ed25519PublicKey;
 #[cfg(any(test, feature = "fuzzing"))]
-use libra_crypto::Uniform;
-use libra_crypto::{ed25519::Ed25519PublicKey, x25519};
-#[cfg(any(test, feature = "fuzzing"))]
-use libra_network_address::NetworkAddress;
-#[cfg(any(test, feature = "fuzzing"))]
-use libra_network_address::RawNetworkAddress;
+use libra_network_address::{
+    encrypted::{TEST_SHARED_VAL_NETADDR_KEY, TEST_SHARED_VAL_NETADDR_KEY_VERSION},
+    NetworkAddress,
+};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-#[cfg(any(test, feature = "fuzzing"))]
-use std::{convert::TryFrom, str::FromStr};
 
 /// After executing a special transaction indicates a change to the next epoch, consensus
 /// and networking get the new list of validators, their keys, and their voting power.  Consensus
@@ -59,20 +56,18 @@ impl ValidatorInfo {
         consensus_public_key: Ed25519PublicKey,
         consensus_voting_power: u64,
     ) -> Self {
-        let private_key = x25519::PrivateKey::generate_for_testing();
-        let validator_network_identity_public_key = private_key.public_key();
-        let network_address = NetworkAddress::from_str("/ip4/127.0.0.1/tcp/1234").unwrap();
-        let validator_network_address = RawNetworkAddress::try_from(&network_address).unwrap();
-
-        let private_key = x25519::PrivateKey::generate_for_testing();
-        let full_node_network_identity_public_key = private_key.public_key();
-        let full_node_network_address = RawNetworkAddress::try_from(&network_address).unwrap();
+        let addr = NetworkAddress::mock();
+        let enc_addr = addr.clone().encrypt(
+            &TEST_SHARED_VAL_NETADDR_KEY,
+            TEST_SHARED_VAL_NETADDR_KEY_VERSION,
+            &account_address,
+            0,
+            0,
+        );
         let config = ValidatorConfig::new(
             consensus_public_key,
-            validator_network_identity_public_key,
-            validator_network_address,
-            full_node_network_identity_public_key,
-            full_node_network_address,
+            lcs::to_bytes(&vec![enc_addr.unwrap()]).unwrap(),
+            lcs::to_bytes(&vec![addr]).unwrap(),
         );
 
         Self {
@@ -98,13 +93,13 @@ impl ValidatorInfo {
         self.consensus_voting_power
     }
 
-    /// Returns the key that establishes a validator's identity in the p2p network
-    pub fn network_identity_public_key(&self) -> x25519::PublicKey {
-        self.config.validator_network_identity_public_key
-    }
-
     /// Returns the validator's config
     pub fn config(&self) -> &ValidatorConfig {
         &self.config
+    }
+
+    /// Returns the validator's config, consuming self
+    pub fn into_config(self) -> ValidatorConfig {
+        self.config
     }
 }

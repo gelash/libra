@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    constants,
     peer::DisconnectReason,
     peer_manager::{
         conn_notifs_channel, error::PeerManagerError, ConnectionNotification, ConnectionRequest,
@@ -9,7 +10,7 @@ use crate::{
     },
     protocols::wire::{
         handshake::v1::MessagingProtocolVersion,
-        messaging::v1::{NetworkMessage, Nonce},
+        messaging::v1::{ErrorCode, NetworkMessage},
     },
     transport,
     transport::{Connection, ConnectionId, ConnectionMetadata},
@@ -105,9 +106,10 @@ fn build_test_peer_manager(
         connection_reqs_rx,
         HashMap::from_iter([(TEST_PROTOCOL, hello_tx)].iter().cloned()),
         vec![conn_status_tx],
-        1024, /* max concurrent network requests */
-        1024, /* max concurrent network notifications */
-        1024, /* channel size */
+        constants::NETWORK_CHANNEL_SIZE,
+        constants::MAX_CONCURRENT_NETWORK_REQS,
+        constants::MAX_CONCURRENT_NETWORK_NOTIFS,
+        constants::MAX_FRAME_SIZE,
     );
 
     (
@@ -121,15 +123,16 @@ fn build_test_peer_manager(
 
 async fn ping_pong(connection: &mut MemorySocket) -> Result<(), PeerManagerError> {
     let mut connection = Framed::new(IoCompat::new(connection), LengthDelimitedCodec::new());
-    let ping = NetworkMessage::Ping(Nonce(42));
-    connection
-        .send(lcs::to_bytes(&ping).unwrap().into())
-        .await?;
-    let raw_pong = connection.next().await.ok_or_else(|| {
+    let bad_message = vec![255, 111];
+    connection.send(bad_message.into()).await?;
+    let raw_error = connection.next().await.ok_or_else(|| {
         PeerManagerError::TransportError(anyhow::anyhow!("Failed to read pong msg"))
     })??;
-    let pong: NetworkMessage = lcs::from_bytes(&raw_pong)?;
-    assert_eq!(pong, NetworkMessage::Pong(Nonce(42)));
+    let error: NetworkMessage = lcs::from_bytes(&raw_error)?;
+    assert_eq!(
+        error,
+        NetworkMessage::Error(ErrorCode::parsing_error(255, 111))
+    );
     Ok(())
 }
 
@@ -145,9 +148,9 @@ async fn assert_peer_disconnected_event(
     let connection_event = peer_manager.transport_notifs_rx.select_next_some().await;
     match &connection_event {
         TransportNotification::Disconnected(ref actual_metadata, ref actual_reason) => {
-            assert_eq!(actual_metadata.peer_id(), peer_id);
+            assert_eq!(actual_metadata.peer_id, peer_id);
             assert_eq!(*actual_reason, reason);
-            assert_eq!(actual_metadata.origin(), origin);
+            assert_eq!(actual_metadata.origin, origin);
             peer_manager.handle_connection_event(connection_event);
         }
         event => {
@@ -586,7 +589,7 @@ fn test_dial_disconnect() {
         let conn_notif = conn_status_rx.next().await.unwrap();
         assert!(matches!(
             conn_notif,
-            ConnectionNotification::NewPeer(_, _, _)
+            ConnectionNotification::NewPeer(_, _, _, _)
         ));
 
         // Send DisconnectPeer request to PeerManager.
@@ -616,7 +619,7 @@ fn test_dial_disconnect() {
         let conn_notif = conn_status_rx.next().await.unwrap();
         assert!(matches!(
             conn_notif,
-            ConnectionNotification::LostPeer(_, _, _)
+            ConnectionNotification::LostPeer(_, _, _, _)
         ));
 
         // Sender of disconnect request should receive acknowledgement once connection is closed.

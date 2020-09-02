@@ -39,7 +39,7 @@ main() {
   return;
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
 import 0x1.Vector;
@@ -68,5 +68,4 @@ main() {
   return;
 }
 
-// check: NATIVE_FUNCTION_ERROR
-// check: Some(1)
+// check: "Keep(ABORTED { code: 1,"

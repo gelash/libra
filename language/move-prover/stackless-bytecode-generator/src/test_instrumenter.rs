@@ -6,8 +6,8 @@ use crate::{
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
 };
 use spec_lang::{
-    ast::{Condition, ConditionKind, Exp, Spec, Value},
-    env::{ConditionInfo, FunctionEnv, VerificationScope, ALWAYS_ABORTS_TEST_PRAGMA},
+    ast::{Condition, ConditionKind, Exp, PropertyBag, Spec, Value},
+    env::{ConditionInfo, ConditionTag, FunctionEnv, VerificationScope, ALWAYS_ABORTS_TEST_PRAGMA},
     ty::BOOL_TYPE,
 };
 
@@ -68,13 +68,15 @@ impl TestInstrumenter {
         // Add ConditionInfo to global environment for backend error reporting.
         let info = ConditionInfo {
             message: "function always aborts".to_string(),
-            message_if_requires: None,
             omit_trace: true,    // no error trace needed
             negative_cond: true, // this is a negative condition: we report above error if it passes
         };
         // Register the condition info for location we assigned to the condition. This way the
         // backend will find it.
-        func_env.module_env.env.set_condition_info(cond_loc, info);
+        func_env
+            .module_env
+            .env
+            .set_condition_info(cond_loc, ConditionTag::NegativeTest, info);
     }
 }
 
@@ -100,6 +102,7 @@ impl TestInstrumenter {
         Condition {
             loc: func_env.get_loc(),
             kind,
+            properties: PropertyBag::default(),
             exp,
         }
     }

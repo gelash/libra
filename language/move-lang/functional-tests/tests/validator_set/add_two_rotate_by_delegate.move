@@ -5,10 +5,17 @@
 // alice's key by bob - aborts
 // alice's key by alice - executes
 
-//! account: alice, 1000000, 0, validator
+//! account: alice, 0, 0, address
 //! account: bob, 1000000, 0, validator
 //! account: carrol, 1000000, 0, validator
 
+//! new-transaction
+//! sender: libraroot
+//! args: 0, {{alice}}, {{alice::auth_key}}, b"alice"
+stdlib_script::create_validator_operator_account
+// check: "Keep(EXECUTED)"
+
+//! new-transaction
 //! sender: bob
 script {
     use 0x1::ValidatorConfig;
@@ -18,7 +25,7 @@ script {
     }
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
 //! sender: bob
@@ -26,11 +33,11 @@ script {
 script {
     use 0x1::ValidatorConfig;
     fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{bob}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"", x"", x"");
+        ValidatorConfig::set_config(account, {{bob}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 263,"
 
 //! new-transaction
 //! sender: bob
@@ -38,11 +45,11 @@ script {
 script {
     use 0x1::ValidatorConfig;
     fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{alice}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"", x"", x"");
+        ValidatorConfig::set_config(account, {{alice}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 5,"
 
 //! new-transaction
 //! sender: alice
@@ -50,35 +57,9 @@ script {
 script {
     use 0x1::ValidatorConfig;
     fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{bob}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"", x"", x"");
+        ValidatorConfig::set_config(account, {{bob}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"");
         assert(*ValidatorConfig::get_consensus_pubkey(&ValidatorConfig::get_config({{bob}})) == x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", 99);
     }
 }
 
-// check: EXECUTED
-
-//! new-transaction
-//! sender: alice
-// check alice can rotate her consensus key
-script {
-    use 0x1::ValidatorConfig;
-    fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{alice}}, x"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", x"", x"", x"", x"");
-        assert(*ValidatorConfig::get_consensus_pubkey(&ValidatorConfig::get_config({{alice}})) == x"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", 99);
-    }
-}
-
-// check: EXECUTED
-
-//! new-transaction
-//! sender: alice
-// check alice can rotate her consensus key
-script {
-    use 0x1::ValidatorConfig;
-    fun main(account: &signer) {
-        ValidatorConfig::set_config(account, {{alice}}, x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", x"", x"", x"", x"");
-        assert(*ValidatorConfig::get_consensus_pubkey(&ValidatorConfig::get_config({{alice}})) == x"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", 99);
-    }
-}
-
-// check: EXECUTED
+// check: "Keep(EXECUTED)"

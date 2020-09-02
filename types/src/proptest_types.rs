@@ -10,6 +10,7 @@ use crate::{
     account_state_blob::AccountStateBlob,
     block_info::{BlockInfo, Round},
     block_metadata::BlockMetadata,
+    chain_id::ChainId,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::{EventHandle, EventKey},
@@ -19,14 +20,13 @@ use crate::{
     transaction::{
         ChangeSet, Module, RawTransaction, Script, SignatureCheckedTransaction, SignedTransaction,
         Transaction, TransactionArgument, TransactionListWithProof, TransactionPayload,
-        TransactionStatus, TransactionToCommit, Version,
+        TransactionStatus, TransactionToCommit, Version, WriteSetPayload,
     },
-    vm_status::{StatusCode, VMStatus},
+    vm_status::{KeptVMStatus, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use libra_crypto::{
     ed25519::{self, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
-    hash::CryptoHash,
     test_utils::KeyPair,
     traits::*,
     HashValue,
@@ -39,7 +39,8 @@ use proptest::{
     prelude::*,
 };
 use proptest_derive::Arbitrary;
-use std::{convert::TryFrom, iter::Iterator, time::Duration};
+use serde_json::Value;
+use std::{convert::TryFrom, iter::Iterator};
 
 impl WriteOp {
     pub fn value_strategy() -> impl Strategy<Value = Self> {
@@ -69,6 +70,15 @@ impl WriteSet {
                 .expect("generated write sets should always be valid")
         })
     }
+}
+
+impl Arbitrary for WriteSetPayload {
+    type Parameters = ();
+    fn arbitrary_with(_args: ()) -> Self::Strategy {
+        any::<ChangeSet>().prop_map(WriteSetPayload::Direct).boxed()
+    }
+
+    type Strategy = BoxedStrategy<Self>;
 }
 
 impl Arbitrary for WriteSet {
@@ -286,6 +296,7 @@ fn new_raw_transaction(
     gas_currency_code: String,
     expiration_time_secs: u64,
 ) -> RawTransaction {
+    let chain_id = ChainId::test();
     match payload {
         TransactionPayload::Module(module) => RawTransaction::new_module(
             sender,
@@ -294,7 +305,8 @@ fn new_raw_transaction(
             max_gas_amount,
             gas_unit_price,
             gas_currency_code,
-            Duration::from_secs(expiration_time_secs),
+            expiration_time_secs,
+            chain_id,
         ),
         TransactionPayload::Script(script) => RawTransaction::new_script(
             sender,
@@ -303,12 +315,19 @@ fn new_raw_transaction(
             max_gas_amount,
             gas_unit_price,
             gas_currency_code,
-            Duration::from_secs(expiration_time_secs),
+            expiration_time_secs,
+            chain_id,
         ),
-        TransactionPayload::WriteSet(write_set) => {
+        TransactionPayload::WriteSet(WriteSetPayload::Direct(write_set)) => {
             // It's a bit unfortunate that max_gas_amount etc is generated but
             // not used, but it isn't a huge deal.
-            RawTransaction::new_change_set(sender, sequence_number, write_set)
+            RawTransaction::new_change_set(sender, sequence_number, write_set, chain_id)
+        }
+        TransactionPayload::WriteSet(WriteSetPayload::Script {
+            execute_as: signer,
+            script,
+        }) => {
+            RawTransaction::new_writeset_script(sender, sequence_number, script, signer, chain_id)
         }
     }
 }
@@ -468,19 +487,28 @@ impl TransactionPayload {
     }
 
     pub fn write_set_strategy() -> impl Strategy<Value = Self> {
-        any::<WriteSet>().prop_map(|ws| TransactionPayload::WriteSet(ChangeSet::new(ws, vec![])))
+        any::<WriteSet>().prop_map(|ws| {
+            TransactionPayload::WriteSet(WriteSetPayload::Direct(ChangeSet::new(ws, vec![])))
+        })
     }
 
     /// Similar to `write_set_strategy` except generates a valid write set for the genesis block.
     pub fn genesis_strategy() -> impl Strategy<Value = Self> {
-        WriteSet::genesis_strategy()
-            .prop_map(|ws| TransactionPayload::WriteSet(ChangeSet::new(ws, vec![])))
+        WriteSet::genesis_strategy().prop_map(|ws| {
+            TransactionPayload::WriteSet(WriteSetPayload::Direct(ChangeSet::new(ws, vec![])))
+        })
     }
 }
 
 prop_compose! {
     fn arb_transaction_status()(vm_status in any::<VMStatus>()) -> TransactionStatus {
         vm_status.into()
+    }
+}
+
+prop_compose! {
+    fn arb_pubkey()(keypair in ed25519::keypair_strategy()) -> AccountAddress {
+            account_address::from_public_key(&keypair.public_key)
     }
 }
 
@@ -539,11 +567,11 @@ impl Arbitrary for Module {
 }
 
 prop_compose! {
-    fn arb_validator_signature_for_hash(hash: HashValue)(
-        hash in Just(hash),
+    fn arb_validator_signature_for_ledger_info(ledger_info: LedgerInfo)(
+        ledger_info in Just(ledger_info),
         keypair in ed25519::keypair_strategy(),
     ) -> (AccountAddress, Ed25519Signature) {
-        let signature = keypair.private_key.sign_message(&hash);
+        let signature = keypair.private_key.sign(&ledger_info);
         (account_address::from_public_key(&keypair.public_key), signature)
     }
 }
@@ -553,11 +581,10 @@ impl Arbitrary for LedgerInfoWithSignatures {
     fn arbitrary_with(num_validators_range: Self::Parameters) -> Self::Strategy {
         (any::<LedgerInfo>(), Just(num_validators_range))
             .prop_flat_map(|(ledger_info, num_validators_range)| {
-                let hash = ledger_info.hash();
                 (
-                    Just(ledger_info),
+                    Just(ledger_info.clone()),
                     prop::collection::vec(
-                        arb_validator_signature_for_hash(hash),
+                        arb_validator_signature_for_ledger_info(ledger_info),
                         num_validators_range,
                     ),
                 )
@@ -599,7 +626,7 @@ impl ContractEventGen {
 }
 
 #[derive(Arbitrary, Debug)]
-struct AccountResourceGen {
+pub struct AccountResourceGen {
     withdrawal_capability: Option<WithdrawCapabilityResource>,
     key_rotation_capability: Option<KeyRotationCapabilityResource>,
 }
@@ -619,13 +646,12 @@ impl AccountResourceGen {
             self.key_rotation_capability,
             account_info.sent_event_handle.clone(),
             account_info.received_event_handle.clone(),
-            false,
         )
     }
 }
 
 #[derive(Arbitrary, Debug)]
-struct BalanceResourceGen {
+pub struct BalanceResourceGen {
     coin: u64,
 }
 
@@ -636,7 +662,7 @@ impl BalanceResourceGen {
 }
 
 #[derive(Arbitrary, Debug)]
-struct AccountStateBlobGen {
+pub struct AccountStateBlobGen {
     account_resource_gen: AccountResourceGen,
     balance_resource_gen: BalanceResourceGen,
 }
@@ -732,7 +758,7 @@ pub struct TransactionToCommitGen {
     /// Gas used.
     gas_used: u64,
     /// Transaction status
-    major_status: StatusCode,
+    status: KeptVMStatus,
 }
 
 impl TransactionToCommitGen {
@@ -764,7 +790,7 @@ impl TransactionToCommitGen {
             account_states,
             events,
             self.gas_used,
-            self.major_status,
+            self.status,
         )
     }
 }
@@ -789,10 +815,10 @@ impl Arbitrary for TransactionToCommitGen {
             ),
             vec((any::<Index>(), any::<AccountStateBlobGen>()), 0..=1),
             any::<u64>(),
-            any::<StatusCode>(),
+            any::<KeptVMStatus>(),
         )
             .prop_map(
-                |(sender, event_emitters, mut touched_accounts, gas_used, major_status)| {
+                |(sender, event_emitters, mut touched_accounts, gas_used, status)| {
                     // To reflect change of account/event sequence numbers, txn sender account and
                     // event emitter accounts must be updated.
                     let (sender_index, sender_blob_gen, txn_gen) = sender;
@@ -809,7 +835,7 @@ impl Arbitrary for TransactionToCommitGen {
                         event_gens,
                         account_state_gens: touched_accounts,
                         gas_used,
-                        major_status,
+                        status,
                     }
                 },
             )
@@ -869,26 +895,18 @@ impl Arbitrary for TransactionListWithProof {
 impl Arbitrary for BlockMetadata {
     type Parameters = SizeRange;
     fn arbitrary_with(num_validators_range: Self::Parameters) -> Self::Strategy {
-        let signature_strategy = (any::<HashValue>(), Just(num_validators_range)).prop_flat_map(
-            |(hash, num_validators_range)| {
-                prop::collection::vec(arb_validator_signature_for_hash(hash), num_validators_range)
-            },
-        );
+        let addr_strategy = (Just(num_validators_range)).prop_flat_map(|num_validator_range| {
+            prop::collection::vec(arb_pubkey(), num_validator_range)
+        });
         (
             any::<HashValue>(),
             any::<u64>(),
             any::<u64>(),
-            signature_strategy,
+            addr_strategy,
             any::<AccountAddress>(),
         )
-            .prop_map(|(id, round, timestamp, signatures, proposer)| {
-                BlockMetadata::new(
-                    id,
-                    round,
-                    timestamp,
-                    signatures.into_iter().map(|(addr, _)| addr).collect(),
-                    proposer,
-                )
+            .prop_map(|(id, round, timestamp, addresses, proposer)| {
+                BlockMetadata::new(id, round, timestamp, addresses, proposer)
             })
             .boxed()
     }
@@ -897,7 +915,7 @@ impl Arbitrary for BlockMetadata {
 }
 
 #[derive(Debug)]
-struct BlockInfoGen {
+pub struct BlockInfoGen {
     id: HashValue,
     executed_state_id: HashValue,
     timestamp_usecs: u64,
@@ -999,17 +1017,39 @@ impl LedgerInfoWithSignaturesGen {
         block_size: usize,
     ) -> LedgerInfoWithSignatures {
         let ledger_info = self.ledger_info_gen.materialize(universe, block_size);
-        let ledger_info_hash = ledger_info.hash();
         let signatures = self
             .signers
             .into_iter()
             .map(|signer_index| {
                 let account = universe.get_account_info(signer_index);
-                let signature = account.private_key.sign_message(&ledger_info_hash);
+                let signature = account.private_key.sign(&ledger_info);
                 (account.address, signature)
             })
             .collect();
 
         LedgerInfoWithSignatures::new(ledger_info, signatures)
     }
+}
+
+// This function generates an arbitrary serde_json::Value.
+pub fn arb_json_value() -> impl Strategy<Value = Value> {
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::Bool),
+        any::<f64>().prop_map(|n| serde_json::json!(n)),
+        any::<String>().prop_map(Value::String),
+    ];
+
+    leaf.prop_recursive(
+        10,  // 10 levels deep
+        256, // Maximum size of 256 nodes
+        10,  // Up to 10 items per collection
+        |inner| {
+            prop_oneof![
+                prop::collection::vec(inner.clone(), 0..10).prop_map(Value::Array),
+                prop::collection::hash_map(any::<String>(), inner, 0..10)
+                    .prop_map(|map| serde_json::json!(map)),
+            ]
+        },
+    )
 }

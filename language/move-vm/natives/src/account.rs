@@ -9,13 +9,13 @@ use move_vm_types::{
     values::Value,
 };
 use std::collections::VecDeque;
-use vm::errors::VMResult;
+use vm::errors::PartialVMResult;
 
 pub fn native_create_signer(
     context: &mut impl NativeContext,
     ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
-) -> VMResult<NativeResult> {
+) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 1);
 
@@ -28,10 +28,10 @@ pub fn native_destroy_signer(
     context: &mut impl NativeContext,
     ty_args: Vec<Type>,
     arguments: VecDeque<Value>,
-) -> VMResult<NativeResult> {
+) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 1);
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::DESTROY_SIGNER, 0);
     Ok(NativeResult::ok(cost, vec![]))
 }

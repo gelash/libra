@@ -32,7 +32,7 @@ fun main(account: &signer) {
     assert(new_auth_key != LibraAccount::authentication_key({{default}}), 3005);
 }
 }
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 // publishing a key with a bad length should fail
 //! new-transaction
@@ -44,8 +44,18 @@ fun main(account: &signer) {
     SharedEd25519PublicKey::publish(account, invalid_pubkey)
 }
 }
-// check: ABORTED
-// check: 9003
+// check: "Keep(ABORTED { code: 7,"
+
+// Trying to get a key for a non-shared account should fail correctly
+//! new-transaction
+//! sender: alice
+script {
+use 0x1::SharedEd25519PublicKey;
+fun main() {
+    SharedEd25519PublicKey::key({{alice}});
+}
+}
+// check: "Keep(ABORTED { code: 261,"
 
 // publishing a key with a bad length should fail
 //! new-transaction
@@ -57,9 +67,7 @@ fun main(account: &signer) {
     SharedEd25519PublicKey::publish(account, invalid_pubkey)
 }
 }
-// check: ABORTED
-// check: 9003
-
+// check: "Keep(ABORTED { code: 7,"
 
 // rotating to a key with a bad length should fail
 //! new-transaction
@@ -75,8 +83,7 @@ fun main(account: &signer) {
     SharedEd25519PublicKey::rotate_key(account, invalid_pubkey)
 }
 }
-// check: ABORTED
-// check: 9003
+// check: "Keep(ABORTED { code: 7,"
 
 // rotating to a key with a good length but bad contents should fail
 //! new-transaction
@@ -91,5 +98,4 @@ fun main(account: &signer) {
     SharedEd25519PublicKey::rotate_key(account, invalid_pubkey)
 }
 }
-// check: ABORTED
-// check: 9003
+// check: "Keep(ABORTED { code: 7,"

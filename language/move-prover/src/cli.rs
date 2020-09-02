@@ -9,6 +9,7 @@ use abigen::AbigenOptions;
 use anyhow::anyhow;
 use clap::{App, Arg};
 use docgen::DocgenOptions;
+use errmapgen::ErrmapOptions;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use simplelog::{
@@ -53,6 +54,11 @@ pub struct Options {
     pub run_docgen: bool,
     /// Whether to run the ABI generator instead of the prover.
     pub run_abigen: bool,
+    /// Whether to run the error map generator instead of the prover.
+    pub run_errmapgen: bool,
+    /// Whether to run a static analysis that computes the set of types that may be packed by the
+    /// Move code under analysis instead of the prover.
+    pub run_packed_types_gen: bool,
     /// An account address to use if none is specified in the source.
     pub account_address: String,
     /// The paths to the Move sources.
@@ -68,6 +74,8 @@ pub struct Options {
     pub docgen: DocgenOptions,
     /// Options for the ABI generator.
     pub abigen: AbigenOptions,
+    /// Options for the error map generator.
+    pub errmapgen: ErrmapOptions,
 }
 
 impl Default for Options {
@@ -77,6 +85,8 @@ impl Default for Options {
             output_path: "output.bpl".to_string(),
             run_docgen: false,
             run_abigen: false,
+            run_errmapgen: false,
+            run_packed_types_gen: false,
             account_address: "0x234567".to_string(),
             verbosity_level: LevelFilter::Info,
             move_sources: vec![],
@@ -85,6 +95,7 @@ impl Default for Options {
             backend: BackendOptions::default(),
             docgen: DocgenOptions::default(),
             abigen: AbigenOptions::default(),
+            errmapgen: ErrmapOptions::default(),
         }
     }
 }
@@ -105,10 +116,20 @@ pub struct ProverOptions {
     pub stable_test_output: bool,
     /// Scope of what functions to verify.
     pub verify_scope: VerificationScope,
-    /// Whether to emit global axiom that resources are well-formed.
+    /// [deprecated] Whether to emit global axiom that resources are well-formed.
     pub resource_wellformed_axiom: bool,
+    /// Whether to assume wellformedness when elements are read from memory, instead of on
+    /// function entry.
+    pub assume_wellformed_on_access: bool,
+    /// Whether to assume a global invariant when the related memory
+    /// is accessed, instead of on function entry. This is currently known to be slower
+    /// if one than off, so off by default.
+    pub assume_invariant_on_access: bool,
     /// Whether to automatically debug trace values of specification expression leafs.
     pub debug_trace: bool,
+    /// Report warnings. This is not on by default. We may turn it on if the warnings
+    /// are better filtered, e.g. do not contain unused schemas intended for other modules.
+    pub report_warnings: bool,
 }
 
 impl Default for ProverOptions {
@@ -120,8 +141,11 @@ impl Default for ProverOptions {
             omit_model_debug: false,
             stable_test_output: false,
             verify_scope: VerificationScope::Public,
-            resource_wellformed_axiom: true,
+            resource_wellformed_axiom: false,
+            assume_wellformed_on_access: false,
             debug_trace: false,
+            report_warnings: false,
+            assume_invariant_on_access: false,
         }
     }
 }
@@ -162,6 +186,18 @@ pub struct BackendOptions {
     pub bench_repeat: usize,
     /// Whether to use the sequence theory as the internal representation for $Vector type.
     pub vector_using_sequences: bool,
+    /// A seed for the prover.
+    pub random_seed: usize,
+    /// The number of cores to use for parallel processing of verification conditions.
+    pub proc_cores: usize,
+    /// A (soft) timeout for the solver, per verification condition, in seconds.
+    pub vc_timeout: usize,
+    /// Whether Boogie output and log should be saved.
+    pub keep_artifacts: bool,
+    /// Eager threshold for quantifier instantiation.
+    pub eager_threshold: usize,
+    /// Lazy threshold for quantifier instantiation.
+    pub lazy_threshold: usize,
 }
 
 impl Default for BackendOptions {
@@ -183,6 +219,12 @@ impl Default for BackendOptions {
             func_inline: "{:inline}".to_owned(),
             serialize_bound: 4,
             vector_using_sequences: false,
+            random_seed: 1,
+            proc_cores: 1,
+            vc_timeout: 40,
+            keep_artifacts: false,
+            eager_threshold: 100,
+            lazy_threshold: 100,
         }
     }
 }
@@ -257,15 +299,55 @@ impl Options {
             )
             .arg(
                 Arg::with_name("generate-only")
-                    .short("g")
                     .long("generate-only")
                     .help("only generate boogie file but do not call boogie"),
+            )
+            .arg(
+                Arg::with_name("warn")
+                    .long("warn")
+                    .short("w")
+                    .help("produces warnings")
             )
             .arg(
                 Arg::with_name("trace")
                     .long("trace")
                     .short("t")
                     .help("enables automatic tracing of expressions in prover errors")
+            )
+            .arg(
+                Arg::with_name("keep")
+                    .long("keep")
+                    .short("k")
+                    .help("keep intermediate artifacts of the backend around")
+            )
+            .arg(
+                Arg::with_name("seed")
+                    .long("seed")
+                    .short("s")
+                    .takes_value(true)
+                    .value_name("NUMBER")
+                    .validator(is_number)
+                    .help("sets a random seed for the prover (default 0)")
+            )
+            .arg(
+                Arg::with_name("cores")
+                    .long("cores")
+                    .takes_value(true)
+                    .value_name("NUMBER")
+                    .validator(is_number)
+                    .help("sets the number of cores to use. \
+                     NOTE: multiple cores may currently lead to scrambled model \
+                     output from boogie (default 1)")
+            )
+            .arg(
+                Arg::with_name("timeout")
+                    .long("timeout")
+                    .short("T")
+                    .takes_value(true)
+                    .value_name("NUMBER")
+                    .validator(is_number)
+                    .help("sets a timeout (in seconds) for each \
+                             individual verification condition (default 40)")
             )
             .arg(
                 Arg::with_name("docgen")
@@ -278,6 +360,17 @@ impl Options {
                     .long("abigen")
                     .help("run the ABI generator instead of the prover. \
                     Generated ABIs will be written into the directory `./abi` unless configured otherwise via toml"),
+            )
+            .arg(
+                Arg::with_name("errmapgen")
+                    .long("errmapgen")
+                    .help("run the error map generator instead of the prover. \
+                    The generated error map will be written to `errmap` unless configured otherwise"),
+            )
+            .arg(
+                Arg::with_name("packedtypesgen")
+                    .long("packedtypesgen")
+                    .help("run the packed types generator instead of the prover.")
             )
             .arg(
                 Arg::with_name("verify")
@@ -316,6 +409,22 @@ impl Options {
                     .min_values(1)
                     .help("the source files to verify"),
             )
+            .arg(
+                Arg::with_name("eager-threshold")
+                    .long("eager-threshold")
+                    .takes_value(true)
+                    .value_name("NUMBER")
+                    .validator(is_number)
+                    .help("sets the eager threshold for quantifier instantiation (default 100)")
+            )
+            .arg(
+                Arg::with_name("lazy-threshold")
+                    .long("lazy-threshold")
+                    .takes_value(true)
+                    .value_name("NUMBER")
+                    .validator(is_number)
+                    .help("sets the lazy threshold for quantifier instantiation (default 100)")
+            )
             .after_help("More options available via `--config file` or `--config-str str`. \
             Use `--print-config` to see format and current values. \
             See `move-prover/src/cli.rs::Option` for documentation.");
@@ -333,10 +442,16 @@ impl Options {
         };
 
         let mut options = if matches.is_present("config") {
+            if matches.is_present("config-str") {
+                return Err(anyhow!(
+                    "currently, if `--config` (including via $MOVE_PROVER_CONFIG) is given \
+                       `--config-str` cannot be used. Consider editing your \
+                       configuration file instead."
+                ));
+            }
             Self::create_from_toml_file(matches.value_of("config").unwrap())?
         } else if matches.is_present("config-str") {
-            let config_lines = get_vec("config-str").join("\n");
-            Self::create_from_toml(&config_lines)?
+            Self::create_from_toml(matches.value_of("config-str").unwrap())?
         } else {
             Options::default()
         };
@@ -378,8 +493,41 @@ impl Options {
         if matches.is_present("abigen") {
             options.run_abigen = true;
         }
+        if matches.is_present("errmapgen") {
+            options.run_errmapgen = true;
+        }
+        if matches.is_present("packedtypesgen") {
+            options.run_packed_types_gen = true;
+        }
+        if matches.is_present("warn") {
+            options.prover.report_warnings = true;
+        }
         if matches.is_present("trace") {
             options.prover.debug_trace = true;
+        }
+        if matches.is_present("keep") {
+            options.backend.keep_artifacts = true;
+        }
+        if matches.is_present("seed") {
+            options.backend.random_seed = matches.value_of("seed").unwrap().parse::<usize>()?;
+        }
+        if matches.is_present("timeout") {
+            options.backend.vc_timeout = matches.value_of("timeout").unwrap().parse::<usize>()?;
+        }
+        if matches.is_present("cores") {
+            options.backend.proc_cores = matches.value_of("cores").unwrap().parse::<usize>()?;
+        }
+        if matches.is_present("eager-threshold") {
+            options.backend.eager_threshold = matches
+                .value_of("eager-threshold")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.is_present("lazy-threshold") {
+            options.backend.lazy_threshold = matches
+                .value_of("lazy-threshold")
+                .unwrap()
+                .parse::<usize>()?;
         }
         if matches.is_present("print-config") {
             println!("{}", toml::to_string(&options).unwrap());
@@ -427,10 +575,30 @@ impl Options {
             add(&[&format!("-proverOpt:PROVER_PATH={}", &self.backend.z3_exe)]);
         }
         if self.backend.use_array_theory {
-            add(&["-useArrayTheory"]);
+            add(&[
+                "-useArrayTheory",
+                "/proverOpt:O:smt.array.extensional=false",
+            ]);
+        } else {
+            add(&[&format!(
+                "-proverOpt:O:smt.QI.EAGER_THRESHOLD={}",
+                self.backend.eager_threshold
+            )]);
+            add(&[&format!(
+                "-proverOpt:O:smt.QI.LAZY_THRESHOLD={}",
+                self.backend.lazy_threshold
+            )]);
         }
-        add(&["-proverOpt:O:smt.QI.EAGER_THRESHOLD=100"]);
-        add(&["-proverOpt:O:smt.QI.LAZY_THRESHOLD=100"]);
+        add(&[&format!(
+            "-vcsCores:{}",
+            if self.prover.stable_test_output {
+                // Do not use multiple cores if stable test output is requested.
+                // Error messages may appear in non-deterministic order otherwise.
+                1
+            } else {
+                self.backend.proc_cores
+            }
+        )]);
         // TODO: see what we can make out of these flags.
         //add(&["-proverOpt:O:smt.QI.PROFILE=true"]);
         //add(&["-proverOpt:O:trace=true"]);
@@ -449,5 +617,15 @@ impl Options {
     /// Returns name of file where to log boogie output.
     pub fn get_boogie_log_file(&self, boogie_file: &str) -> String {
         format!("{}.log", boogie_file)
+    }
+
+    /// Adjust a timeout value, given in seconds, for the runtime environment.
+    pub fn adjust_timeout(&self, time: usize) -> usize {
+        // If running on a Linux flavor as in Ci, add 100% to the timeout for added
+        // robustness against flakiness.
+        match std::env::consts::OS {
+            "linux" | "freebsd" | "openbsd" => time + time,
+            _ => time,
+        }
     }
 }

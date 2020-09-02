@@ -13,6 +13,4 @@ fun main() {
 }
 }
 
-// check: ABORTED
-// check: 22
-// check: "::M::foo at offset 2"
+// check: "Keep(ABORTED { code: 22,"

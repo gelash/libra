@@ -7,6 +7,7 @@
 [![Documentation (master)](https://img.shields.io/badge/docs-master-59f)](https://libra.github.io/libra/)
 [![CircleCI](https://circleci.com/gh/libra/libra.svg?style=shield)](https://circleci.com/gh/libra/libra)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
+[![grcov](https://img.shields.io/badge/Coverage-grcov-green)](https://ci-artifacts.libra.org/coverage/unit-coverage/latest/index.html)
 [![codecov](https://codecov.io/gh/libra/libra/branch/master/graph/badge.svg)](https://codecov.io/gh/libra/libra)
 
 Libra Core implements a decentralized, programmable database which provides a financial infrastructure that can empower billions of people.
@@ -26,6 +27,7 @@ To begin contributing, [sign the CLA](https://libra.org/en-US/cla-sign/). You ca
 * [Welcome](https://developers.libra.org/docs/welcome-to-libra)
 * [Libra Protocol: Key Concepts](https://developers.libra.org/docs/libra-protocol)
 * [Life of a Transaction](https://developers.libra.org/docs/life-of-a-transaction)
+* [JSON-RPC SPEC](json-rpc/json-rpc-spec.md)
 
 ### Try Libra Core
 * [My First Transaction](https://developers.libra.org/docs/my-first-transaction)

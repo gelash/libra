@@ -5,8 +5,7 @@ fun main(account: &signer) {
     LibraVersion::initialize(account);
 }
 }
-// check: ABORTED
-// check: 1
+// check: "Keep(ABORTED { code: 1,"
 
 //! new-transaction
 script{
@@ -15,5 +14,4 @@ fun main(account: &signer) {
     LibraVersion::set(account, 0);
 }
 }
-// check: ABORTED
-// check: 25
+// check: "Keep(ABORTED { code: 2,"

@@ -25,13 +25,13 @@ inside `stdlib` to compile all of the standard library modules, transaction scri
 
 ### Testing
 
-Most tests for the standard library live [here](../move-lang/tests/functional) and can be run with `cargo test`.
+Most tests for the standard library live [here](../move-lang/functional-tests) and can be run with `cargo test`.
 
 These tests use the Move functional testing framework, which we will briefly explain here (more details can be found in this [blog post](https://developers.libra.org/blog/2020/03/06/how-to-use-the-end-to-end-tests-framework-in-move).
 
 A functional test is a sequence of Move transaction scripts that are executed against the genesis state of the blockchain. Tests typically call functions of the module under test and then use `assert`s to check that the call had the expected effect. The framework includes directives for checking that a transaction executed successfully (`// check: EXECUTED`) or aborted (e.g., `// check: ABORTED`). In addition, there are configuration macros (written `//!`) for creating accounts with human-readable names (`//! account: alice`), begining a new transaction (`//! new-transaction`), and setting the sender of a transaction (`//! sender: alice`).
 
-The functional testing framework is very convenient, but can't express all of the tests we need to write. More heavyweight tests that create/execute transactions from Rust code live [here](../e2e-tests/src/tests) and can be run with `cargo test`.
+The functional testing framework is very convenient, but can't express all of the tests we need to write. More heavyweight tests that create/execute transactions from Rust code live [here](../testing-infra/e2e-tests/src/tests) and can be run with `cargo test`.
 
 ## Changing the standard library
 
@@ -40,15 +40,15 @@ The functional testing framework is very convenient, but can't express all of th
 - Add or edit the relevant `.move` file under [modules](modules/)
 - [Build](#building) your changes and address compiler errors as needed
 - Once the stdlib builds, add new functional [tests](#testing)
-- If you have added a new `public` function that is intended to be called from a user-submitted transaction, make sure you introduce a new transaction script and add it to the whitelist (see [below](#transaction-scripts))
+- If you have added a new `public` function that is intended to be called from a user-submitted transaction, make sure you introduce a new transaction script and add it to the allowlist (see [below](#transaction-scripts))
 
 ### Transaction Scripts
 
 - Add or edit the relevant `.move` file under [transaction scripts](transaction_scripts)
 - [Build](#building) your changes and address compiler errors as needed
-- If you have added a new script, extend the `StdlibScript` enum and script whitelist (`all()` function) [here](src/stdlib.rs). Don't forget to `git add` the compiled binary for the new script (`your_script.mv` [here](staged/transaction_scripts)).
+- If you have added a new script, extend the `StdlibScript` enum and script allowlist (`all()` function) [here](src/stdlib.rs). Don't forget to `git add` the compiled binary for the new script (`your_script.mv` [here](staged/transaction_scripts)).
 - In addition, add a Rust wrapper for your script [here](../transaction-builder/src/lib.rs) to allow client code and tests to create the script.
-- Add or modify tests for the script under the end-to-end [tests](../e2e-tests/src/tests/transaction_builder.rs)
+- Add or modify tests for the script under the end-to-end [tests](../testing-infra/e2e-tests/src/tests/transaction_builder.rs)
 - If you have added a new script, don't forget to `git add` the new script binary
 
 ## Coding conventions

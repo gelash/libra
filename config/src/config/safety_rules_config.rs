@@ -3,7 +3,7 @@
 
 use crate::{
     config::{LoggerConfig, SecureBackend},
-    keys::KeyPair,
+    keys::ConfigKey,
 };
 use libra_crypto::{ed25519::Ed25519PrivateKey, Uniform};
 use libra_network_address::NetworkAddress;
@@ -23,6 +23,8 @@ pub struct SafetyRulesConfig {
     pub service: SafetyRulesService,
     pub test: Option<SafetyRulesTestConfig>,
     pub verify_vote_proposal_signature: bool,
+    // Read/Write/Connect networking operation timeout in milliseconds.
+    pub network_timeout_ms: u64,
 }
 
 impl Default for SafetyRulesConfig {
@@ -33,6 +35,8 @@ impl Default for SafetyRulesConfig {
             service: SafetyRulesService::Thread,
             test: None,
             verify_vote_proposal_signature: true,
+            // Default value of 30seconds for a timeout
+            network_timeout_ms: 30_000,
         }
     }
 }
@@ -56,9 +60,6 @@ pub enum SafetyRulesService {
     /// This runs safety rules in the same thread as event processor but data is passed through the
     /// light weight RPC (serializer)
     Serializer,
-    /// This instructs Consensus that this is an test model, where Consensus should take the
-    /// existing config, create a new process, and pass it the config
-    SpawnedProcess(RemoteService),
     /// This creates a separate thread to run safety rules, it is similar to a fork / exec style
     Thread,
 }
@@ -79,41 +80,31 @@ impl RemoteService {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone))]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SafetyRulesTestConfig {
     pub author: PeerId,
-    #[serde(rename = "consensus_private_key")]
-    pub consensus_keypair: Option<KeyPair<Ed25519PrivateKey>>,
-    #[serde(rename = "execution_private_key")]
-    pub execution_keypair: Option<KeyPair<Ed25519PrivateKey>>,
+    pub consensus_key: Option<ConfigKey<Ed25519PrivateKey>>,
+    pub execution_key: Option<ConfigKey<Ed25519PrivateKey>>,
     pub waypoint: Option<Waypoint>,
-}
-
-#[cfg(not(any(test, feature = "fuzzing")))]
-impl Clone for SafetyRulesTestConfig {
-    fn clone(&self) -> Self {
-        Self::new(self.author)
-    }
 }
 
 impl SafetyRulesTestConfig {
     pub fn new(author: PeerId) -> Self {
         Self {
             author,
-            consensus_keypair: None,
-            execution_keypair: None,
+            consensus_key: None,
+            execution_key: None,
             waypoint: None,
         }
     }
 
     pub fn random_consensus_key(&mut self, rng: &mut StdRng) {
         let privkey = Ed25519PrivateKey::generate(rng);
-        self.consensus_keypair = Some(KeyPair::<Ed25519PrivateKey>::load(privkey));
+        self.consensus_key = Some(ConfigKey::<Ed25519PrivateKey>::new(privkey));
     }
 
     pub fn random_execution_key(&mut self, rng: &mut StdRng) {
         let privkey = Ed25519PrivateKey::generate(rng);
-        self.execution_keypair = Some(KeyPair::<Ed25519PrivateKey>::load(privkey));
+        self.execution_key = Some(ConfigKey::<Ed25519PrivateKey>::new(privkey));
     }
 }

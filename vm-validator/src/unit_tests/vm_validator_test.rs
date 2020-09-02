@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::vm_validator::{TransactionValidation, VMValidator};
-use executor::db_bootstrapper::bootstrap_db_if_empty;
 use libra_config::{config::NodeConfig, utils::get_genesis_txn};
 use libra_crypto::{ed25519::Ed25519PrivateKey, PrivateKey, Uniform};
 use libra_types::{
@@ -17,7 +16,7 @@ use libradb::LibraDB;
 use rand::SeedableRng;
 use std::u64;
 use storage_interface::DbReaderWriter;
-use transaction_builder::encode_transfer_with_metadata_script;
+use transaction_builder::encode_peer_to_peer_with_metadata_script;
 
 struct TestValidator {
     vm_validator: VMValidator,
@@ -26,8 +25,11 @@ struct TestValidator {
 impl TestValidator {
     fn new(config: &NodeConfig) -> Self {
         let (db, db_rw) = DbReaderWriter::wrap(LibraDB::new_for_test(&config.storage.dir()));
-        bootstrap_db_if_empty::<LibraVM>(&db_rw, get_genesis_txn(config).unwrap())
-            .expect("Db-bootstrapper should not fail.");
+        executor_test_helpers::bootstrap_genesis::<LibraVM>(
+            &db_rw,
+            get_genesis_txn(config).unwrap(),
+        )
+        .expect("Db-bootstrapper should not fail.");
 
         // Create another client for the vm_validator since the one used for the executor will be
         // run on another runtime which will be dropped before this function returns.
@@ -50,7 +52,7 @@ impl std::ops::Deref for TestValidator {
 // errors are not exercised:
 // * Sequence number too old -- We can't test sequence number too old here without running execution
 //   first in order to bump the account's sequence number. This needs to (and is) tested in the
-//   language e2e tests in: libra/language/e2e-tests/src/tests/verify_txn.rs ->
+//   language e2e tests in: libra/language/e2e-testsuite/src/tests/verify_txn.rs ->
 //   verify_simple_payment.
 // * Errors arising from deserializing the code -- these are tested in
 //   - libra/language/vm/src/unit_tests/deserializer_tests.rs
@@ -58,16 +60,16 @@ impl std::ops::Deref for TestValidator {
 // * Errors arising from calls to `static_verify_program` -- this is tested separately in tests for
 //   the bytecode verifier.
 // * Testing for invalid genesis write sets -- this is tested in
-//   libra/language/e2e-tests/src/tests/genesis.rs
+//   libra/language/e2e-testsuite/src/tests/genesis.rs
 
 #[test]
 fn test_validate_transaction() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_signed_txn(
         address,
         1,
@@ -88,9 +90,9 @@ fn test_validate_invalid_signature() {
     let other_private_key = Ed25519PrivateKey::generate(&mut rng);
     // Submit with an account using an different private/public keypair
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_unchecked_txn(
         address,
         1,
@@ -99,10 +101,7 @@ fn test_validate_invalid_signature() {
         Some(program),
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(
-        ret.status().unwrap().major_status,
-        StatusCode::INVALID_SIGNATURE
-    );
+    assert_eq!(ret.status().unwrap(), StatusCode::INVALID_SIGNATURE);
 }
 
 #[test]
@@ -110,7 +109,7 @@ fn test_validate_known_script_too_large_args() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         address,
         1,
@@ -131,7 +130,7 @@ fn test_validate_known_script_too_large_args() {
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
     assert_eq!(
-        ret.status().unwrap().major_status,
+        ret.status().unwrap(),
         StatusCode::EXCEEDED_MAX_TRANSACTION_SIZE
     );
 }
@@ -141,7 +140,7 @@ fn test_validate_max_gas_units_above_max() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         address,
         1,
@@ -155,7 +154,7 @@ fn test_validate_max_gas_units_above_max() {
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
     assert_eq!(
-        ret.status().unwrap().major_status,
+        ret.status().unwrap(),
         StatusCode::MAX_GAS_UNITS_EXCEEDS_MAX_GAS_UNITS_BOUND
     );
 }
@@ -165,7 +164,7 @@ fn test_validate_max_gas_units_below_min() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         address,
         1,
@@ -179,7 +178,7 @@ fn test_validate_max_gas_units_below_min() {
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
     assert_eq!(
-        ret.status().unwrap().major_status,
+        ret.status().unwrap(),
         StatusCode::MAX_GAS_UNITS_BELOW_MIN_TRANSACTION_GAS_UNITS
     );
 }
@@ -189,7 +188,7 @@ fn test_validate_max_gas_price_above_bounds() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         address,
         1,
@@ -203,7 +202,7 @@ fn test_validate_max_gas_price_above_bounds() {
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
     assert_eq!(
-        ret.status().unwrap().major_status,
+        ret.status().unwrap(),
         StatusCode::GAS_UNIT_PRICE_ABOVE_MAX_BOUND
     );
 }
@@ -216,9 +215,9 @@ fn test_validate_max_gas_price_below_bounds() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         address,
         1,
@@ -245,7 +244,7 @@ fn test_validate_unknown_script() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::testnet_dd_account_address();
     let transaction = transaction_test_helpers::get_test_signed_txn(
         address,
         1,
@@ -254,13 +253,10 @@ fn test_validate_unknown_script() {
         Some(Script::new(vec![], vec![], vec![])),
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(
-        ret.status().unwrap().major_status,
-        StatusCode::UNKNOWN_SCRIPT
-    );
+    assert_eq!(ret.status().unwrap(), StatusCode::UNKNOWN_SCRIPT);
 }
 
-// Make sure that we can publish non-whitelisted modules from the association address
+// Make sure that we can publish non-allowlisted modules from the association address
 #[cfg(not(feature = "allow_custom_transaction_scripts"))]
 #[cfg(not(feature = "custom_modules"))]
 #[test]
@@ -268,7 +264,7 @@ fn test_validate_module_publishing() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction = transaction_test_helpers::get_test_signed_module_publishing_transaction(
         address,
         1,
@@ -280,7 +276,7 @@ fn test_validate_module_publishing() {
     assert_eq!(ret.status(), None);
 }
 
-// Make sure that we can't publish non-whitelisted modules
+// Make sure that we can't publish non-allowlisted modules
 #[cfg(not(feature = "allow_custom_transaction_scripts"))]
 #[cfg(not(feature = "custom_modules"))]
 #[test]
@@ -297,10 +293,7 @@ fn test_validate_module_publishing_non_association() {
         Module::new(vec![]),
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(
-        ret.status().unwrap().major_status,
-        StatusCode::INVALID_MODULE_PUBLISHER
-    );
+    assert_eq!(ret.status().unwrap(), StatusCode::INVALID_MODULE_PUBLISHER);
 }
 
 #[test]
@@ -312,9 +305,9 @@ fn test_validate_invalid_auth_key() {
     let other_private_key = Ed25519PrivateKey::generate(&mut rng);
     // Submit with an account using an different private/public keypair
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_signed_txn(
         address,
         1,
@@ -323,10 +316,7 @@ fn test_validate_invalid_auth_key() {
         Some(program),
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(
-        ret.status().unwrap().major_status,
-        StatusCode::INVALID_AUTH_KEY
-    );
+    assert_eq!(ret.status().unwrap(), StatusCode::INVALID_AUTH_KEY);
 }
 
 #[test]
@@ -334,10 +324,10 @@ fn test_validate_account_doesnt_exist() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let random_account_addr = account_address::AccountAddress::random();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_signed_transaction(
         random_account_addr,
         1,
@@ -351,7 +341,7 @@ fn test_validate_account_doesnt_exist() {
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
     assert_eq!(
-        ret.status().unwrap().major_status,
+        ret.status().unwrap(),
         StatusCode::SENDING_ACCOUNT_DOES_NOT_EXIST
     );
 }
@@ -361,9 +351,9 @@ fn test_validate_sequence_number_too_new() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let program =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![]);
     let transaction = transaction_test_helpers::get_test_signed_txn(
         address,
         1,
@@ -380,9 +370,9 @@ fn test_validate_invalid_arguments() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let (program_script, _) =
-        encode_transfer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![])
+        encode_peer_to_peer_with_metadata_script(lbr_type_tag(), address, 100, vec![], vec![])
             .into_inner();
     let program = Script::new(program_script, vec![], vec![TransactionArgument::U64(42)]);
     let transaction = transaction_test_helpers::get_test_signed_txn(
@@ -402,10 +392,10 @@ fn test_validate_non_genesis_write_set() {
     let (config, key) = config_builder::test_config();
     let vm_validator = TestValidator::new(&config);
 
-    let address = account_config::association_address();
+    let address = account_config::libra_root_address();
     let transaction =
         transaction_test_helpers::get_write_set_txn(address, 2, &key, key.public_key(), None)
             .into_inner();
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(ret.status().unwrap().major_status, StatusCode::ABORTED);
+    assert_eq!(ret.status().unwrap(), StatusCode::REJECTED_WRITE_SET);
 }

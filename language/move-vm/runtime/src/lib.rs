@@ -13,11 +13,18 @@
 extern crate mirai_annotations;
 
 pub mod data_cache;
-mod data_operations;
 mod interpreter;
 mod loader;
 pub mod move_vm;
 mod native_functions;
 mod runtime;
+pub mod session;
 #[macro_use]
 mod tracing;
+
+// Only include debugging functionality in debug builds
+#[cfg(debug_assertions)]
+mod debug;
+
+#[cfg(test)]
+mod unit_tests;

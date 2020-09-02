@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::account_address::AccountAddress;
-use libra_crypto::{ed25519::Ed25519PublicKey, x25519};
-use libra_network_address::RawNetworkAddress;
+use libra_crypto::ed25519::Ed25519PublicKey;
+use libra_network_address::{encrypted::EncNetworkAddress, NetworkAddress};
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq, Default)]
 pub struct ValidatorConfigResource {
     pub validator_config: Option<ValidatorConfig>,
     pub delegated_account: Option<AccountAddress>,
+    pub human_name: Vec<u8>,
 }
 
 impl MoveResource for ValidatorConfigResource {
@@ -20,30 +21,44 @@ impl MoveResource for ValidatorConfigResource {
     const STRUCT_NAME: &'static str = "ValidatorConfig";
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq, Default)]
+pub struct ValidatorOperatorConfigResource {
+    pub human_name: Vec<u8>,
+}
+
+impl MoveResource for ValidatorOperatorConfigResource {
+    const MODULE_NAME: &'static str = "ValidatorOperatorConfig";
+    const STRUCT_NAME: &'static str = "ValidatorOperatorConfig";
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConfig {
     pub consensus_public_key: Ed25519PublicKey,
-    pub validator_network_identity_public_key: x25519::PublicKey,
-    pub validator_network_address: RawNetworkAddress,
-    pub full_node_network_identity_public_key: x25519::PublicKey,
-    pub full_node_network_address: RawNetworkAddress,
+    /// This is an lcs serialized Vec<EncNetworkAddress>
+    pub validator_network_addresses: Vec<u8>,
+    /// This is an lcs serialized Vec<NetworkAddress>
+    pub fullnode_network_addresses: Vec<u8>,
 }
 
 impl ValidatorConfig {
     pub fn new(
         consensus_public_key: Ed25519PublicKey,
-        validator_network_identity_public_key: x25519::PublicKey,
-        validator_network_address: RawNetworkAddress,
-        full_node_network_identity_public_key: x25519::PublicKey,
-        full_node_network_address: RawNetworkAddress,
+        validator_network_addresses: Vec<u8>,
+        fullnode_network_addresses: Vec<u8>,
     ) -> Self {
         ValidatorConfig {
             consensus_public_key,
-            validator_network_identity_public_key,
-            validator_network_address,
-            full_node_network_identity_public_key,
-            full_node_network_address,
+            validator_network_addresses,
+            fullnode_network_addresses,
         }
+    }
+
+    pub fn fullnode_network_addresses(&self) -> Result<Vec<NetworkAddress>, lcs::Error> {
+        lcs::from_bytes(&self.fullnode_network_addresses)
+    }
+
+    pub fn validator_network_addresses(&self) -> Result<Vec<EncNetworkAddress>, lcs::Error> {
+        lcs::from_bytes(&self.validator_network_addresses)
     }
 }

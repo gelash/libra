@@ -11,7 +11,7 @@ use libra_config::{
 };
 use libra_crypto::ed25519::Ed25519PrivateKey;
 use libra_network_address::NetworkAddress;
-use libra_types::transaction::Transaction;
+use libra_types::{chain_id::ChainId, transaction::Transaction};
 use rand::{rngs::StdRng, SeedableRng};
 use std::{collections::HashSet, str::FromStr};
 
@@ -55,6 +55,11 @@ impl Default for FullNodeConfig {
 impl FullNodeConfig {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn chain_id(&mut self, chain_id: ChainId) -> &mut Self {
+        self.validator_config.chain_id = chain_id;
+        self
     }
 
     pub fn num_validator_nodes(&mut self, nodes: usize) -> &mut Self {
@@ -141,7 +146,7 @@ impl FullNodeConfig {
         // Don't randomize ports. Until we better separate genesis generation,
         // we don't want to accidentally randomize initial discovery set addresses.
         let randomize_validator_ports = false;
-        let (validator_configs, faucet_key) = self
+        let (validator_configs, libra_root_key) = self
             .validator_config
             .build_common(randomize_validator_ports)?;
         let validator_config = validator_configs.first().ok_or(Error::NoConfigs)?;
@@ -175,10 +180,7 @@ impl FullNodeConfig {
             network.discovery_method = DiscoveryMethod::gossip(self.advertised_address.clone());
             network.mutual_authentication = self.mutual_authentication;
 
-            let pubkey = network
-                .identity
-                .public_key_from_config()
-                .ok_or(Error::MissingNetworkKeyPairs)?;
+            let pubkey = network.identity_key().public_key();
             let pubkey_set: HashSet<_> = [pubkey].iter().copied().collect();
             seed_pubkeys.insert(network.peer_id(), pubkey_set);
 
@@ -205,15 +207,15 @@ impl FullNodeConfig {
             }
         }
 
-        Ok((configs, faucet_key))
+        Ok((configs, libra_root_key))
     }
 }
 
 impl BuildSwarm for FullNodeConfig {
     fn build_swarm(&self) -> Result<(Vec<NodeConfig>, Ed25519PrivateKey)> {
-        let (mut configs, faucet_key) = self.build_internal(true)?;
+        let (mut configs, libra_root_key) = self.build_internal(true)?;
         configs.swap_remove(configs.len() - 1);
-        Ok((configs, faucet_key))
+        Ok((configs, libra_root_key))
     }
 }
 

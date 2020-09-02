@@ -16,7 +16,10 @@ use libra_types::{
     ledger_info::LedgerInfoWithSignatures,
     move_resource::MoveStorage,
     proof::{definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof},
-    transaction::{TransactionListWithProof, TransactionToCommit, TransactionWithProof, Version},
+    transaction::{
+        TransactionInfo, TransactionListWithProof, TransactionToCommit, TransactionWithProof,
+        Version,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -48,6 +51,28 @@ impl StartupInfo {
         committed_tree_state: TreeState,
         synced_tree_state: Option<TreeState>,
     ) -> Self {
+        Self {
+            latest_ledger_info,
+            latest_epoch_state,
+            committed_tree_state,
+            synced_tree_state,
+        }
+    }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn new_for_testing() -> Self {
+        use libra_types::on_chain_config::ValidatorSet;
+
+        let latest_ledger_info =
+            LedgerInfoWithSignatures::genesis(HashValue::zero(), ValidatorSet::empty());
+        let latest_epoch_state = None;
+        let committed_tree_state = TreeState {
+            num_transactions: 0,
+            ledger_frozen_subtree_hashes: Vec::new(),
+            account_state_root_hash: *SPARSE_MERKLE_PLACEHOLDER_HASH,
+        };
+        let synced_tree_state = None;
+
         Self {
             latest_ledger_info,
             latest_epoch_state,
@@ -92,6 +117,22 @@ impl TreeState {
         self.num_transactions == 0
             && self.account_state_root_hash == *SPARSE_MERKLE_PLACEHOLDER_HASH
     }
+
+    pub fn describe(&self) -> String {
+        if self.num_transactions != 0 {
+            format!(
+                "DB has {} transactions in it, state root hash is {}.",
+                self.num_transactions, self.account_state_root_hash
+            )
+        } else if self.account_state_root_hash != *SPARSE_MERKLE_PLACEHOLDER_HASH {
+            format!(
+                "DB has no transactions in it, but has pre-genesis state, state root hash is {}.",
+                self.account_state_root_hash
+            )
+        } else {
+            "DB is empty, has no transactions or state.".into()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Error, PartialEq, Serialize)]
@@ -125,6 +166,12 @@ impl From<libra_secure_net::Error> for Error {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Order {
+    Ascending,
+    Descending,
+}
+
 /// Trait that is implemented by a DB that supports certain public (to client) read APIs
 /// expected of a Libra DB
 pub trait DbReader: Send + Sync {
@@ -154,7 +201,7 @@ pub trait DbReader: Send + Sync {
         &self,
         event_key: &EventKey,
         start: u64,
-        ascending: bool,
+        order: Order,
         limit: u64,
     ) -> Result<Vec<(u64, ContractEvent)>>;
 
@@ -254,11 +301,18 @@ pub trait DbReader: Send + Sync {
 
     /// Get the ledger info of the epoch that `known_version` belongs to.
     fn get_epoch_ending_ledger_info(&self, known_version: u64) -> Result<LedgerInfoWithSignatures>;
+
+    /// Gets the latest transaction info.
+    /// N.B. Unlike get_startup_info(), even if the db is not bootstrapped, this can return `Some`
+    /// -- those from a db-restore run.
+    fn get_latest_transaction_info_option(&self) -> Result<Option<(Version, TransactionInfo)>> {
+        unimplemented!()
+    }
 }
 
 impl MoveStorage for &dyn DbReader {
     fn batch_fetch_resources(&self, access_paths: Vec<AccessPath>) -> Result<Vec<Vec<u8>>> {
-        self.batch_fetch_resources_by_version(access_paths, self.get_latest_version()?)
+        self.batch_fetch_resources_by_version(access_paths, self.fetch_synced_version()?)
     }
 
     fn batch_fetch_resources_by_version(
@@ -275,15 +329,15 @@ impl MoveStorage for &dyn DbReader {
 
         let results = addresses
             .iter()
-            .map(|addr| self.get_account_state_with_proof(*addr, version, version))
+            .map(|addr| self.get_account_state_with_proof_by_version(*addr, version))
             .collect::<Result<Vec<_>>>()?;
 
         // Account address --> AccountState
         let account_states = addresses
             .iter()
             .zip_eq(results)
-            .map(|(addr, result)| {
-                let account_state = AccountState::try_from(&result.blob.ok_or_else(|| {
+            .map(|(addr, (blob, _proof))| {
+                let account_state = AccountState::try_from(&blob.ok_or_else(|| {
                     format_err!("missing blob in account state/account does not exist")
                 })?)?;
                 Ok((addr, account_state))
@@ -301,6 +355,19 @@ impl MoveStorage for &dyn DbReader {
                     .clone())
             })
             .collect()
+    }
+
+    fn fetch_synced_version(&self) -> Result<u64> {
+        let (synced_version, _) = self
+            .get_latest_transaction_info_option()
+            .map_err(|e| {
+                format_err!(
+                    "[MoveStorage] Failed fetching latest transaction info: {}",
+                    e
+                )
+            })?
+            .ok_or_else(|| format_err!("[MoveStorage] Latest transaction info not found."))?;
+        Ok(synced_version)
     }
 }
 
@@ -334,12 +401,16 @@ impl DbReaderWriter {
         Self { reader, writer }
     }
 
-    pub fn wrap<D: 'static + DbReader + DbWriter>(db: D) -> (Arc<D>, Self) {
-        let arc_db = Arc::new(db);
+    pub fn from_arc<D: 'static + DbReader + DbWriter>(arc_db: Arc<D>) -> Self {
         let reader = Arc::clone(&arc_db);
         let writer = Arc::clone(&arc_db);
 
-        (arc_db, Self { reader, writer })
+        Self { reader, writer }
+    }
+
+    pub fn wrap<D: 'static + DbReader + DbWriter>(db: D) -> (Arc<D>, Self) {
+        let arc_db = Arc::new(db);
+        (Arc::clone(&arc_db), Self::from_arc(arc_db))
     }
 }
 

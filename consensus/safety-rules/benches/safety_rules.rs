@@ -110,7 +110,9 @@ fn thread(n: u64) {
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
     );
-    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false);
+    // Test value, in milliseconds
+    let timeout_ms = 5_000;
+    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false, timeout_ms);
     lsr(safety_rules_manager.client(), signer, n);
 }
 
@@ -118,8 +120,13 @@ fn vault(n: u64) {
     let signer = ValidatorSigner::from_int(0);
     let waypoint = test_utils::validator_signers_to_waypoint(&[&signer]);
 
-    let mut storage =
-        VaultStorage::new(VAULT_HOST.to_string(), VAULT_TOKEN.to_string(), None, None);
+    let mut storage = VaultStorage::new(
+        VAULT_HOST.to_string(),
+        VAULT_TOKEN.to_string(),
+        None,
+        None,
+        None,
+    );
     storage.reset_and_clear().unwrap();
 
     let storage = PersistentSafetyStorage::initialize(
@@ -129,7 +136,9 @@ fn vault(n: u64) {
         Ed25519PrivateKey::generate_for_testing(),
         waypoint,
     );
-    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false);
+    // Test value in milliseconds.
+    let timeout_ms = 5_000;
+    let safety_rules_manager = SafetyRulesManager::new_thread(storage, false, timeout_ms);
     lsr(safety_rules_manager.client(), signer, n);
 }
 
@@ -138,7 +147,13 @@ pub fn benchmark(c: &mut Criterion) {
     let duration_secs = 5;
     let samples = 10;
 
-    let storage = VaultStorage::new(VAULT_HOST.to_string(), VAULT_TOKEN.to_string(), None, None);
+    let storage = VaultStorage::new(
+        VAULT_HOST.to_string(),
+        VAULT_TOKEN.to_string(),
+        None,
+        None,
+        None,
+    );
 
     let enable_vault = if storage.available().is_err() {
         println!(

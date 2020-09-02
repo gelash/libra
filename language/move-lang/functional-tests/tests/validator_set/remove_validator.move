@@ -9,7 +9,7 @@
 //! block-time: 3
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 // remove_validator cannot be called on a non-validator
 script{
     use 0x1::LibraSystem;
@@ -18,8 +18,7 @@ script{
     }
 }
 
-// check: ABORTED
-// check: 21
+// check: "Keep(ABORTED { code: 775,"
 
 // remove_validator can only be called by the Association
 //! new-transaction
@@ -31,10 +30,10 @@ script{
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 2,"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 // should work because Vivian is a validator
 script{
     use 0x1::LibraSystem;
@@ -44,10 +43,10 @@ script{
 }
 
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 // double-removing Vivian should fail
 script{
     use 0x1::LibraSystem;
@@ -56,4 +55,4 @@ script{
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 775,"

@@ -8,6 +8,7 @@ use std::{
 };
 
 use libra_logger::{info, warn};
+use libra_types::chain_id::ChainId;
 use reqwest::Url;
 use structopt::{clap::ArgGroup, StructOpt};
 use termion::{color, style};
@@ -60,6 +61,8 @@ struct Args {
     #[structopt(long, group = "action", requires = "swarm")]
     diag: bool,
     #[structopt(long, group = "action")]
+    no_teardown: bool,
+    #[structopt(long, group = "action")]
     suite: Option<String>,
     #[structopt(long, group = "action")]
     exec: Option<String>,
@@ -83,6 +86,8 @@ struct Args {
     burst: bool,
     #[structopt(long, default_value = "mint.key")]
     mint_file: String,
+    #[structopt(long, default_value = "TESTING")]
+    chain_id: ChainId,
     #[structopt(
         long,
         help = "Time to run --emit-tx for in seconds",
@@ -169,7 +174,9 @@ pub async fn main() {
             warn!("Tearing down cluster now");
         }
     }
-    runner.teardown().await;
+    if !args.no_teardown {
+        runner.teardown().await;
+    }
     let perf_msg = exit_on_error(result);
 
     if let Some(mut changelog) = args.changelog {
@@ -197,7 +204,14 @@ async fn handle_cluster_test_runner_commands(
     let startup_timeout = Duration::from_secs(5 * 60);
     runner
         .wait_until_all_healthy(Instant::now() + startup_timeout)
-        .await?;
+        .await
+        .map_err(|err| {
+            runner
+                .report
+                .report_text(format!("Cluster setup failed: `{}`", err));
+            runner.print_report();
+            err
+        })?;
     let mut perf_msg = None;
     if args.health_check {
         let duration = Duration::from_secs(args.duration);
@@ -252,6 +266,8 @@ struct BasicSwarmUtil {
 struct ClusterTestRunner {
     logs: LogTail,
     trace_tail: TraceTail,
+    cluster_builder: ClusterBuilder,
+    cluster_builder_params: ClusterBuilderParams,
     cluster: Cluster,
     health_check_runner: HealthCheckRunner,
     slack: SlackClient,
@@ -354,14 +370,14 @@ impl BasicSwarmUtil {
             .map(|peer| parse_host_port(peer).expect("Failed to parse host_port"))
             .collect();
 
-        let cluster = Cluster::from_host_port(parsed_peers, &args.mint_file);
+        let cluster = Cluster::from_host_port(parsed_peers, &args.mint_file, args.chain_id);
         Self { cluster }
     }
 
     pub async fn diag(&self) -> Result<()> {
         let emitter = TxEmitter::new(&self.cluster);
         let mut faucet_account: Option<AccountData> = None;
-        let instances: Vec<_> = self.cluster.all_instances().collect();
+        let instances: Vec<_> = self.cluster.validator_and_fullnode_instances().collect();
         for instance in &instances {
             print!("Getting faucet account sequence number on {}...", instance);
             let account = emitter
@@ -462,8 +478,9 @@ impl ClusterTestRunner {
             .expect("Failed to discover grafana url in k8s");
         let prometheus = Prometheus::new(prometheus_ip, grafana_base_url);
         let cluster_builder = ClusterBuilder::new(current_tag.to_string(), cluster_swarm.clone());
+        let cluster_builder_params = args.cluster_builder_params.clone();
         let cluster = cluster_builder
-            .setup_cluster(&args.cluster_builder_params)
+            .setup_cluster(&cluster_builder_params, true)
             .await
             .map_err(|e| format_err!("Failed to setup cluster: {}", e))?;
         let log_tail_started = Instant::now();
@@ -499,6 +516,8 @@ impl ClusterTestRunner {
         Ok(Self {
             logs,
             trace_tail,
+            cluster_builder,
+            cluster_builder_params,
             cluster,
             health_check_runner,
             slack,
@@ -545,6 +564,7 @@ impl ClusterTestRunner {
                     }
                     let commit_lines: Vec<_> = commit.commit.message.split('\n').collect();
                     let commit_head = commit_lines[0];
+                    let commit_head = commit_head.replace("[breaking]", "*[breaking]*");
                     let short_sha = &commit.sha[..6];
                     let email_parts: Vec<_> = commit.commit.author.email.split('@').collect();
                     let author = email_parts[0];
@@ -561,11 +581,15 @@ impl ClusterTestRunner {
         let suite_started = Instant::now();
         for experiment in suite.experiments {
             let experiment_name = format!("{}", experiment);
-            self.run_single_experiment(experiment, None)
+            let experiment_result = self
+                .run_single_experiment(experiment, None)
                 .await
-                .map_err(move |e| {
-                    format_err!("Experiment `{}` failed: `{}`", experiment_name, e)
-                })?;
+                .map_err(move |e| format_err!("Experiment `{}` failed: `{}`", experiment_name, e));
+            if let Err(e) = experiment_result.as_ref() {
+                self.report.report_text(e.to_string());
+                self.print_report();
+                experiment_result?;
+            }
         }
         info!(
             "Suite completed in {:?}",
@@ -591,10 +615,24 @@ impl ClusterTestRunner {
     }
 
     pub async fn run_and_report(&mut self, experiment: Box<dyn Experiment>) -> Result<()> {
-        self.run_single_experiment(experiment, Some(self.global_emit_job_request.clone()))
-            .await?;
-        self.print_report();
-        Ok(())
+        let experiment_name = format!("{}", experiment);
+        match self
+            .run_single_experiment(experiment, Some(self.global_emit_job_request.clone()))
+            .await
+        {
+            Ok(_) => {
+                self.print_report();
+                Ok(())
+            }
+            Err(err) => {
+                self.report.report_text(format!(
+                    "Experiment `{}` failed: `{}`",
+                    experiment_name, err
+                ));
+                self.print_report();
+                Err(err)
+            }
+        }
     }
 
     pub async fn run_single_experiment(
@@ -653,6 +691,8 @@ impl ClusterTestRunner {
             &mut self.tx_emitter,
             &mut self.trace_tail,
             &self.prometheus,
+            &mut self.cluster_builder,
+            &self.cluster_builder_params,
             &self.cluster,
             &mut self.report,
             &mut global_emit_job_request,
@@ -710,13 +750,20 @@ impl ClusterTestRunner {
             "All nodes are now healthy. Checking json rpc endpoints of validators and full nodes"
         );
         loop {
-            let results = join_all(self.cluster.all_instances().map(Instance::try_json_rpc)).await;
+            let results = join_all(
+                self.cluster
+                    .validator_and_fullnode_instances()
+                    .map(Instance::try_json_rpc),
+            )
+            .await;
 
             if results.iter().all(Result::is_ok) {
                 break;
             }
             if Instant::now() > deadline {
-                for (instance, result) in zip(self.cluster.all_instances(), results) {
+                for (instance, result) in
+                    zip(self.cluster.validator_and_fullnode_instances(), results)
+                {
                     if let Err(err) = result {
                         warn!("Instance {} still unhealthy: {}", instance, err);
                     }
@@ -742,7 +789,7 @@ impl ClusterTestRunner {
             .cluster
             .find_instance_by_pod(pod)
             .ok_or_else(|| format_err!("Can not find instance with pod {}", pod))?;
-        instance.exec(cmd).await
+        instance.exec(cmd, false).await
     }
 }
 

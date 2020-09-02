@@ -14,6 +14,7 @@ use libra_types::transaction::Version;
 use schemadb::{SchemaBatch, DB};
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub(crate) struct SystemStore {
     db: Arc<DB>,
 }
@@ -41,7 +42,7 @@ impl SystemStore {
             if let Some(counters) = self.db.get::<LedgerCountersSchema>(&base_version)? {
                 counters
             } else {
-                crit!(
+                error!(
                     "Base version ({}) ledger counters not found. Assuming zeros.",
                     base_version
                 );

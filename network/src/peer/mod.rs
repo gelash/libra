@@ -6,7 +6,7 @@
 use crate::{
     counters,
     peer_manager::PeerManagerError,
-    protocols::wire::messaging::v1::NetworkMessage,
+    protocols::wire::messaging::v1::{ErrorCode, NetworkMessage},
     transport,
     transport::{Connection, ConnectionMetadata},
     ProtocolId,
@@ -22,7 +22,7 @@ use futures::{
 use libra_logger::prelude::*;
 use libra_types::PeerId;
 use netcore::compat::IoCompat;
-use serde::Serialize;
+use serde::{export::Formatter, Serialize};
 use std::{fmt::Debug, io, time::Duration};
 use stream_ratelimiter::*;
 use tokio::runtime::Handle;
@@ -49,6 +49,19 @@ pub enum PeerRequest {
 pub enum DisconnectReason {
     Requested,
     ConnectionLost,
+}
+
+impl std::fmt::Display for DisconnectReason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DisconnectReason::Requested => "Requested",
+                DisconnectReason::ConnectionLost => "ConnectionLost",
+            }
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -79,6 +92,9 @@ pub struct Peer<TSocket> {
     direct_send_notifs_tx: channel::Sender<PeerNotification>,
     /// Flag to indicate if the actor is being shut down.
     state: State,
+    /// The maximum size of an inbound or outbound request frame
+    /// Currently, requests are only a single frame
+    max_frame_size: usize,
 }
 
 impl<TSocket> Peer<TSocket>
@@ -92,6 +108,7 @@ where
         peer_notifs_tx: channel::Sender<PeerNotification>,
         rpc_notifs_tx: channel::Sender<PeerNotification>,
         direct_send_notifs_tx: channel::Sender<PeerNotification>,
+        max_frame_size: usize,
     ) -> Self {
         let Connection {
             metadata: connection_metadata,
@@ -106,11 +123,12 @@ where
             rpc_notifs_tx,
             direct_send_notifs_tx,
             state: State::Connected,
+            max_frame_size,
         }
     }
 
     fn peer_id(&self) -> PeerId {
-        self.connection_metadata.peer_id()
+        self.connection_metadata.peer_id
     }
 
     pub async fn start(mut self) {
@@ -119,16 +137,24 @@ where
             "Starting Peer actor for peer: {:?}",
             self_peer_id.short_str()
         );
+
         // Split the connection into a ReadHalf and a WriteHalf.
         let (reader, writer) = tokio::io::split(IoCompat::new(self.connection.take().unwrap()));
+        let mut codec_builder = LengthDelimitedCodec::builder();
+        codec_builder
+            .max_frame_length(self.max_frame_size)
+            .length_field_length(4)
+            .big_endian();
         // Convert ReadHalf to Stream of length-delimited messages.
-        let reader = FramedRead::new(reader, LengthDelimitedCodec::new()).fuse();
+
+        let reader = FramedRead::new(reader, codec_builder.new_codec()).fuse();
         // Create a rate-limited stream of inbound messages.
         let mut reader = reader
             .ratelimit(MESSAGE_RATE_LIMIT_WINDOW, MESSAGE_RATE_LIMIT_COUNT)
             .fuse();
+
         // Convert WriteHalf to Sink of length-delimited messages.
-        let writer = FramedWrite::new(writer, LengthDelimitedCodec::new());
+        let writer = FramedWrite::new(writer, codec_builder.new_codec());
         // Start writer "process" as a separate task. We receive two handles to communicate with
         // the task:
         // `write_reqs_tx`: Instruction to send a NetworkMessage on the wire.
@@ -153,17 +179,17 @@ where
                             match maybe_message {
                                 Some(Ok(message)) =>  {
                                     if let Err(err) = self.handle_inbound_message(message, write_reqs_tx.clone()).await {
-                                        warn!("Error in handling inbound message from peer: {:?}. Error: {:?}",
+                                        warn!("Error in handling inbound message from peer: {}. Error: {:?}",
                                             self_peer_id.short_str(), err);
                                     }
                                 },
                                 Some(Err(err)) => {
-                                    warn!("Failure in reading messages from socket from peer: {:?}. Error: {:?}",
+                                    warn!("Failure in reading messages from socket from peer: {}. Error: {:?}",
                                         self_peer_id.short_str(), err);
                                     self.close_connection( DisconnectReason::ConnectionLost).await;
                                 }
                                 None => {
-                                    warn!("Received connection closed event for peer: {:?}",
+                                    warn!("Received connection closed event for peer: {}",
                                         self_peer_id.short_str());
                                     self.close_connection(DisconnectReason::ConnectionLost).await;
                                 }
@@ -176,7 +202,7 @@ where
                     // task drops all pending outbound messages and closes the connection.
                     if let Err(e) = close_tx.send(()) {
                         info!(
-                            "Failed to send close intruction to writer task. It must already be terminating/terminated. Error: {:?}",
+                            "Failed to send close instruction to writer task. It must already be terminating/terminated. Error: {:?}",
                             e
                         );
                     }
@@ -195,7 +221,7 @@ where
                             e
                         );
                     }
-                    debug!("Peer actor '{}' shutdown", self.peer_id().short_str(),);
+                    debug!("Peer actor '{}' shutdown", self.peer_id().short_str());
                     break;
                 }
             }
@@ -236,14 +262,14 @@ where
                         if let Err(e) = writer
                             .send(
                                 lcs::to_bytes(&message)
-                                    .expect("Outboung message failed to serialize")
+                                    .expect("Outbound message failed to serialize")
                                     .into(),
                             )
                             .map_ok(|_| ack_ch.send(Ok(())))
                             .await
                         {
                             warn!(
-                                "Error in sending message to peer: {:?}. Error: {:?}",
+                                "Error in sending message to peer: {}. Error: {:?}",
                                 self_peer_id.short_str(),
                                 e
                             );
@@ -255,7 +281,7 @@ where
                     }
                 }
             }
-            info!("Closing connection to peer: {:?}", self_peer_id.short_str());
+            info!("Closing connection to peer: {}", self_peer_id.short_str());
             let flush_and_close = async move {
                 writer.flush().await?;
                 writer.close().await?;
@@ -264,19 +290,19 @@ where
             match tokio::time::timeout(transport::TRANSPORT_TIMEOUT, flush_and_close).await {
                 Err(_) => {
                     info!(
-                        "Timeout in flush/close of connection to peer: {:?}",
+                        "Timeout in flush/close of connection to peer: {}",
                         self_peer_id.short_str()
                     );
                 }
                 Ok(Err(e)) => {
                     info!(
-                        "Failure in flush/close of connection to peer: {:?}. Error: {:?}",
+                        "Failure in flush/close of connection to peer: {}. Error: {:?}",
                         self_peer_id.short_str(),
                         e
                     );
                 }
                 Ok(Ok(())) => {
-                    info!("Closed connection to peer: {:?}", self_peer_id.short_str());
+                    info!("Closed connection to peer: {}", self_peer_id.short_str());
                 }
             }
         };
@@ -292,19 +318,23 @@ where
             oneshot::Sender<Result<(), PeerManagerError>>,
         )>,
     ) -> Result<(), PeerManagerError> {
-        trace!("Received message from Peer {}", self.peer_id().short_str(),);
+        trace!("Received message from Peer {}", self.peer_id().short_str());
         // Read inbound message from stream.
         let message = message.freeze();
-        let message: NetworkMessage = lcs::from_bytes(&message)?;
-        match message {
-            NetworkMessage::RpcRequest(_) | NetworkMessage::RpcResponse(_) => {
-                let notif = PeerNotification::NewMessage(message);
-                self.rpc_notifs_tx.send(notif).await.map_err(|err| {
-                    warn!("Failed to send notification to RPC actor. Error: {:?}", err);
-                    err
-                })?;
-                Ok(())
+        let message = match lcs::from_bytes(&message) {
+            Ok(message) => message,
+            Err(err) => {
+                // Don't bother returning errors for tiny messages
+                if message.len() >= 2 {
+                    let error = ErrorCode::parsing_error(message[0], message[1]);
+                    let message = NetworkMessage::Error(error);
+                    let (ack_tx, _) = oneshot::channel();
+                    write_reqs_tx.send((message, ack_tx)).await?;
+                }
+                return Err(err.into());
             }
+        };
+        match message {
             NetworkMessage::DirectSendMsg(_) => {
                 let notif = PeerNotification::NewMessage(message);
                 self.direct_send_notifs_tx
@@ -317,17 +347,23 @@ where
                         );
                         err
                     })?;
-                Ok(())
             }
-            NetworkMessage::Ping(nonce) => {
-                let pong = NetworkMessage::Pong(nonce);
-                let (ack_tx, _) = oneshot::channel();
-                // Resond to a ping right away.
-                write_reqs_tx.send((pong, ack_tx)).await?;
-                Ok(())
+            NetworkMessage::Error(error) => {
+                warn!(
+                    "Peer {} sent an error message: {:?}",
+                    self.peer_id().short_str(),
+                    error,
+                );
             }
-            _ => unreachable!("Unhandled"),
-        }
+            NetworkMessage::RpcRequest(_) | NetworkMessage::RpcResponse(_) => {
+                let notif = PeerNotification::NewMessage(message);
+                self.rpc_notifs_tx.send(notif).await.map_err(|err| {
+                    warn!("Failed to send notification to RPC actor. Error: {:?}", err);
+                    err
+                })?;
+            }
+        };
+        Ok(())
     }
 
     async fn handle_request<'a>(
@@ -347,7 +383,7 @@ where
             PeerRequest::SendMessage(message, protocol, channel) => {
                 if let Err(e) = write_reqs_tx.send((message, channel)).await {
                     error!(
-                        "Failed to send message for protocol {:?} to peer: {:?}. Error: {:?}",
+                        "Failed to send message for protocol {} to peer: {}. Error: {:?}",
                         protocol,
                         self.peer_id().short_str(),
                         e

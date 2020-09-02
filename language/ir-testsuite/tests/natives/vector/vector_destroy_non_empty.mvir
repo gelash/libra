@@ -9,4 +9,4 @@ main() {
     return;
 }
 
-// check: NATIVE_FUNCTION_ERROR
+// check: "Keep(ABORTED { code: 3,"

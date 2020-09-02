@@ -8,7 +8,12 @@ use crate::{
     env::{GlobalEnv, ModuleId, StructEnv, StructId},
     symbol::{Symbol, SymbolPool},
 };
-use std::{collections::BTreeMap, fmt, fmt::Formatter};
+use move_core_types::language_storage::TypeTag;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    fmt::Formatter,
+};
 
 /// Represents a type.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -69,6 +74,31 @@ impl TypeError {
     }
 }
 
+impl PrimitiveType {
+    /// Returns true if this type is a specification language only type
+    pub fn is_spec(&self) -> bool {
+        use PrimitiveType::*;
+        match self {
+            Bool | U8 | U64 | U128 | Address | Signer => false,
+            Num | Range | TypeValue => true,
+        }
+    }
+
+    /// Attempt to convert this type into a language_storage::TypeTag
+    pub fn into_type_tag(self) -> Option<TypeTag> {
+        use PrimitiveType::*;
+        Some(match self {
+            Bool => TypeTag::Bool,
+            U8 => TypeTag::U8,
+            U64 => TypeTag::U64,
+            U128 => TypeTag::U128,
+            Address => TypeTag::Address,
+            Signer => TypeTag::Signer,
+            Num | Range | TypeValue => return None,
+        })
+    }
+}
+
 impl Type {
     pub fn new_prim(p: PrimitiveType) -> Type {
         Type::Primitive(p)
@@ -97,6 +127,21 @@ impl Type {
         }
     }
 
+    /// Returns true if this type is a specification language only type or contains specification
+    /// language only types
+    pub fn is_spec(&self) -> bool {
+        use Type::*;
+        match self {
+            Primitive(p) => p.is_spec(),
+            Fun(..) | TypeDomain(..) | TypeLocal(..) | Error => true,
+            Var(..) | TypeParameter(..) => false,
+            Tuple(ts) => ts.iter().any(|t| t.is_spec()),
+            Struct(_, _, ts) => ts.iter().any(|t| t.is_spec()),
+            Vector(et) => et.is_spec(),
+            Reference(_, bt) => bt.is_spec(),
+        }
+    }
+
     /// Returns true if this is any number type.
     pub fn is_number(&self) -> bool {
         if let Type::Primitive(p) = self {
@@ -109,6 +154,15 @@ impl Type {
             }
         }
         false
+    }
+
+    /// Skip reference type.
+    pub fn skip_reference(&self) -> &Type {
+        if let Type::Reference(_, bt) = self {
+            &*bt
+        } else {
+            self
+        }
     }
 
     /// If this is a struct type, replace the type instantiation.
@@ -128,6 +182,15 @@ impl Type {
             Some((env.get_module(*module_idx).into_struct(*struct_idx), params))
         } else {
             None
+        }
+    }
+
+    /// Require this to be a struct, if so extracts its content.
+    pub fn require_struct(&self) -> (ModuleId, StructId, &[Type]) {
+        if let Type::Struct(mid, sid, targs) = self {
+            (*mid, *sid, targs.as_slice())
+        } else {
+            panic!("expected a Type::Struct")
         }
     }
 
@@ -153,12 +216,12 @@ impl Type {
             }
             Type::Var(i) => {
                 if let Some(s) = subs {
-                    if let Some(s) = s.subs.get(i) {
+                    if let Some(t) = s.subs.get(i) {
                         // Recursively call replacement again here, in case the substitution s
                         // refers to type variables.
                         // TODO: a more efficient approach is to maintain that type assignments
                         // are always fully specialized w.r.t. to the substitution.
-                        s.replace(params, subs)
+                        t.replace(params, subs)
                     } else {
                         self.clone()
                     }
@@ -176,7 +239,7 @@ impl Type {
             Type::Tuple(args) => Type::Tuple(replace_vec(args)),
             Type::Vector(et) => Type::Vector(Box::new(et.replace(params, subs))),
             Type::TypeDomain(et) => Type::TypeDomain(Box::new(et.replace(params, subs))),
-            _ => self.clone(),
+            Type::Primitive(..) | Type::TypeLocal(..) | Type::Error => self.clone(),
         }
     }
 
@@ -209,7 +272,102 @@ impl Type {
             Fun(ts, r) => ts.iter().any(|t| t.is_incomplete()) || r.is_incomplete(),
             Struct(_, _, ts) => ts.iter().any(|t| t.is_incomplete()),
             Vector(et) => et.is_incomplete(),
-            _ => false,
+            Reference(_, bt) => bt.is_incomplete(),
+            TypeDomain(bt) => bt.is_incomplete(),
+            Error | Primitive(..) | TypeLocal(..) | TypeParameter(_) => false,
+        }
+    }
+
+    /// Return true if this type contains free type variables
+    pub fn is_open(&self) -> bool {
+        use Type::*;
+        match self {
+            TypeParameter(_) | TypeLocal(_) => true,
+            Primitive(_) => false,
+            Tuple(ts) => ts.iter().any(|t| t.is_open()),
+            Fun(ts, r) => ts.iter().any(|t| t.is_open()) || r.is_open(),
+            Struct(_, _, ts) => ts.iter().any(|t| t.is_open()),
+            Vector(et) => et.is_open(),
+            Reference(_, bt) => bt.is_open(),
+            TypeDomain(bt) => bt.is_open(),
+            Error | Var(_) => {
+                panic!("Invariant violation: is_open should be called after type checking")
+            }
+        }
+    }
+
+    /// Attempt to convert this type into a language_storage::TypeTag
+    pub fn into_type_tag(self, env: &GlobalEnv) -> Option<TypeTag> {
+        use Type::*;
+        if self.is_open() || self.is_reference() || self.is_spec() {
+            None
+        } else {
+            Some (
+                match self {
+                    Primitive(p) => p.into_type_tag().expect("Invariant violation: unexpected spec primitive"),
+                    Struct(mid, sid, ts) =>TypeTag::Struct(
+                        env.get_struct_tag(mid, sid, &ts)
+                            .expect("Invariant violation: struct type argument contains incomplete, tuple, reference, or spec type")
+                    ),
+                    Vector(et) => TypeTag::Vector(
+                        Box::new(et.into_type_tag(env)
+                                 .expect("Invariant violation: vector type argument contains incomplete, tuple, reference, or spec type"))
+                    ),
+                    Tuple(..) | Error | Fun(..) | TypeDomain(..) | TypeParameter(..) | TypeLocal(..) | Var(..) | Reference(..) =>
+                        return None
+                }
+            )
+        }
+    }
+
+    /// Create a `Type` from `t`
+    pub fn from_type_tag(t: TypeTag, env: &GlobalEnv) -> Self {
+        use Type::*;
+        match t {
+            TypeTag::Bool => Primitive(PrimitiveType::Bool),
+            TypeTag::U8 => Primitive(PrimitiveType::U8),
+            TypeTag::U64 => Primitive(PrimitiveType::U64),
+            TypeTag::U128 => Primitive(PrimitiveType::U128),
+            TypeTag::Address => Primitive(PrimitiveType::Address),
+            TypeTag::Signer => Primitive(PrimitiveType::Signer),
+            TypeTag::Struct(s) => {
+                let qid = env.find_struct_by_tag(&s).unwrap_or_else(|| {
+                    panic!("Invariant violation: couldn't resolve struct {:?}", s)
+                });
+                let type_args = s
+                    .type_params
+                    .into_iter()
+                    .map(|arg| Self::from_type_tag(arg, env))
+                    .collect();
+                Struct(qid.module_id, qid.id, type_args)
+            }
+            TypeTag::Vector(type_param) => Vector(Box::new(Self::from_type_tag(*type_param, env))),
+        }
+    }
+
+    /// Get the unbound type variables in the type.
+    pub fn get_vars(&self) -> BTreeSet<u16> {
+        let mut vars = BTreeSet::new();
+        self.internal_get_vars(&mut vars);
+        vars
+    }
+
+    fn internal_get_vars(&self, vars: &mut BTreeSet<u16>) {
+        use Type::*;
+        match self {
+            Var(id) => {
+                vars.insert(*id);
+            }
+            Tuple(ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
+            Fun(ts, r) => {
+                r.internal_get_vars(vars);
+                ts.iter().for_each(|t| t.internal_get_vars(vars));
+            }
+            Struct(_, _, ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
+            Vector(et) => et.internal_get_vars(vars),
+            Reference(_, bt) => bt.internal_get_vars(vars),
+            TypeDomain(bt) => bt.internal_get_vars(vars),
+            Error | Primitive(..) | TypeParameter(..) | TypeLocal(..) => {}
         }
     }
 }
@@ -220,6 +378,11 @@ impl Substitution {
         Self {
             subs: BTreeMap::new(),
         }
+    }
+
+    /// Binds the type variables.
+    pub fn bind(&mut self, var: u16, ty: Type) {
+        self.subs.insert(var, ty);
     }
 
     /// Specializes the type, substituting all variables bound in this substitution.

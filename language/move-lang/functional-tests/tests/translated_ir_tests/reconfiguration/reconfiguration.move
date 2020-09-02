@@ -7,7 +7,7 @@
 //! block-time: 2
 
 //! new-transaction
-// Reconfiguration can only be invoked by association.
+// Reconfiguration can only be invoked by the libra root.
 script {
 use 0x1::LibraConfig;
 
@@ -16,11 +16,10 @@ fun main(account: &signer) {
 }
 }
 
-// check: ABORT
-// check: 1
+// check: "Keep(ABORTED { code: 2,"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
 use 0x1::LibraConfig;
 
@@ -29,10 +28,10 @@ fun main(account: &signer) {
 }
 }
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 // Cannot trigger two reconfiguration within the same block.
 script {
 use 0x1::LibraConfig;
@@ -41,21 +40,4 @@ fun main(account: &signer) {
     LibraConfig::reconfigure(account);
 }
 }
-// check: ABORTED
-// check: 23
-
-//! block-prologue
-//! proposer: vivian
-//! block-time: 3
-
-//! new-transaction
-//! sender: association
-script {
-use 0x1::LibraConfig;
-
-fun main(account: &signer) {
-    LibraConfig::reconfigure(account);
-}
-}
-// check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(ABORTED { code: 1025,"

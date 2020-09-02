@@ -12,14 +12,18 @@ edition = "2018"
 [dependencies]
 libra-workspace-hack = { path = "../workspace-hack", version = "0.1.0" }
 thiserror = "1.0.20"
-serde = { version = "1.0.114", features = ["derive"] }
+serde = { version = "1.0.115", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.3.3"
-libra-crypto = { path = "../../crypto/crypto", version = "0.1.0" }
-proptest = "0.10.0"
+libra-crypto = { path = "../../crypto/crypto", version = "0.1.0", features = ["fuzzing"] }
+libra-crypto-derive = { path = "../../crypto/crypto-derive", version = "0.1.0" }
+proptest = "0.10.1"
 proptest-derive = "0.2.0"
 rand = "0.7.3"
+
+[features]
+fuzzing = ["libra-crypto/fuzzing"]
 
 [[bench]]
 name = "lcs_bench"

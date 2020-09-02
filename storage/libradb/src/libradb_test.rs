@@ -7,14 +7,17 @@ use crate::{
     schema::jellyfish_merkle_node::JellyfishMerkleNodeSchema,
     test_helper::{arb_blocks_to_commit, arb_mock_genesis},
 };
-#[allow(unused_imports)]
-use jellyfish_merkle::node_type::{Node, NodeKey};
 use libra_crypto::hash::CryptoHash;
+#[allow(unused_imports)]
+use libra_jellyfish_merkle::node_type::{Node, NodeKey};
 use libra_temppath::TempPath;
 #[allow(unused_imports)]
 use libra_types::{
-    account_config::AccountResource, contract_event::ContractEvent, ledger_info::LedgerInfo,
-    proof::SparseMerkleLeafNode, vm_status::StatusCode,
+    account_config::AccountResource,
+    contract_event::ContractEvent,
+    ledger_info::LedgerInfo,
+    proof::SparseMerkleLeafNode,
+    vm_status::{KeptVMStatus, StatusCode},
 };
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -51,6 +54,25 @@ fn verify_epochs(db: &LibraDB, ledger_infos_with_sigs: &[LedgerInfoWithSignature
         .cloned()
         .collect();
     assert_eq!(actual_epoch_change_lis, expected_epoch_change_lis);
+
+    let mut last_ver = 0;
+    for li in ledger_infos_with_sigs {
+        let this_ver = li.ledger_info().version();
+
+        // a version potentially without ledger_info ever committed
+        let v1 = (last_ver + this_ver) / 2;
+        if v1 != last_ver && v1 != this_ver {
+            assert!(db.get_epoch_ending_ledger_info(v1).is_err());
+        }
+
+        // a version where there was a ledger_info once
+        if li.ledger_info().ends_epoch() {
+            assert_eq!(db.get_epoch_ending_ledger_info(this_ver).unwrap(), *li);
+        } else {
+            assert!(db.get_epoch_ending_ledger_info(this_ver).is_err());
+        }
+        last_ver = this_ver;
+    }
 }
 
 pub fn test_save_blocks_impl(input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>) {
@@ -146,12 +168,12 @@ fn get_events_by_event_key(
     event_key: &EventKey,
     first_seq_num: u64,
     last_seq_num: u64,
-    ascending: bool,
+    order: Order,
     is_latest: bool,
 ) -> Result<Vec<ContractEvent>> {
     const LIMIT: u64 = 3;
 
-    let mut cursor = if ascending {
+    let mut cursor = if order == Order::Ascending {
         first_seq_num
     } else if is_latest {
         // Test the ability to get the latest.
@@ -163,13 +185,13 @@ fn get_events_by_event_key(
     let mut ret = Vec::new();
     loop {
         let events_with_proof =
-            db.get_events_by_event_key(event_key, cursor, ascending, LIMIT, ledger_info.version())?;
+            db.get_events_by_event_key(event_key, cursor, order, LIMIT, ledger_info.version())?;
 
         let num_events = events_with_proof.len() as u64;
         if cursor == u64::max_value() {
             cursor = last_seq_num;
         }
-        let expected_seq_nums: Vec<_> = if ascending {
+        let expected_seq_nums: Vec<_> = if order == Order::Ascending {
             (cursor..cursor + num_events).collect()
         } else {
             (cursor + 1 - num_events..=cursor).rev().collect()
@@ -195,7 +217,7 @@ fn get_events_by_event_key(
         }
         assert_eq!(events.first().unwrap().sequence_number(), cursor);
 
-        if ascending {
+        if order == Order::Ascending {
             if cursor + num_results > last_seq_num {
                 ret.extend(
                     events
@@ -223,7 +245,7 @@ fn get_events_by_event_key(
         }
     }
 
-    if !ascending {
+    if order == Order::Descending {
         ret.reverse();
     }
 
@@ -251,7 +273,7 @@ fn verify_events_by_event_key(
                 &access_path,
                 first_seq,
                 last_seq,
-                /* ascending = */ true,
+                Order::Ascending,
                 is_latest,
             )
             .unwrap();
@@ -263,7 +285,7 @@ fn verify_events_by_event_key(
                 &access_path,
                 first_seq,
                 last_seq,
-                /* ascending = */ false,
+                Order::Descending,
                 is_latest,
             )
             .unwrap();
@@ -373,17 +395,35 @@ proptest! {
 
 #[test]
 fn test_get_first_seq_num_and_limit() {
-    assert!(get_first_seq_num_and_limit(true, 0, 0).is_err());
+    assert!(get_first_seq_num_and_limit(Order::Ascending, 0, 0).is_err());
 
     // ascending
-    assert_eq!(get_first_seq_num_and_limit(true, 0, 4).unwrap(), (0, 4));
-    assert_eq!(get_first_seq_num_and_limit(true, 0, 1).unwrap(), (0, 1));
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Ascending, 0, 4).unwrap(),
+        (0, 4)
+    );
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Ascending, 0, 1).unwrap(),
+        (0, 1)
+    );
 
     // descending
-    assert_eq!(get_first_seq_num_and_limit(false, 2, 1).unwrap(), (2, 1));
-    assert_eq!(get_first_seq_num_and_limit(false, 2, 2).unwrap(), (1, 2));
-    assert_eq!(get_first_seq_num_and_limit(false, 2, 3).unwrap(), (0, 3));
-    assert_eq!(get_first_seq_num_and_limit(false, 2, 4).unwrap(), (0, 3));
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Descending, 2, 1).unwrap(),
+        (2, 1)
+    );
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Descending, 2, 2).unwrap(),
+        (1, 2)
+    );
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Descending, 2, 3).unwrap(),
+        (0, 3)
+    );
+    assert_eq!(
+        get_first_seq_num_and_limit(Order::Descending, 2, 4).unwrap(),
+        (0, 3)
+    );
 }
 
 #[test]
@@ -425,7 +465,7 @@ fn test_get_latest_tree_state() {
         HashValue::random(),
         HashValue::random(),
         0,
-        StatusCode::UNKNOWN_STATUS,
+        KeptVMStatus::VerificationError,
     );
     put_transaction_info(&db, 0, &txn_info);
     let bootstrapped = db.get_latest_tree_state().unwrap();

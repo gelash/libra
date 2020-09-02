@@ -15,11 +15,10 @@ fun main() {
     assert(LibraTimestamp::now_microseconds() == 1000000, 78);
 }
 }
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! block-prologue
 //! proposer: alice
 //! block-time: 1000000
 
-// check: ABORTED
-// check: 5002
+// check: UNEXPECTED_ERROR_FROM_KNOWN_MOVE_FUNCTION

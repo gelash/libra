@@ -248,6 +248,7 @@ impl HashValue {
 
     /// Returns the `index`-th nibble.
     pub fn get_nibble(&self, index: usize) -> Nibble {
+        precondition!(index < HashValue::LENGTH);
         Nibble::from(if index % 2 == 0 {
             self[index / 2] >> 4
         } else {
@@ -497,13 +498,19 @@ impl DefaultHasher {
     }
 }
 
+impl fmt::Debug for DefaultHasher {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DefaultHasher: state = Sha3")
+    }
+}
+
 macro_rules! define_hasher {
     (
         $(#[$attr:meta])*
         ($hasher_type: ident, $hasher_name: ident, $seed_name: ident, $salt: expr)
     ) => {
 
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         $(#[$attr])*
         pub struct $hasher_type(DefaultHasher);
 

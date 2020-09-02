@@ -1,4 +1,4 @@
-FROM debian:buster AS toolchain
+FROM debian:buster-20200803@sha256:a44ab0cca6cd9411032d180bc396f19bc98f71972d2398d50460145cab81c5ab AS toolchain
 
 # To use http/https proxy while building, use:
 # docker build --build-arg https_proxy=http://fwdproxy:8080 --build-arg http_proxy=http://fwdproxy:8080
@@ -11,6 +11,9 @@ ENV PATH "$PATH:/root/.cargo/bin"
 WORKDIR /libra
 COPY rust-toolchain /libra/rust-toolchain
 RUN rustup install $(cat rust-toolchain)
+
+COPY cargo-toolchain /libra/cargo-toolchain
+RUN rustup install $(cat cargo-toolchain)
 
 FROM toolchain AS builder
 
@@ -37,6 +40,8 @@ EXPOSE 8000
 EXPOSE 6180
 # Metrics
 EXPOSE 9101
+# Backup
+EXPOSE 6186
 
 # Capture backtrace on error
 ENV RUST_BACKTRACE 1

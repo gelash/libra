@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Error, Result};
-use libra_config::config::RoleType;
+use libra_config::config::{
+    RoleType, DEFAULT_BATCH_SIZE_LIMIT, DEFAULT_CONTENT_LENGTH_LIMIT, DEFAULT_PAGE_SIZE_LIMIT,
+};
 use libra_crypto::HashValue;
 use libra_mempool::MempoolClientSender;
 use libra_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     block_info::BlockInfo,
+    chain_id::ChainId,
     contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
     event::EventKey,
@@ -20,10 +23,14 @@ use libra_types::{
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof, TransactionWithProof, Version,
     },
-    vm_status::StatusCode,
+    vm_status::KeptVMStatus,
 };
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-use storage_interface::{DbReader, StartupInfo, TreeState};
+use std::{
+    collections::{BTreeMap, HashMap},
+    net::SocketAddr,
+    sync::Arc,
+};
+use storage_interface::{DbReader, Order, StartupInfo, TreeState};
 use tokio::runtime::Runtime;
 
 /// Creates JSON RPC server for a Validator node
@@ -33,15 +40,25 @@ pub fn test_bootstrap(
     libra_db: Arc<dyn DbReader>,
     mp_sender: MempoolClientSender,
 ) -> Runtime {
-    crate::bootstrap(address, libra_db, mp_sender, RoleType::Validator)
+    crate::bootstrap(
+        address,
+        DEFAULT_BATCH_SIZE_LIMIT,
+        DEFAULT_PAGE_SIZE_LIMIT,
+        DEFAULT_CONTENT_LENGTH_LIMIT,
+        libra_db,
+        mp_sender,
+        RoleType::Validator,
+        ChainId::test(),
+    )
 }
 
 /// Lightweight mock of LibraDB
 #[derive(Clone)]
-pub(crate) struct MockLibraDB {
+pub struct MockLibraDB {
     pub version: u64,
-    pub all_accounts: BTreeMap<AccountAddress, AccountStateBlob>,
-    pub all_txns: Vec<(Transaction, StatusCode)>,
+    pub genesis: HashMap<AccountAddress, AccountStateBlob>,
+    pub all_accounts: HashMap<AccountAddress, AccountStateBlob>,
+    pub all_txns: Vec<(Transaction, KeptVMStatus)>,
     pub events: Vec<(u64, ContractEvent)>,
     pub account_state_with_proof: Vec<AccountStateWithProof>,
     pub timestamps: Vec<u64>,
@@ -52,7 +69,9 @@ impl DbReader for MockLibraDB {
         &self,
         address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>> {
-        if let Some(blob) = self.all_accounts.get(&address) {
+        if let Some(blob) = self.genesis.get(&address) {
+            Ok(Some(blob.clone()))
+        } else if let Some(blob) = self.all_accounts.get(&address) {
             Ok(Some(blob.clone()))
         } else {
             Ok(None)
@@ -68,7 +87,7 @@ impl DbReader for MockLibraDB {
                     HashValue::zero(),
                     HashValue::zero(),
                     self.version,
-                    *self.timestamps.last().expect("must have"),
+                    self.get_block_timestamp(self.version).unwrap(),
                     None,
                 ),
                 HashValue::zero(),
@@ -117,7 +136,7 @@ impl DbReader for MockLibraDB {
                         Default::default(),
                         Default::default(),
                         0,
-                        *status,
+                        status.clone(),
                     ),
                 ),
             }))
@@ -143,7 +162,7 @@ impl DbReader for MockLibraDB {
                     Default::default(),
                     Default::default(),
                     0,
-                    *status,
+                    status.clone(),
                 ));
             });
         let first_transaction_version = transactions.first().map(|_| start_version);
@@ -176,7 +195,7 @@ impl DbReader for MockLibraDB {
         &self,
         key: &EventKey,
         start: u64,
-        _ascending: bool,
+        _order: Order,
         limit: u64,
     ) -> Result<Vec<(u64, ContractEvent)>> {
         let events = self
@@ -265,6 +284,9 @@ impl DbReader for MockLibraDB {
     }
 
     fn get_block_timestamp(&self, version: u64) -> Result<u64> {
-        Ok(self.timestamps[version as usize])
+        Ok(match self.timestamps.get(version as usize) {
+            Some(t) => *t,
+            None => *self.timestamps.last().unwrap(),
+        })
     }
 }

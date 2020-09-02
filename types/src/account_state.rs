@@ -4,14 +4,17 @@
 use crate::{
     account_address::AccountAddress,
     account_config::{
-        type_tag_for_currency_code, AccountResource, AccountRole, BalanceResource, ChildVASP,
-        ParentVASP, ACCOUNT_RECEIVED_EVENT_PATH, ACCOUNT_SENT_EVENT_PATH,
+        type_tag_for_currency_code, AccountResource, AccountRole, BalanceResource, ChainIdResource,
+        ChildVASP, Credential, CurrencyInfoResource, DesignatedDealer, FreezingBit, ParentVASP,
+        PreburnResource, ACCOUNT_RECEIVED_EVENT_PATH, ACCOUNT_SENT_EVENT_PATH,
     },
     block_metadata::{LibraBlockResource, NEW_BLOCK_EVENT_PATH},
     event::EventHandle,
     libra_timestamp::LibraTimestampResource,
-    on_chain_config::{ConfigurationResource, OnChainConfig, ValidatorSet},
-    validator_config::ValidatorConfigResource,
+    on_chain_config::{
+        ConfigurationResource, LibraVersion, OnChainConfig, RegisteredCurrencies, ValidatorSet,
+    },
+    validator_config::{ValidatorConfigResource, ValidatorOperatorConfigResource},
 };
 use anyhow::{bail, Error, Result};
 use move_core_types::{identifier::Identifier, move_resource::MoveResource};
@@ -49,6 +52,27 @@ impl AccountState {
             .collect()
     }
 
+    pub fn get_preburn_balances(
+        &self,
+        currency_codes: &[Identifier],
+    ) -> Result<BTreeMap<Identifier, PreburnResource>> {
+        currency_codes
+            .iter()
+            .filter_map(|currency_code| {
+                let currency_type_tag = type_tag_for_currency_code(currency_code.to_owned());
+                // TODO: update this to use PreburnResource::resource_path once that takes type
+                // parameters
+                self.get_resource(&PreburnResource::access_path_for(currency_type_tag))
+                    .transpose()
+                    .map(|preburn_balance| preburn_balance.map(|b| (currency_code.to_owned(), b)))
+            })
+            .collect()
+    }
+
+    pub fn get_chain_id_resource(&self) -> Result<Option<ChainIdResource>> {
+        self.get_resource(&ChainIdResource::resource_path())
+    }
+
     pub fn get_configuration_resource(&self) -> Result<Option<ConfigurationResource>> {
         self.get_resource(&ConfigurationResource::resource_path())
     }
@@ -61,13 +85,45 @@ impl AccountState {
         self.get_resource(&ValidatorConfigResource::resource_path())
     }
 
-    pub fn get_account_role(&self) -> Result<Option<AccountRole>> {
+    pub fn get_validator_operator_config_resource(
+        &self,
+    ) -> Result<Option<ValidatorOperatorConfigResource>> {
+        self.get_resource(&ValidatorOperatorConfigResource::resource_path())
+    }
+
+    pub fn get_freezing_bit(&self) -> Result<Option<FreezingBit>> {
+        self.get_resource(&FreezingBit::resource_path())
+    }
+
+    pub fn get_account_role(&self, currency_codes: &[Identifier]) -> Result<Option<AccountRole>> {
         if self.0.contains_key(&ParentVASP::resource_path()) {
-            self.get_resource(&ParentVASP::resource_path())
-                .map(|r_opt| r_opt.map(AccountRole::ParentVASP))
+            match (
+                self.get_resource(&ParentVASP::resource_path()),
+                self.get_resource(&Credential::resource_path()),
+            ) {
+                (Ok(Some(vasp)), Ok(Some(credential))) => {
+                    Ok(Some(AccountRole::ParentVASP { vasp, credential }))
+                }
+                _ => Ok(None),
+            }
         } else if self.0.contains_key(&ChildVASP::resource_path()) {
             self.get_resource(&ChildVASP::resource_path())
                 .map(|r_opt| r_opt.map(AccountRole::ChildVASP))
+        } else if self.0.contains_key(&DesignatedDealer::resource_path()) {
+            match (
+                self.get_resource(&Credential::resource_path()),
+                self.get_preburn_balances(&currency_codes),
+                self.get_resource(&DesignatedDealer::resource_path()),
+            ) {
+                (Ok(Some(dd_credential)), Ok(preburn_balances), Ok(Some(designated_dealer))) => {
+                    Ok(Some(AccountRole::DesignatedDealer {
+                        dd_credential,
+                        preburn_balances,
+                        designated_dealer,
+                    }))
+                }
+                _ => Ok(None),
+            }
         } else {
             // TODO: add role_id to Unknown
             Ok(Some(AccountRole::Unknown))
@@ -76,6 +132,26 @@ impl AccountState {
 
     pub fn get_validator_set(&self) -> Result<Option<ValidatorSet>> {
         self.get_resource(&ValidatorSet::CONFIG_ID.access_path().path)
+    }
+
+    pub fn get_libra_version(&self) -> Result<Option<LibraVersion>> {
+        self.get_resource(&LibraVersion::CONFIG_ID.access_path().path)
+    }
+
+    pub fn get_registered_currency_info_resources(
+        &self,
+    ) -> Result<Vec<Option<CurrencyInfoResource>>> {
+        let path = RegisteredCurrencies::CONFIG_ID.access_path().path;
+        let currencies: Option<RegisteredCurrencies> = self.get_resource(&path)?;
+        match currencies {
+            Some(currencies) => currencies
+                .currency_codes()
+                .iter()
+                .map(|code| CurrencyInfoResource::resource_path_for(code.clone()))
+                .map(|access_path| self.get_resource(&access_path.path))
+                .collect(),
+            None => Ok(vec![]),
+        }
     }
 
     pub fn get_libra_block_resource(&self) -> Result<Option<LibraBlockResource>> {

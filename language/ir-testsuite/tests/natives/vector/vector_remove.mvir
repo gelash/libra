@@ -39,7 +39,7 @@ main() {
   return;
 }
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
 import 0x1.Vector;
@@ -53,8 +53,7 @@ main() {
   return;
 }
 
-// check: ABORTED
-// check: Some(10)
+// check: "Keep(ABORTED { code: 0,"
 
 //! new-transaction
 import 0x1.Vector;
@@ -69,5 +68,4 @@ main() {
   return;
 }
 
-// check: ABORTED
-// check: Some(10)
+// check: "Keep(ABORTED { code: 0,"

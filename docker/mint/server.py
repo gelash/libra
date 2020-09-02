@@ -24,12 +24,14 @@ def create_client():
         ac_port = os.environ['AC_PORT']
         url = "http://{}:{}".format(ac_host, ac_port)
         waypoint = open("/opt/libra/etc/waypoint.txt", "r").readline()
+        chain_id = os.environ['CFG_CHAIN_ID']
 
         print("Connecting to ac on: {}".format(url))
-        cmd = "/opt/libra/bin/cli --url {} -m {} --waypoint {}".format(
+        cmd = "/opt/libra/bin/cli --url {} -m {} --waypoint {} --chain-id {}".format(
             url,
             "/opt/libra/etc/mint.key",
-            waypoint)
+            waypoint,
+            chain_id)
 
         application.client = pexpect.spawn(cmd)
         application.client.delaybeforesend = 0.1
@@ -43,6 +45,7 @@ create_client()
 
 
 @application.route("/", methods=('POST',))
+@application.route("/mint", methods=('POST',))
 def send_transaction():
     auth_key = flask.request.args['auth_key']
 
@@ -62,15 +65,25 @@ def send_transaction():
 
     try:
         create_client()
+        application.client.sendline("q as 000000000000000000000000000000dd")
+        application.client.expect(r"sequence_number: ([0-9]+)", timeout=1)
+        if application.client.match:
+            next_dd_seq = int(application.client.match.groups()[0]) + 1
+        else:
+            return 'DD sequence number not found', 400
+
         application.client.sendline(
             "a m {} {} {} use_base_units".format(auth_key, amount, currency_code))
-        application.client.expect("Mint request submitted", timeout=2)
+        application.client.expect("Request submitted to faucet", timeout=2)
 
-        application.client.sendline("a la")
-        application.client.expect(r"sequence_number: ([0-9]+)", timeout=1)
         application.client.terminate(True)
     except pexpect.exceptions.ExceptionPexpect:
         application.client.terminate(True)
         raise
 
-    return application.client.match.groups()[0]
+    return str(next_dd_seq)
+
+
+@application.route("/-/healthy", methods=('GET',))
+def health_check():
+    return "libra-faucet:ok"

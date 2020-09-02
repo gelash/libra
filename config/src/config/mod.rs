@@ -4,8 +4,8 @@
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::HashSet,
-    fmt,
+    collections::{HashMap, HashSet},
+    fmt, fs,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -44,7 +44,7 @@ pub use safety_rules_config::*;
 mod upstream_config;
 pub use upstream_config::*;
 mod test_config;
-use crate::{chain_id::ChainId, network_id::NetworkId};
+use crate::network_id::NetworkId;
 use libra_secure_storage::{KVStorage, Storage};
 use libra_types::waypoint::Waypoint;
 pub use test_config::*;
@@ -53,8 +53,7 @@ pub use test_config::*;
 /// This is used to set up the nodes and configure various parameters.
 /// The config file is broken up into sections for each module
 /// so that only that module can be passed around
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, PartialEq))]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeConfig {
     #[serde(default)]
@@ -85,13 +84,14 @@ pub struct NodeConfig {
     pub upstream: UpstreamConfig,
     #[serde(default)]
     pub validator_network: Option<NetworkConfig>,
+    #[serde(default)]
+    pub failpoints: Option<HashMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BaseConfig {
     data_dir: PathBuf,
-    pub chain_id: ChainId,
     pub role: RoleType,
     pub waypoint: WaypointConfig,
 }
@@ -99,8 +99,7 @@ pub struct BaseConfig {
 impl Default for BaseConfig {
     fn default() -> BaseConfig {
         BaseConfig {
-            data_dir: PathBuf::from("/opt/libra/data/commmon"),
-            chain_id: ChainId::default(),
+            data_dir: PathBuf::from("/opt/libra/data"),
             role: RoleType::Validator,
             waypoint: WaypointConfig::None,
         }
@@ -111,6 +110,7 @@ impl Default for BaseConfig {
 #[serde(rename_all = "snake_case")]
 pub enum WaypointConfig {
     FromConfig(Waypoint),
+    FromFile(PathBuf),
     FromStorage(SecureBackend),
     None,
 }
@@ -127,15 +127,21 @@ impl WaypointConfig {
     pub fn waypoint(&self) -> Waypoint {
         let waypoint = match &self {
             WaypointConfig::FromConfig(waypoint) => Some(*waypoint),
+            WaypointConfig::FromFile(path) => {
+                let content = fs::read_to_string(path)
+                    .unwrap_or_else(|_| panic!("Failed to read waypoint file {}", path.display()));
+                Some(
+                    Waypoint::from_str(&content.trim())
+                        .unwrap_or_else(|_| panic!("Failed to parse waypoint: {}", content.trim())),
+                )
+            }
             WaypointConfig::FromStorage(backend) => {
                 let storage: Storage = backend.into();
                 let waypoint = storage
-                    .get(libra_global_constants::WAYPOINT)
+                    .get::<Waypoint>(libra_global_constants::WAYPOINT)
                     .expect("Unable to read waypoint")
-                    .value
-                    .string()
-                    .expect("Expected string for waypoint");
-                Some(Waypoint::from_str(&waypoint).expect("Unable to parse waypoint"))
+                    .value;
+                Some(waypoint)
             }
             WaypointConfig::None => None,
         };
@@ -143,7 +149,7 @@ impl WaypointConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RoleType {
     Validator,
@@ -175,6 +181,12 @@ impl FromStr for RoleType {
     }
 }
 
+impl fmt::Debug for RoleType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl fmt::Display for RoleType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -198,34 +210,6 @@ impl NodeConfig {
         self.storage.set_data_dir(data_dir);
     }
 
-    /// This clones the underlying data except for the keys so that this config can be used as a
-    /// template for another config.
-    pub fn clone_for_template(&self) -> Self {
-        Self {
-            rpc: self.rpc.clone(),
-            base: self.base.clone(),
-            consensus: self.consensus.clone(),
-            debug_interface: self.debug_interface.clone(),
-            execution: self.execution.clone(),
-            full_node_networks: self
-                .full_node_networks
-                .iter()
-                .map(|c| c.clone_for_template())
-                .collect(),
-            logger: self.logger.clone(),
-            metrics: self.metrics.clone(),
-            mempool: self.mempool.clone(),
-            state_sync: self.state_sync.clone(),
-            storage: self.storage.clone(),
-            test: None,
-            upstream: self.upstream.clone(),
-            validator_network: self
-                .validator_network
-                .as_ref()
-                .map(|n| n.clone_for_template()),
-        }
-    }
-
     /// Reads the config file and returns the configuration object in addition to doing some
     /// post-processing of the config
     /// Paths used in the config are either absolute or relative to the config location
@@ -247,19 +231,19 @@ impl NodeConfig {
         let input_dir = RootPath::new(input_path);
         config.execution.load(&input_dir)?;
         if let Some(network) = &mut config.validator_network {
-            network.load()?;
+            network.load(RoleType::Validator)?;
             network_ids.insert(network.network_id.clone());
         }
         for network in &mut config.full_node_networks {
-            network.load()?;
+            network.load(RoleType::FullNode)?;
 
-            // Validate that a network isn't repeated
-            let network_id = network.network_id.clone();
+            // Check a validator network is not included in a list of full-node networks
+            let network_id = &network.network_id;
             invariant(
-                !network_ids.contains(&network_id),
-                format!("network_id {:?} was repeated", network_id),
+                !matches!(network_id, NetworkId::Validator),
+                "Included a validator network in full_node_networks".into(),
             )?;
-            network_ids.insert(network_id);
+            network_ids.insert(network_id.clone());
         }
         config.set_data_dir(config.data_dir().clone());
         Ok(config)
@@ -305,7 +289,7 @@ impl NodeConfig {
     }
 
     pub fn random_with_template(template: &Self, rng: &mut StdRng) -> Self {
-        let mut config = template.clone_for_template();
+        let mut config = template.clone();
         config.random_internal(rng);
         config
     }
@@ -316,7 +300,7 @@ impl NodeConfig {
         if self.base.role == RoleType::Validator {
             test.random_account_key(rng);
             let peer_id = libra_types::account_address::from_public_key(
-                &test.operator_keypair.as_ref().unwrap().public_key(),
+                &test.owner_key.as_ref().unwrap().public_key(),
             );
 
             if self.validator_network.is_none() {

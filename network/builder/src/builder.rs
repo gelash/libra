@@ -11,15 +11,15 @@
 //! long as the latter is in its trusted peers set.
 use channel::{self, message_queues::QueueStyle};
 use libra_config::{
-    chain_id::ChainId,
-    config::{DiscoveryMethod, NetworkConfig, RoleType, HANDSHAKE_VERSION},
-    network_id::{NetworkContext, NetworkId},
+    config::{DiscoveryMethod, GossipConfig, NetworkConfig, RoleType, HANDSHAKE_VERSION},
+    network_id::NetworkContext,
 };
 use libra_crypto::x25519;
 use libra_logger::prelude::*;
 use libra_metrics::IntCounterVec;
 use libra_network_address::NetworkAddress;
-use libra_types::PeerId;
+use libra_network_address_encryption::Encryptor;
+use libra_types::{chain_id::ChainId, PeerId};
 use network::{
     connectivity_manager::{builder::ConnectivityManagerBuilder, ConnectivityRequest},
     constants,
@@ -28,7 +28,7 @@ use network::{
         conn_notifs_channel, ConnectionRequestSender,
     },
     protocols::{
-        discovery::{self, builder::DiscoveryBuilder},
+        gossip_discovery::{self, builder::GossipDiscoveryBuilder},
         health_checker::{self, builder::HealthCheckerBuilder},
         network::{NewNetworkEvents, NewNetworkSender},
     },
@@ -43,77 +43,67 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subscription_service::ReconfigSubscription;
-use tokio::runtime::{Builder, Handle, Runtime};
+use tokio::runtime::Handle;
+
+#[derive(Debug, PartialEq, PartialOrd)]
+enum State {
+    CREATED,
+    BUILT,
+    STARTED,
+}
 
 /// Build Network module with custom configuration values.
 /// Methods can be chained in order to set the configuration values.
 /// MempoolNetworkHandler and ConsensusNetworkHandler are constructed by calling
 /// [`NetworkBuilder::build`].  New instances of `NetworkBuilder` are obtained
-/// via [`NetworkBuilder::new`].
-// TODO(philiphayes): refactor NetworkBuilder and libra-node; current config is
-// pretty tangled.
+/// via [`NetworkBuilder::create`].
 pub struct NetworkBuilder {
-    executor: Handle,
+    state: State,
+    executor: Option<Handle>,
     network_context: Arc<NetworkContext>,
-    trusted_peers: Arc<RwLock<HashMap<PeerId, HashSet<x25519::PublicKey>>>>,
-    seed_addrs: HashMap<PeerId, Vec<NetworkAddress>>,
-    seed_pubkeys: HashMap<PeerId, HashSet<x25519::PublicKey>>,
-    channel_size: usize,
-    connectivity_check_interval_ms: u64,
-    max_connection_delay_ms: u64,
-    /// For now full node connections are limited by
-    max_fullnode_connections: usize,
 
     configuration_change_listener_builder: Option<ConfigurationChangeListenerBuilder>,
     connectivity_manager_builder: Option<ConnectivityManagerBuilder>,
-    discovery_builder: Option<DiscoveryBuilder>,
+    discovery_builder: Option<GossipDiscoveryBuilder>,
     health_checker_builder: Option<HealthCheckerBuilder>,
     peer_manager_builder: PeerManagerBuilder,
 
+    // (StateSync) ReconfigSubscriptions required by internal Network components.
     reconfig_subscriptions: Vec<ReconfigSubscription>,
 }
 
 impl NetworkBuilder {
     /// Return a new NetworkBuilder initialized with default configuration values.
+    // TODO:  Remove `pub`.  NetworkBuilder should only be created thorugh `::create()`
     pub fn new(
-        executor: Handle,
         chain_id: ChainId,
-        network_id: NetworkId,
-        role: RoleType,
-        peer_id: PeerId,
+        trusted_peers: Arc<RwLock<HashMap<PeerId, HashSet<x25519::PublicKey>>>>,
+        network_context: Arc<NetworkContext>,
         listen_address: NetworkAddress,
         authentication_mode: AuthenticationMode,
-    ) -> NetworkBuilder {
-        // TODO: Pass network_context in as a constructed object.
-        let network_context = Arc::new(NetworkContext::new(network_id, role, peer_id));
-        let trusted_peers = Arc::new(RwLock::new(HashMap::new()));
-
+        max_frame_size: usize,
+    ) -> Self {
         // A network cannot exist without a PeerManager
-        // TODO:  construct this in create and pass it to new() as a parameter
+        // TODO:  construct this in create and pass it to new() as a parameter. The complication is manual construction of NetworkBuilder in various tests.
         let peer_manager_builder = PeerManagerBuilder::create(
             chain_id,
             network_context.clone(),
             listen_address,
-            trusted_peers.clone(),
+            trusted_peers,
             authentication_mode,
-            // TODO:  move to a config
+            // TODO: Encode this value in NetworkConfig
             constants::NETWORK_CHANNEL_SIZE,
-            // TODO:  Move to a config
+            // TODO: Encode this value in NetworkConfig
             constants::MAX_CONCURRENT_NETWORK_REQS,
-            // TODO:  Move to a config
+            // TODO: Encode this value in NetworkConfig
             constants::MAX_CONCURRENT_NETWORK_NOTIFS,
+            max_frame_size,
         );
 
         NetworkBuilder {
-            executor,
+            state: State::CREATED,
+            executor: None,
             network_context,
-            trusted_peers,
-            seed_addrs: HashMap::new(),
-            seed_pubkeys: HashMap::new(),
-            channel_size: constants::NETWORK_CHANNEL_SIZE,
-            connectivity_check_interval_ms: constants::CONNECTIVITY_CHECK_INTERNAL_MS,
-            max_connection_delay_ms: constants::MAX_CONNECTION_DELAY_MS,
-            max_fullnode_connections: constants::MAX_FULLNODE_CONNECTIONS,
             configuration_change_listener_builder: None,
             connectivity_manager_builder: None,
             discovery_builder: None,
@@ -123,47 +113,43 @@ impl NetworkBuilder {
         }
     }
 
-    pub fn create(
-        chain_id: &ChainId,
-        role: RoleType,
-        config: &mut NetworkConfig,
-    ) -> (Runtime, NetworkBuilder) {
-        let runtime = Builder::new()
-            .thread_name("network-")
-            .threaded_scheduler()
-            .enable_all()
-            .build()
-            .expect("Failed to start runtime. Won't be able to start networking.");
-
+    /// Create a new NetworkBuilder based on the provided configuration.
+    pub fn create(chain_id: ChainId, role: RoleType, config: &NetworkConfig) -> NetworkBuilder {
         let peer_id = config.peer_id();
         let identity_key = config.identity_key();
+        let pubkey = libra_crypto::PrivateKey::public_key(&identity_key);
 
         let authentication_mode = if config.mutual_authentication {
             AuthenticationMode::Mutual(identity_key)
         } else {
             AuthenticationMode::ServerOnly(identity_key)
         };
-        let pubkey = authentication_mode.public_key();
 
-        let mut network_builder = NetworkBuilder::new(
-            runtime.handle().clone(),
-            chain_id.clone(),
+        let network_context = Arc::new(NetworkContext::new(
             config.network_id.clone(),
             role,
             peer_id,
+        ));
+
+        let trusted_peers = Arc::new(RwLock::new(HashMap::new()));
+
+        let mut network_builder = NetworkBuilder::new(
+            chain_id,
+            trusted_peers.clone(),
+            network_context,
             config.listen_address.clone(),
             authentication_mode,
+            config.max_frame_size,
         );
-        network_builder
-            .seed_addrs(config.seed_addrs.clone())
-            .seed_pubkeys(config.seed_pubkeys.clone())
-            .connectivity_check_interval_ms(config.connectivity_check_interval_ms)
-            .add_connection_monitoring(
-                // TODO: Move these values into NetworkConfig
-                constants::PING_INTERVAL_MS,
-                constants::PING_TIMEOUT_MS,
-                constants::PING_FAILURES_TOLERATED,
-            );
+
+        network_builder.add_connection_monitoring(
+            // TODO: Encode this value in NetworkConfig
+            constants::PING_INTERVAL_MS,
+            // TODO: Encode this value in NetworkConfig
+            constants::PING_TIMEOUT_MS,
+            // TODO: Encode this value in NetworkConfig
+            constants::PING_FAILURES_TOLERATED,
+        );
 
         // Sanity check seed addresses.
         config
@@ -181,32 +167,62 @@ impl NetworkBuilder {
         //    discovered peers.
         // 3) if we have seed peers, then we need connmgr to connect to them.
         // TODO(philiphayes): could probably use a better way to specify these cases
+        // TODO:  Why not add ConnectivityManager always?
         if config.mutual_authentication
             || config.discovery_method != DiscoveryMethod::None
             || !config.seed_addrs.is_empty()
         {
-            network_builder.add_connectivity_manager();
+            network_builder.add_connectivity_manager(
+                config.seed_addrs.clone(),
+                config.seed_pubkeys.clone(), // TODO: this should be encoded in network config
+                trusted_peers,
+                constants::MAX_FULLNODE_CONNECTIONS,
+                // TODO: this should be encoded in network_config
+                constants::MAX_CONNECTION_DELAY_MS,
+                config.connectivity_check_interval_ms,
+                constants::NETWORK_CHANNEL_SIZE,
+            );
         }
 
         match &config.discovery_method {
             DiscoveryMethod::Gossip(gossip_config) => {
-                network_builder.add_gossip_discovery(
-                    gossip_config.advertised_address.clone(),
-                    gossip_config.discovery_interval_ms,
-                    pubkey,
-                );
+                network_builder.add_gossip_discovery(gossip_config.clone(), pubkey);
                 // HACK: gossip relies on on-chain discovery for the eligible peers update.
+                // TODO:  it should be safe to enable the configuraction_change_listener always.
                 if role == RoleType::Validator {
-                    network_builder.add_configuration_change_listener(role);
+                    network_builder.add_configuration_change_listener(role, config.encryptor());
                 }
             }
             DiscoveryMethod::Onchain => {
-                network_builder.add_configuration_change_listener(role);
+                network_builder.add_configuration_change_listener(role, config.encryptor());
             }
             DiscoveryMethod::None => {}
         }
 
-        (runtime, network_builder)
+        network_builder
+    }
+
+    /// Create the configured Networking components.
+    pub fn build(&mut self, executor: Handle) -> &mut Self {
+        assert_eq!(self.state, State::CREATED);
+        self.state = State::BUILT;
+        self.executor = Some(executor);
+        self.build_peer_manager()
+            .build_configuration_change_listener()
+            .build_gossip_discovery()
+            .build_connectivity_manager()
+            .build_connection_monitoring()
+    }
+
+    /// Start the built Networking components.
+    pub fn start(&mut self) -> &mut Self {
+        assert_eq!(self.state, State::BUILT);
+        self.state = State::STARTED;
+        self.start_peer_manager()
+            .start_connectivity_manager()
+            .start_connection_monitoring()
+            .start_gossip_discovery()
+            .start_configuration_change_listener()
     }
 
     pub fn reconfig_subscriptions(&mut self) -> &mut Vec<ReconfigSubscription> {
@@ -217,52 +233,30 @@ impl NetworkBuilder {
         self.network_context.clone()
     }
 
-    pub fn peer_id(&self) -> PeerId {
-        self.network_context.peer_id()
-    }
-
-    /// Set additional public keys for seed peers to bootstrap discovery.
-    pub fn seed_pubkeys(
-        &mut self,
-        seed_pubkeys: HashMap<PeerId, HashSet<x25519::PublicKey>>,
-    ) -> &mut Self {
-        self.seed_pubkeys = seed_pubkeys;
-        self
-    }
-
-    /// Set addresses of seed peers to bootstrap discovery
-    pub fn seed_addrs(&mut self, seed_addrs: HashMap<PeerId, Vec<NetworkAddress>>) -> &mut Self {
-        self.seed_addrs = seed_addrs;
-        self
-    }
-
-    /// Set connectivity check ticker interval
-    pub fn connectivity_check_interval_ms(
-        &mut self,
-        connectivity_check_interval_ms: u64,
-    ) -> &mut Self {
-        self.connectivity_check_interval_ms = connectivity_check_interval_ms;
-        self
-    }
-
-    pub fn conn_mgr_reqs_tx(&self) -> Option<channel::Sender<ConnectivityRequest>> {
+    fn conn_mgr_reqs_tx(&self) -> Option<channel::Sender<ConnectivityRequest>> {
         match self.connectivity_manager_builder.as_ref() {
             Some(conn_mgr_builder) => Some(conn_mgr_builder.conn_mgr_reqs_tx()),
             None => None,
         }
     }
 
-    pub fn add_connection_event_listener(&mut self) -> conn_notifs_channel::Receiver {
+    fn add_connection_event_listener(&mut self) -> conn_notifs_channel::Receiver {
         self.peer_manager_builder.add_connection_event_listener()
     }
 
+    pub fn listen_address(&self) -> NetworkAddress {
+        self.peer_manager_builder.listen_address()
+    }
+
     fn build_peer_manager(&mut self) -> &mut Self {
-        self.peer_manager_builder.build(&self.executor);
+        self.peer_manager_builder
+            .build(self.executor.as_mut().expect("Executor must exist"));
         self
     }
 
     fn start_peer_manager(&mut self) -> &mut Self {
-        self.peer_manager_builder.start(&self.executor);
+        self.peer_manager_builder
+            .start(self.executor.as_mut().expect("Executor must exist"));
         self
     }
 
@@ -275,16 +269,19 @@ impl NetworkBuilder {
     ///
     /// Note: a connectivity manager should only be added if the network is
     /// permissioned.
-    pub fn add_connectivity_manager(&mut self) -> &mut Self {
-        let trusted_peers = self.trusted_peers.clone();
-        let seed_addrs = self.seed_addrs.clone();
-        let mut seed_pubkeys = self.seed_pubkeys.clone();
-
-        let max_connection_delay_ms = self.max_connection_delay_ms;
-        let connectivity_check_interval_ms = self.connectivity_check_interval_ms;
+    pub fn add_connectivity_manager(
+        &mut self,
+        seed_addrs: HashMap<PeerId, Vec<NetworkAddress>>,
+        mut seed_pubkeys: HashMap<PeerId, HashSet<x25519::PublicKey>>,
+        trusted_peers: Arc<RwLock<HashMap<PeerId, HashSet<x25519::PublicKey>>>>,
+        max_fullnode_connections: usize,
+        max_connection_delay_ms: u64,
+        connectivity_check_interval_ms: u64,
+        channel_size: usize,
+    ) -> &mut Self {
         let pm_conn_mgr_notifs_rx = self.add_connection_event_listener();
         let connection_limit = if let RoleType::FullNode = self.network_context.role() {
-            Some(self.max_fullnode_connections)
+            Some(max_fullnode_connections)
         } else {
             None
         };
@@ -310,30 +307,33 @@ impl NetworkBuilder {
             // TODO:  move this into a config
             2, // Legacy hardcoded value,
             max_connection_delay_ms,
-            self.channel_size,
+            channel_size,
             ConnectionRequestSender::new(self.peer_manager_builder.connection_reqs_tx()),
             pm_conn_mgr_notifs_rx,
             connection_limit,
         ));
-        self.build_connectivity_manager()
-            .start_connectivity_manager()
+        self
     }
 
     fn build_connectivity_manager(&mut self) -> &mut Self {
         if let Some(builder) = self.connectivity_manager_builder.as_mut() {
-            builder.build(&self.executor);
+            builder.build(self.executor.as_mut().expect("Executor must exist"));
         }
         self
     }
 
     fn start_connectivity_manager(&mut self) -> &mut Self {
         if let Some(builder) = self.connectivity_manager_builder.as_mut() {
-            builder.start(&self.executor);
+            builder.start(self.executor.as_mut().expect("Executor must exist"));
         }
         self
     }
 
-    fn add_configuration_change_listener(&mut self, role: RoleType) -> &mut Self {
+    fn add_configuration_change_listener(
+        &mut self,
+        role: RoleType,
+        encryptor: Encryptor,
+    ) -> &mut Self {
         let conn_mgr_reqs_tx = self
             .conn_mgr_reqs_tx()
             .expect("ConnectivityManager must be installed for validator");
@@ -345,11 +345,11 @@ impl NetworkBuilder {
         self.configuration_change_listener_builder =
             Some(ConfigurationChangeListenerBuilder::create(
                 role,
+                encryptor,
                 conn_mgr_reqs_tx,
                 simple_discovery_reconfig_rx,
             ));
-        self.build_configuration_change_listener()
-            .start_configuration_change_listener()
+        self
     }
 
     fn build_configuration_change_listener(&mut self) -> &mut Self {
@@ -365,7 +365,8 @@ impl NetworkBuilder {
         if let Some(configuration_change_listener) =
             self.configuration_change_listener_builder.as_mut()
         {
-            configuration_change_listener.start(&self.executor);
+            configuration_change_listener
+                .start(self.executor.as_mut().expect("Executor must exist"));
         }
         self
     }
@@ -380,8 +381,7 @@ impl NetworkBuilder {
     // TODO:  remove the pub qualifier
     pub fn add_gossip_discovery(
         &mut self,
-        advertised_address: NetworkAddress,
-        discovery_interval_ms: u64,
+        gossip_config: GossipConfig,
         pubkey: x25519::PublicKey,
     ) -> &mut Self {
         let conn_mgr_reqs_tx = self
@@ -389,7 +389,7 @@ impl NetworkBuilder {
             .expect("ConnectivityManager not enabled");
         // Get handles for network events and sender.
         let (discovery_network_tx, discovery_network_rx) =
-            self.add_protocol_handler(discovery::network_endpoint_config());
+            self.add_protocol_handler(gossip_discovery::network_endpoint_config());
 
         // TODO(philiphayes): the current setup for gossip discovery doesn't work
         // when we don't have an `advertised_address` set, since it uses the
@@ -399,28 +399,27 @@ impl NetworkBuilder {
         // "/ip6/::1/tcp/0/ln-noise-ik/<pubkey>/ln-handshake/0", which is wrong
         // since the actual bound port will be something > 0.
 
-        // TODO(philiphayes): in network_builder setup, only bind the channels.
-        // wait until PeerManager is running to actual setup gossip discovery.
-
-        let advertised_address = advertised_address.append_prod_protos(pubkey, HANDSHAKE_VERSION);
+        // TODO:  move this logic into DiscoveryBuilder::create
+        let advertised_address = gossip_config
+            .advertised_address
+            .append_prod_protos(pubkey, HANDSHAKE_VERSION);
 
         let addrs = vec![advertised_address];
 
-        self.discovery_builder = Some(DiscoveryBuilder::create(
+        self.discovery_builder = Some(GossipDiscoveryBuilder::create(
             self.network_context(),
             addrs,
-            discovery_interval_ms,
+            gossip_config.discovery_interval_ms,
             discovery_network_tx,
             discovery_network_rx,
             conn_mgr_reqs_tx,
         ));
-        self.build_gossip_discovery().start_gossip_discovery();
         self
     }
 
     fn build_gossip_discovery(&mut self) -> &mut Self {
         if let Some(discovery_builder) = self.discovery_builder.as_mut() {
-            discovery_builder.build(&self.executor);
+            discovery_builder.build(self.executor.as_mut().expect("Executor must exist"));
             debug!("{} Built Gossip Discovery", self.network_context());
         }
         self
@@ -428,13 +427,14 @@ impl NetworkBuilder {
 
     fn start_gossip_discovery(&mut self) -> &mut Self {
         if let Some(discovery_builder) = self.discovery_builder.as_mut() {
-            discovery_builder.start(&self.executor);
+            discovery_builder.start(self.executor.as_mut().expect("Executor must exist"));
             debug!("{} Started gossip discovery", self.network_context());
         }
         self
     }
 
     /// Add a HealthChecker to the network.
+    // TODO: remove the pub qualifier
     pub fn add_connection_monitoring(
         &mut self,
         ping_interval_ms: u64,
@@ -454,32 +454,25 @@ impl NetworkBuilder {
             hc_network_rx,
         ));
         debug!("{} Created health checker", self.network_context);
-        self.build_connection_monitoring()
+        self
     }
 
     /// Build the HealthChecker, if it has been added.
     fn build_connection_monitoring(&mut self) -> &mut Self {
         if let Some(health_checker) = self.health_checker_builder.as_mut() {
-            health_checker.build(&self.executor);
+            health_checker.build(self.executor.as_mut().expect("Executor must exist"));
             debug!("{} Built health checker", self.network_context);
         };
-        self.start_connection_monitoring()
+        self
     }
 
     /// Star the built HealthChecker.
     fn start_connection_monitoring(&mut self) -> &mut Self {
         if let Some(health_checker) = self.health_checker_builder.as_mut() {
-            health_checker.start(&self.executor);
+            health_checker.start(self.executor.as_mut().expect("Executor must exist"));
             debug!("{} Started health checker", self.network_context);
         };
         self
-    }
-
-    /// Create the configured transport and start PeerManager.
-    /// Return the actual NetworkAddress over which this peer is listening.
-    pub fn build(mut self) -> NetworkAddress {
-        self.build_peer_manager().start_peer_manager();
-        self.peer_manager_builder.listen_address()
     }
 
     /// Adds a endpoints for the provided configuration.  Returns NetworkSender and NetworkEvent which

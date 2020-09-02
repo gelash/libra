@@ -2,14 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    consensus_state::ConsensusState, error::Error,
-    persistent_safety_storage::PersistentSafetyStorage, t_safety_rules::TSafetyRules, COUNTERS,
+    consensus_state::ConsensusState,
+    counters,
+    error::Error,
+    logging::{LogEntry, LogEvent, SafetyLogSchema},
+    persistent_safety_storage::PersistentSafetyStorage,
+    t_safety_rules::TSafetyRules,
 };
 use consensus_types::{
     block::Block,
     block_data::BlockData,
-    common::Author,
+    common::{Author, Round},
     quorum_cert::QuorumCert,
+    safety_data::SafetyData,
     timeout::Timeout,
     vote::Vote,
     vote_data::VoteData,
@@ -17,10 +22,10 @@ use consensus_types::{
 };
 use libra_crypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
-    hash::{CryptoHash, HashValue},
+    hash::HashValue,
     traits::Signature,
 };
-use libra_logger::debug;
+use libra_logger::prelude::*;
 use libra_types::{
     block_info::BlockInfo, epoch_change::EpochChangeProof, epoch_state::EpochState,
     ledger_info::LedgerInfo, validator_signer::ValidatorSigner, waypoint::Waypoint,
@@ -99,50 +104,66 @@ impl SafetyRules {
     /// 1) B0 <- B1 <- B2 <--
     /// 2) round(B0) + 1 = round(B1), and
     /// 3) round(B1) + 1 = round(B2).
-    pub fn construct_ledger_info(&self, proposed_block: &Block) -> LedgerInfo {
+    pub fn construct_ledger_info(&self, proposed_block: &Block) -> Result<LedgerInfo, Error> {
         let block2 = proposed_block.round();
         let block1 = proposed_block.quorum_cert().certified_block().round();
         let block0 = proposed_block.quorum_cert().parent_block().round();
 
-        let commit = block0 + 1 == block1 && block1 + 1 == block2;
-        if commit {
+        // verify 3-chain rule
+        let next_round =
+            |round: u64| u64::checked_add(round, 1).ok_or(Error::IncorrectRound(round));
+        let commit = next_round(block0)? == block1 && next_round(block1)? == block2;
+
+        // create a ledger info
+        let ledger_info = if commit {
             LedgerInfo::new(
                 proposed_block.quorum_cert().parent_block().clone(),
                 HashValue::zero(),
             )
         } else {
             LedgerInfo::new(BlockInfo::empty(), HashValue::zero())
-        }
+        };
+
+        Ok(ledger_info)
     }
 
     /// Second voting rule
-    fn verify_and_update_preferred_round(&mut self, quorum_cert: &QuorumCert) -> Result<(), Error> {
-        let preferred_round = self.persistent_storage.preferred_round()?;
+    fn verify_and_update_preferred_round(
+        &mut self,
+        quorum_cert: &QuorumCert,
+        safety_data: &mut SafetyData,
+    ) -> Result<bool, Error> {
+        let preferred_round = safety_data.preferred_round;
         let one_chain_round = quorum_cert.certified_block().round();
         let two_chain_round = quorum_cert.parent_block().round();
 
         if one_chain_round < preferred_round {
-            debug!(
-                "QC round does not match preferred round {} < {}",
-                one_chain_round, preferred_round
-            );
             return Err(Error::IncorrectPreferredRound(
                 one_chain_round,
                 preferred_round,
             ));
         }
 
-        match two_chain_round.cmp(&preferred_round) {
-            Ordering::Greater => self
-                .persistent_storage
-                .set_preferred_round(two_chain_round)?,
-            Ordering::Less => debug!(
+        let updated = match two_chain_round.cmp(&preferred_round) {
+            Ordering::Greater => {
+                safety_data.preferred_round = two_chain_round;
+                sl_info!(
+                    SafetyLogSchema::new(LogEntry::PreferredRound, LogEvent::Update)
+                        .preferred_round(safety_data.preferred_round)
+                        .into_struct_log()
+                );
+                true
+            }
+            Ordering::Less => {
+                trace!(
                 "2-chain round {} is lower than preferred round {} but 1-chain round {} is higher.",
                 two_chain_round, preferred_round, one_chain_round
-            ),
-            Ordering::Equal => (),
-        }
-        Ok(())
+            );
+                false
+            }
+            Ordering::Equal => false,
+        };
+        Ok(updated)
     }
 
     /// This verifies whether the author of one proposal is the validator signer
@@ -159,8 +180,8 @@ impl SafetyRules {
     }
 
     /// This verifies the epoch given against storage for consistent verification
-    fn verify_epoch(&self, epoch: u64) -> Result<(), Error> {
-        let expected_epoch = self.persistent_storage.epoch()?;
+    fn verify_epoch(&self, epoch: u64, safety_data: &SafetyData) -> Result<(), Error> {
+        let expected_epoch = safety_data.epoch;
         if epoch != expected_epoch {
             Err(Error::IncorrectEpoch(epoch, expected_epoch))
         } else {
@@ -169,21 +190,23 @@ impl SafetyRules {
     }
 
     /// First voting rule
-    fn verify_last_vote_round(&self, proposed_block: &BlockData) -> Result<(), Error> {
-        let last_voted_round = self.persistent_storage.last_voted_round()?;
-        if proposed_block.round() > last_voted_round {
+    fn verify_and_update_last_vote_round(
+        &self,
+        round: Round,
+        safety_data: &mut SafetyData,
+    ) -> Result<(), Error> {
+        let last_voted_round = safety_data.last_voted_round;
+        if round > last_voted_round {
+            safety_data.last_voted_round = round;
+            sl_info!(
+                SafetyLogSchema::new(LogEntry::LastVotedRound, LogEvent::Update)
+                    .last_voted_round(safety_data.last_voted_round)
+                    .into_struct_log()
+            );
             return Ok(());
         }
 
-        debug!(
-            "Vote proposal is old {} <= {}",
-            proposed_block.round(),
-            last_voted_round
-        );
-        Err(Error::IncorrectLastVotedRound(
-            proposed_block.round(),
-            last_voted_round,
-        ))
+        Err(Error::IncorrectLastVotedRound(round, last_voted_round))
     }
 
     /// This verifies a QC has valid signatures.
@@ -194,22 +217,18 @@ impl SafetyRules {
             .map_err(|e| Error::InvalidQuorumCertificate(e.to_string()))?;
         Ok(())
     }
-}
 
-impl TSafetyRules for SafetyRules {
-    fn consensus_state(&mut self) -> Result<ConsensusState, Error> {
+    // Internal functions mapped to the public interface to enable exhaustive logging and metrics
+
+    fn guarded_consensus_state(&mut self) -> Result<ConsensusState, Error> {
         Ok(ConsensusState::new(
-            self.persistent_storage.epoch()?,
-            self.persistent_storage.last_voted_round()?,
-            self.persistent_storage.preferred_round()?,
+            self.persistent_storage.safety_data()?,
             self.persistent_storage.waypoint()?,
             self.signer().is_ok(),
         ))
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
-        debug!("Initializing");
-
+    fn guarded_initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
         let waypoint = self.persistent_storage.waypoint()?;
         let last_li = proof
             .verify(&waypoint)
@@ -226,27 +245,38 @@ impl TSafetyRules for SafetyRules {
             if curr_key != Some(expected_key.clone()) {
                 let consensus_key = self
                     .persistent_storage
-                    .consensus_key_for_version(expected_key.clone())
+                    .consensus_key_for_version(expected_key)
                     .ok()
                     .ok_or_else(|| {
-                        debug!("Validator key not found!");
+                        sl_error!(SafetyLogSchema::new(
+                            LogEntry::KeyReconciliation,
+                            LogEvent::Error
+                        )
+                        .into_struct_log()
+                        .message("Validator key not found".into()));
+
                         self.validator_signer = None;
                         Error::InternalError("Validator key not found".into())
                     })?;
-                debug!(
-                    "Reconciled pub key for signer {} [{:#?} -> {}]",
-                    author, curr_key, expected_key
-                );
+
                 self.validator_signer = Some(ValidatorSigner::new(author, consensus_key));
-            } else {
-                debug!("Validator key matches the key in validator set.");
             }
+
+            sl_debug!(
+                SafetyLogSchema::new(LogEntry::KeyReconciliation, LogEvent::Success)
+                    .into_struct_log()
+                    .message("in set".into())
+            );
         } else {
-            debug!("The validator is not in set!");
+            sl_debug!(
+                SafetyLogSchema::new(LogEntry::KeyReconciliation, LogEvent::Success)
+                    .into_struct_log()
+                    .message("not in set".into())
+            );
             self.validator_signer = None;
         }
 
-        let current_epoch = self.persistent_storage.epoch()?;
+        let current_epoch = self.persistent_storage.safety_data()?.epoch;
 
         if current_epoch < epoch_state.epoch {
             // This is ordered specifically to avoid configuration issues:
@@ -254,24 +284,32 @@ impl TSafetyRules for SafetyRules {
             // * set the round information,
             // * finally, set the epoch information because once the epoch is set, this `if`
             // statement cannot be re-entered.
-            self.persistent_storage
-                .set_waypoint(&Waypoint::new_epoch_boundary(ledger_info)?)?;
-            self.persistent_storage.set_last_voted_round(0)?;
-            self.persistent_storage.set_preferred_round(0)?;
-            self.persistent_storage.set_last_vote(None)?;
-            self.persistent_storage.set_epoch(epoch_state.epoch)?;
+            let waypoint = &Waypoint::new_epoch_boundary(ledger_info)
+                .map_err(|error| Error::InternalError(error.to_string()))?;
+            self.persistent_storage.set_waypoint(waypoint)?;
+            self.persistent_storage.set_safety_data(SafetyData::new(
+                epoch_state.epoch,
+                0,
+                0,
+                None,
+            ))?;
+
+            sl_info!(SafetyLogSchema::new(LogEntry::Epoch, LogEvent::Update)
+                .epoch(epoch_state.epoch)
+                .into_struct_log());
         }
         self.epoch_state = Some(epoch_state);
 
         Ok(())
     }
 
-    fn construct_and_sign_vote(
+    fn guarded_construct_and_sign_vote(
         &mut self,
         maybe_signed_vote_proposal: &MaybeSignedVoteProposal,
     ) -> Result<Vote, Error> {
         // Exit early if we cannot sign
         self.signer()?;
+        let mut safety_data = self.persistent_storage.safety_data()?;
 
         let (vote_proposal, execution_signature) = (
             &maybe_signed_vote_proposal.vote_proposal,
@@ -281,91 +319,149 @@ impl TSafetyRules for SafetyRules {
         if let Some(public_key) = self.execution_public_key.as_ref() {
             execution_signature
                 .ok_or_else(|| Error::VoteProposalSignatureNotFound)?
-                .verify(&vote_proposal.hash(), public_key)?
+                .verify(vote_proposal, public_key)
+                .map_err(|error| Error::InternalError(error.to_string()))?;
         }
 
         let proposed_block = vote_proposal.block();
-        self.verify_epoch(proposed_block.epoch())?;
+        self.verify_epoch(proposed_block.epoch(), &safety_data)?;
         self.verify_qc(proposed_block.quorum_cert())?;
-        proposed_block.validate_signature(&self.epoch_state()?.verifier)?;
+        proposed_block
+            .validate_signature(&self.epoch_state()?.verifier)
+            .map_err(|error| Error::InternalError(error.to_string()))?;
 
-        self.verify_and_update_preferred_round(proposed_block.quorum_cert())?;
+        self.verify_and_update_preferred_round(proposed_block.quorum_cert(), &mut safety_data)?;
         // if already voted on this round, send back the previous vote.
-        let last_vote = self.persistent_storage.last_vote()?;
-        if let Some(vote) = last_vote {
+        if let Some(vote) = safety_data.last_vote.clone() {
             if vote.vote_data().proposed().round() == proposed_block.round() {
-                self.persistent_storage
-                    .set_last_voted_round(proposed_block.round())?;
+                safety_data.last_voted_round = proposed_block.round();
+                self.persistent_storage.set_safety_data(safety_data)?;
                 return Ok(vote);
             }
         }
-        self.verify_last_vote_round(proposed_block.block_data())?;
+        self.verify_and_update_last_vote_round(
+            proposed_block.block_data().round(),
+            &mut safety_data,
+        )?;
 
         let vote_data = self.extension_check(vote_proposal)?;
-        self.persistent_storage
-            .set_last_voted_round(proposed_block.round())?;
 
         let validator_signer = self.signer()?;
         let vote = Vote::new(
             vote_data,
             validator_signer.author(),
-            self.construct_ledger_info(proposed_block),
+            self.construct_ledger_info(proposed_block)?,
             validator_signer,
         );
-        self.persistent_storage.set_last_vote(Some(vote.clone()))?;
-        self.persistent_storage
-            .set_last_voted_round(proposed_block.round())?;
+        safety_data.last_vote = Some(vote.clone());
+        self.persistent_storage.set_safety_data(safety_data)?;
 
         Ok(vote)
     }
 
-    fn sign_proposal(&mut self, block_data: BlockData) -> Result<Block, Error> {
-        debug!("Incoming proposal to sign.");
+    fn guarded_sign_proposal(&mut self, block_data: BlockData) -> Result<Block, Error> {
+        let mut safety_data = self.persistent_storage.safety_data()?;
         self.signer()?;
         self.verify_author(block_data.author())?;
-        self.verify_epoch(block_data.epoch())?;
-        self.verify_last_vote_round(&block_data)?;
+        self.verify_epoch(block_data.epoch(), &safety_data)?;
+        if block_data.round() <= safety_data.last_voted_round {
+            return Err(Error::InvalidProposal(format!(
+                "Proposed round {} is not higher than last voted round {}",
+                block_data.round(),
+                safety_data.last_voted_round
+            )));
+        }
         self.verify_qc(block_data.quorum_cert())?;
-        self.verify_and_update_preferred_round(block_data.quorum_cert())?;
+        if self.verify_and_update_preferred_round(block_data.quorum_cert(), &mut safety_data)? {
+            self.persistent_storage.set_safety_data(safety_data)?;
+        }
 
-        COUNTERS.sign_proposal.inc();
         Ok(Block::new_proposal_from_block_data(
             block_data,
             self.signer()?,
         ))
     }
 
-    fn sign_timeout(&mut self, timeout: &Timeout) -> Result<Ed25519Signature, Error> {
-        debug!("Incoming timeout message for round {}", timeout.round());
-        COUNTERS.requested_sign_timeout.inc();
-
+    fn guarded_sign_timeout(&mut self, timeout: &Timeout) -> Result<Ed25519Signature, Error> {
         self.signer()?;
-        self.verify_epoch(timeout.epoch())?;
+        let mut safety_data = self.persistent_storage.safety_data()?;
+        self.verify_epoch(timeout.epoch(), &safety_data)?;
 
-        let preferred_round = self.persistent_storage.preferred_round()?;
-        if timeout.round() <= preferred_round {
+        if timeout.round() <= safety_data.preferred_round {
             return Err(Error::IncorrectPreferredRound(
                 timeout.round(),
-                preferred_round,
+                safety_data.preferred_round,
             ));
         }
 
-        let last_voted_round = self.persistent_storage.last_voted_round()?;
-        if timeout.round() < last_voted_round {
+        if timeout.round() < safety_data.last_voted_round {
             return Err(Error::IncorrectLastVotedRound(
                 timeout.round(),
-                last_voted_round,
+                safety_data.last_voted_round,
             ));
         }
-        if timeout.round() > last_voted_round {
-            self.persistent_storage
-                .set_last_voted_round(timeout.round())?;
+        if timeout.round() > safety_data.last_voted_round {
+            self.verify_and_update_last_vote_round(timeout.round(), &mut safety_data)?;
+            self.persistent_storage.set_safety_data(safety_data)?;
         }
 
         let validator_signer = self.signer()?;
         let signature = timeout.sign(&validator_signer);
-        COUNTERS.sign_timeout.inc();
-        debug!("Successfully signed timeout message.");
+
         Ok(signature)
     }
+}
+
+impl TSafetyRules for SafetyRules {
+    fn consensus_state(&mut self) -> Result<ConsensusState, Error> {
+        let cb = || self.guarded_consensus_state();
+        run_and_log(cb, |log| log, LogEntry::ConsensusState)
+    }
+
+    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
+        let cb = || self.guarded_initialize(proof);
+        run_and_log(cb, |log| log, LogEntry::Initialize)
+    }
+
+    fn construct_and_sign_vote(
+        &mut self,
+        maybe_signed_vote_proposal: &MaybeSignedVoteProposal,
+    ) -> Result<Vote, Error> {
+        let round = maybe_signed_vote_proposal.vote_proposal.block().round();
+        let cb = || self.guarded_construct_and_sign_vote(maybe_signed_vote_proposal);
+        run_and_log(cb, |log| log.round(round), LogEntry::ConstructAndSignVote)
+    }
+
+    fn sign_proposal(&mut self, block_data: BlockData) -> Result<Block, Error> {
+        let round = block_data.round();
+        let cb = || self.guarded_sign_proposal(block_data);
+        run_and_log(cb, |log| log.round(round), LogEntry::SignProposal)
+    }
+
+    fn sign_timeout(&mut self, timeout: &Timeout) -> Result<Ed25519Signature, Error> {
+        let cb = || self.guarded_sign_timeout(timeout);
+        run_and_log(cb, |log| log.round(timeout.round()), LogEntry::SignTimeout)
+    }
+}
+
+fn run_and_log<F, L, R>(callback: F, log_cb: L, log_entry: LogEntry) -> Result<R, Error>
+where
+    F: FnOnce() -> Result<R, Error>,
+    L: for<'a> Fn(SafetyLogSchema<'a>) -> SafetyLogSchema<'a>,
+{
+    sl_debug!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Request)).into_struct_log());
+    counters::increment_query(log_entry.as_str(), "request");
+    callback()
+        .map(|v| {
+            sl_info!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Success)).into_struct_log());
+            counters::increment_query(log_entry.as_str(), "success");
+            v
+        })
+        .map_err(|err| {
+            sl_error!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Error))
+                .error(&err)
+                .into_struct_log());
+            counters::increment_query(log_entry.as_str(), "error");
+            err
+        })
 }

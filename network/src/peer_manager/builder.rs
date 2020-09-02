@@ -13,14 +13,15 @@ use crate::{
     ProtocolId,
 };
 use channel::{self, libra_channel, message_queues::QueueStyle};
-use libra_config::{chain_id::ChainId, config::HANDSHAKE_VERSION, network_id::NetworkContext};
+use libra_config::{config::HANDSHAKE_VERSION, network_id::NetworkContext};
 use libra_crypto::x25519;
 use libra_logger::prelude::*;
 use libra_metrics::IntCounterVec;
 use libra_network_address::NetworkAddress;
-use libra_types::PeerId;
+use libra_types::{chain_id::ChainId, PeerId};
+#[cfg(any(test, feature = "testing", feature = "fuzzing"))]
+use netcore::transport::memory::MemoryTransport;
 use netcore::transport::{
-    memory::MemoryTransport,
     tcp::{TcpSocket, TcpTransport},
     Transport,
 };
@@ -45,20 +46,6 @@ pub enum AuthenticationMode {
     /// listener will only accept connections that successfully authenticate to a
     /// pubkey in their "trusted peers" set.
     Mutual(x25519::PrivateKey),
-}
-
-impl AuthenticationMode {
-    /// Convenience method to retrieve the public key for the auth mode's inner
-    /// network identity key.
-    ///
-    /// Note: this only works because all auth modes are Noise-based.
-    pub fn public_key(&self) -> x25519::PublicKey {
-        match self {
-            AuthenticationMode::ServerOnly(key) | AuthenticationMode::Mutual(key) => {
-                key.public_key()
-            }
-        }
-    }
 }
 
 struct TransportContext {
@@ -171,6 +158,7 @@ impl PeerManagerContext {
     }
 }
 
+#[cfg(any(test, feature = "testing", feature = "fuzzing"))]
 type MemoryPeerManager =
     PeerManager<LibraNetTransport<MemoryTransport>, NoiseStream<memsocket::MemorySocket>>;
 type TcpPeerManager = PeerManager<LibraNetTransport<TcpTransport>, NoiseStream<TcpSocket>>;
@@ -188,11 +176,13 @@ pub struct PeerManagerBuilder {
     peer_manager_context: Option<PeerManagerContext>,
     // TODO(philiphayes): better support multiple listening addrs
     // An option to ensure at most one copy of the contained private key.
+    #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
     memory_peer_manager: Option<MemoryPeerManager>,
     tcp_peer_manager: Option<TcpPeerManager>,
     // ListenAddress will be updated when the PeerManager is built
     listen_address: NetworkAddress,
     state: State,
+    max_frame_size: usize,
 }
 
 impl PeerManagerBuilder {
@@ -206,6 +196,7 @@ impl PeerManagerBuilder {
         channel_size: usize,
         max_concurrent_network_reqs: usize,
         max_concurrent_network_notifs: usize,
+        max_frame_size: usize,
     ) -> Self {
         // Setup channel to send requests to peer manager.
         let (pm_reqs_tx, pm_reqs_rx) = libra_channel::new(
@@ -240,10 +231,12 @@ impl PeerManagerBuilder {
                 max_concurrent_network_notifs,
                 channel_size,
             )),
+            #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
             memory_peer_manager: None,
             tcp_peer_manager: None,
             listen_address,
             state: State::CREATED,
+            max_frame_size,
         }
     }
 
@@ -279,23 +272,11 @@ impl PeerManagerBuilder {
             .expect("PeerManager can only be built once");
 
         let protos = transport_context.supported_protocols();
-        let chain_id = transport_context.chain_id.clone();
-        let network_id = self.network_context.network_id().clone();
-        let peer_id = self.network_context.peer_id();
+        let chain_id = transport_context.chain_id;
 
-        let (key, maybe_trusted_peers, peer_id) = match transport_context.authentication_mode {
-            // validator-operated full node
-            AuthenticationMode::ServerOnly(key) if peer_id == PeerId::ZERO => {
-                let public_key = key.public_key();
-                let peer_id = PeerId::from_identity_public_key(public_key);
-                (key, None, peer_id)
-            }
-            // full node
-            AuthenticationMode::ServerOnly(key) => (key, None, peer_id),
-            // validator
-            AuthenticationMode::Mutual(key) => {
-                (key, Some(transport_context.trusted_peers), peer_id)
-            }
+        let (key, maybe_trusted_peers) = match transport_context.authentication_mode {
+            AuthenticationMode::ServerOnly(key) => (key, None),
+            AuthenticationMode::Mutual(key) => (key, Some(transport_context.trusted_peers)),
         };
 
         match self.listen_address.as_slice() {
@@ -303,27 +284,26 @@ impl PeerManagerBuilder {
                 self.tcp_peer_manager = Some(self.build_with_transport(
                     LibraNetTransport::new(
                         LIBRA_TCP_TRANSPORT.clone(),
-                        peer_id,
+                        self.network_context.clone(),
                         key,
                         maybe_trusted_peers,
                         HANDSHAKE_VERSION,
                         chain_id,
-                        network_id,
                         protos,
                     ),
                     executor,
                 ))
             }
+            #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
             [Memory(_)] => {
                 self.memory_peer_manager = Some(self.build_with_transport(
                     LibraNetTransport::new(
                         MemoryTransport,
-                        peer_id,
+                        self.network_context.clone(),
                         key,
                         maybe_trusted_peers,
                         HANDSHAKE_VERSION,
                         chain_id,
-                        network_id,
                         protos,
                     ),
                     executor,
@@ -369,6 +349,7 @@ impl PeerManagerBuilder {
             pm_context.max_concurrent_network_reqs,
             pm_context.max_concurrent_network_notifs,
             pm_context.channel_size,
+            self.max_frame_size,
         );
 
         // PeerManager constructor appends a public key to the listen_address.
@@ -393,6 +374,7 @@ impl PeerManagerBuilder {
         assert_eq!(self.state, State::BUILT);
         self.state = State::STARTED;
         debug!("{} Starting Peer manager", self.network_context);
+        #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
         if let Some(memory_pm) = self.memory_peer_manager.take() {
             self.start_peer_manager(memory_pm, executor);
         };

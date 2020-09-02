@@ -20,10 +20,7 @@ use libra_types::{
     validator_signer::{proptests, ValidatorSigner},
 };
 use proptest::prelude::*;
-use std::{
-    collections::BTreeMap,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::collections::BTreeMap;
 
 type LinearizedBlockForest = Vec<Block>;
 
@@ -45,7 +42,7 @@ prop_compose! {
         Block::new_proposal(
             vec![],
             round,
-            get_current_timestamp().as_micros() as u64,
+            libra_time::duration_since_epoch().as_micros() as u64,
             parent_qc,
             &signer,
         )
@@ -90,7 +87,7 @@ prop_compose! {
                     block.payload().unwrap().clone(),
                     block.author().unwrap(),
                     block.round(),
-                    get_current_timestamp().as_micros() as u64,
+                    libra_time::duration_since_epoch().as_micros() as u64,
                     block.quorum_cert().clone(),
                 ),
                 signature: Some(block.signature().unwrap().clone()),
@@ -179,14 +176,6 @@ pub fn block_forest_and_its_keys(
     )
 }
 
-// Using current_timestamp in this test
-// because it's a bit hard to generate incremental timestamps in proptests
-pub fn get_current_timestamp() -> Duration {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Timestamp generated is before the UNIX_EPOCH!")
-}
-
 pub fn placeholder_ledger_info() -> LedgerInfo {
     LedgerInfo::new(BlockInfo::empty(), HashValue::zero())
 }
@@ -209,7 +198,7 @@ pub fn gen_test_certificate(
 
     let mut signatures = BTreeMap::new();
     for signer in signers {
-        let li_sig = signer.sign_message(ledger_info.hash());
+        let li_sig = signer.sign(&ledger_info);
         signatures.insert(signer.author(), li_sig);
     }
 
@@ -257,7 +246,7 @@ pub fn placeholder_certificate_for_block(
 
     let mut signatures = BTreeMap::new();
     for signer in signers {
-        let li_sig = signer.sign_message(ledger_info_placeholder.hash());
+        let li_sig = signer.sign(&ledger_info_placeholder);
         signatures.insert(signer.author(), li_sig);
     }
 

@@ -4,8 +4,9 @@
 use crate::{
     account_address::AccountAddress,
     account_config::LBR_NAME,
+    chain_id::ChainId,
     transaction::{
-        RawTransaction, Script, SignedTransaction, Transaction, TransactionInfo,
+        GovernanceRole, RawTransaction, Script, SignedTransaction, Transaction, TransactionInfo,
         TransactionListWithProof, TransactionPayload, TransactionWithProof,
     },
 };
@@ -27,13 +28,30 @@ fn test_invalid_signature() {
             0,
             0,
             LBR_NAME.to_owned(),
-            std::time::Duration::new(0, 0),
+            0,
+            ChainId::test(),
         ),
         Ed25519PrivateKey::generate_for_testing().public_key(),
         Ed25519Signature::try_from(&[1u8; 64][..]).unwrap(),
     );
     txn.check_signature()
         .expect_err("signature checking should fail");
+}
+
+#[test]
+fn test_role_ordering() {
+    use GovernanceRole::*;
+    assert!(LibraRoot.priority() > TreasuryCompliance.priority());
+    assert!(LibraRoot.priority() > Validator.priority());
+    assert!(LibraRoot.priority() > ValidatorOperator.priority());
+    assert!(LibraRoot.priority() > DesignatedDealer.priority());
+
+    assert!(TreasuryCompliance.priority() > Validator.priority());
+    assert!(TreasuryCompliance.priority() > ValidatorOperator.priority());
+    assert!(TreasuryCompliance.priority() > DesignatedDealer.priority());
+
+    assert!(Validator.priority() == ValidatorOperator.priority());
+    assert!(Validator.priority() == DesignatedDealer.priority());
 }
 
 proptest! {

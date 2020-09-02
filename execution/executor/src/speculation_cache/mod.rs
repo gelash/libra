@@ -17,13 +17,18 @@
 #[cfg(test)]
 mod test;
 
-use crate::types::ProcessedVMOutput;
+use crate::{
+    logging::{self, executor_log, LogEntry},
+    types::ProcessedVMOutput,
+};
 use anyhow::{format_err, Result};
 use consensus_types::block::Block;
 use executor_types::{Error, ExecutedTrees};
 use libra_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use libra_logger::prelude::*;
-use libra_types::{ledger_info::LedgerInfo, transaction::Transaction};
+use libra_types::{
+    contract_event::ContractEvent, ledger_info::LedgerInfo, transaction::Transaction,
+};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, Weak},
@@ -75,6 +80,12 @@ impl SpeculationBlock {
     pub fn output(&self) -> &ProcessedVMOutput {
         &self.output
     }
+
+    pub fn replace(&mut self, transactions: Vec<Transaction>, output: ProcessedVMOutput) {
+        self.transactions = transactions;
+        self.output = output;
+        self.children = vec![];
+    }
 }
 
 /// drop() will clean the current block entry from the global map.
@@ -85,7 +96,9 @@ impl Drop for SpeculationBlock {
             .unwrap()
             .remove(&self.id())
             .expect("Speculation block must exist in block_map before being dropped.");
-        debug!("Speculation block {} is dropped.", self.id())
+        sl_debug!(executor_log(LogEntry::Cache)
+            .data(logging::EVENT, "Block dropped")
+            .data("block_id", self.id()));
     }
 }
 
@@ -97,6 +110,7 @@ impl Drop for SpeculationBlock {
 pub(crate) struct SpeculationCache {
     synced_trees: ExecutedTrees,
     committed_trees: ExecutedTrees,
+    committed_txns_and_events: (Vec<Transaction>, Vec<ContractEvent>),
     // The id of root block.
     committed_block_id: HashValue,
     // The chidren of root block.
@@ -111,6 +125,7 @@ impl SpeculationCache {
         Self {
             synced_trees: ExecutedTrees::new_empty(),
             committed_trees: ExecutedTrees::new_empty(),
+            committed_txns_and_events: (vec![], vec![]),
             heads: vec![],
             block_map: Arc::new(Mutex::new(HashMap::new())),
             committed_block_id: *PRE_GENESIS_BLOCK_ID,
@@ -121,7 +136,12 @@ impl SpeculationCache {
         let mut cache = Self::new();
         let ledger_info = startup_info.latest_ledger_info.ledger_info();
         let committed_trees = ExecutedTrees::from(startup_info.committed_tree_state);
-        cache.update_block_tree_root(committed_trees, ledger_info);
+        cache.update_block_tree_root(
+            committed_trees,
+            ledger_info,
+            vec![], /* lastest_committed_txns */
+            vec![], /* latest_reconfig_events */
+        );
         if let Some(synced_tree_state) = startup_info.synced_tree_state {
             cache.update_synced_trees(ExecutedTrees::from(synced_tree_state));
         }
@@ -135,10 +155,15 @@ impl SpeculationCache {
         Self {
             synced_trees: executor_trees.clone(),
             committed_trees: executor_trees,
+            committed_txns_and_events: (vec![], vec![]),
             heads: vec![],
             block_map: Arc::new(Mutex::new(HashMap::new())),
             committed_block_id: *PRE_GENESIS_BLOCK_ID,
         }
+    }
+
+    pub fn committed_txns_and_events(&self) -> (Vec<Transaction>, Vec<ContractEvent>) {
+        self.committed_txns_and_events.clone()
     }
 
     pub fn committed_block_id(&self) -> HashValue {
@@ -157,24 +182,34 @@ impl SpeculationCache {
         &mut self,
         committed_trees: ExecutedTrees,
         committed_ledger_info: &LedgerInfo,
+        committed_txns: Vec<Transaction>,
+        reconfig_events: Vec<ContractEvent>,
     ) {
         let new_root_block_id = if committed_ledger_info.ends_epoch() {
             // Update the root block id with reconfig virtual block id, to be consistent
             // with the logic of Consensus.
             let id = Block::make_genesis_block_from_ledger_info(committed_ledger_info).id();
-            debug!(
-                "Updated with a new root block {} as a virtual block of reconfiguration block {}",
-                id,
-                committed_ledger_info.consensus_block_id()
-            );
+            sl_info!(executor_log(LogEntry::Cache)
+                .data(
+                    logging::EVENT,
+                    "Updated with a new root block as a virtual block of reconfiguration block"
+                )
+                .data("root_block_id", id)
+                .data(
+                    "original_reconfiguration_block_id",
+                    committed_ledger_info.consensus_block_id()
+                ));
             id
         } else {
             let id = committed_ledger_info.consensus_block_id();
-            debug!("updated with a new root block {}", id);
+            sl_info!(executor_log(LogEntry::Cache)
+                .data(logging::EVENT, "Updated with a new root block")
+                .data("root_block_id", id));
             id
         };
         self.committed_block_id = new_root_block_id;
         self.committed_trees = committed_trees.clone();
+        self.committed_txns_and_events = (committed_txns, reconfig_events);
         self.synced_trees = committed_trees;
     }
 
@@ -196,37 +231,59 @@ impl SpeculationCache {
             ProcessedVMOutput, /* block execution output */
         ),
     ) -> Result<(), Error> {
-        // 0. Check existence first
+        // Check existence first
         let (block_id, txns, output) = block;
-        if self.block_map.lock().unwrap().contains_key(&block_id) {
+
+        // If block is re-executed, update it.
+        let old_block = self
+            .block_map
+            .lock()
+            .unwrap()
+            .get(&block_id)
+            .map(|b| {
+                b.upgrade().ok_or_else(|| {
+                    format_err!(
+                        "block {:x} has been deallocated. Something went wrong.",
+                        block_id
+                    )
+                })
+            })
+            .transpose()?;
+
+        if let Some(old_block) = old_block {
+            old_block.lock().unwrap().replace(txns, output);
             return Ok(());
         }
 
-        let block = Arc::new(Mutex::new(SpeculationBlock::new(
+        let new_block = Arc::new(Mutex::new(SpeculationBlock::new(
             block_id,
             txns,
             output,
             Arc::clone(&self.block_map),
         )));
-        // 1. Add to the map
+        // Add to the map
         self.block_map
             .lock()
             .unwrap()
-            .insert(block_id, Arc::downgrade(&block));
-        // 2. Add to the tree
+            .insert(block_id, Arc::downgrade(&new_block));
+        // Add to the tree
         if parent_block_id == self.committed_block_id() {
-            self.heads.push(block);
-            return Ok(());
+            self.heads.push(new_block);
         } else {
             self.get_block(&parent_block_id)?
                 .lock()
                 .unwrap()
-                .add_child(block);
+                .add_child(new_block);
         }
         Ok(())
     }
 
-    pub fn prune(&mut self, committed_ledger_info: &LedgerInfo) -> Result<(), Error> {
+    pub fn prune(
+        &mut self,
+        committed_ledger_info: &LedgerInfo,
+        committed_txns: Vec<Transaction>,
+        reconfig_events: Vec<ContractEvent>,
+    ) -> Result<(), Error> {
         let arc_latest_committed_block =
             self.get_block(&committed_ledger_info.consensus_block_id())?;
         let latest_committed_block = arc_latest_committed_block.lock().unwrap();
@@ -234,6 +291,8 @@ impl SpeculationCache {
         self.update_block_tree_root(
             latest_committed_block.output().executed_trees().clone(),
             committed_ledger_info,
+            committed_txns,
+            reconfig_events,
         );
         Ok(())
     }

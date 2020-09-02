@@ -112,7 +112,8 @@ where
                         Ok(Some(frame_len)) => {
                             // Empty Frame
                             if frame_len == 0 {
-                                self.read_state = ReadState::Init;
+                                // 0-length messages are not expected
+                                self.read_state = ReadState::Eof(Err(()));
                             } else {
                                 self.read_state = ReadState::ReadFrame {
                                     frame_len,
@@ -547,13 +548,14 @@ mod test {
     use super::*;
     use crate::{
         noise::{AntiReplayTimestamps, HandshakeAuthMode, NoiseUpgrader},
-        testutils::fake_socket::ReadWriteTestSocket,
+        testutils::fake_socket::{ReadOnlyTestSocket, ReadWriteTestSocket},
     };
     use futures::{
         executor::block_on,
         future::join,
         io::{AsyncReadExt, AsyncWriteExt},
     };
+    use libra_config::network_id::NetworkContext;
     use libra_crypto::{test_utils::TEST_SEED, traits::Uniform as _, x25519};
     use libra_types::PeerId;
     use memsocket::MemorySocket;
@@ -576,12 +578,12 @@ mod test {
         let server_peer_id = PeerId::from_identity_public_key(server_public);
 
         let client = NoiseUpgrader::new(
-            client_peer_id,
+            NetworkContext::mock_with_peer_id(client_peer_id),
             client_private,
             HandshakeAuthMode::ServerOnly,
         );
         let server = NoiseUpgrader::new(
-            server_peer_id,
+            NetworkContext::mock_with_peer_id(server_peer_id),
             server_private,
             HandshakeAuthMode::ServerOnly,
         );
@@ -628,6 +630,27 @@ mod test {
         assert_eq!(buf, b"stormlight archive");
 
         Ok(())
+    }
+
+    // we used to time out when given a stream of all zeros, now we want an EOF
+    #[test]
+    fn dont_read_forever() {
+        // setup fake socket
+        let mut fake_socket = ReadOnlyTestSocket::new(&[0u8]);
+
+        // the socket will read a continuous streams of zeros
+        fake_socket.set_trailing();
+
+        // setup a NoiseStream with a dummy state
+        let noise_session = noise::NoiseSession::new_for_testing();
+        let mut peer = NoiseStream::new(fake_socket, noise_session);
+
+        // make sure we error and we don't continuously read
+        block_on(async move {
+            let mut buffer = [0u8; 128];
+            let res = peer.read(&mut buffer).await;
+            assert!(res.is_err());
+        });
     }
 
     #[test]

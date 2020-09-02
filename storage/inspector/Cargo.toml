@@ -9,8 +9,8 @@ publish = false
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.31"
-structopt = "0.3.15"
+anyhow = "1.0.32"
+structopt = "0.3.17"
 tempfile = "3.1.0"
 
 libradb = { path = "../libradb", version = "0.1.0" }

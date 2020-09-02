@@ -11,10 +11,10 @@
 //! proposer: bob
 //! block-time: 2
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -23,10 +23,10 @@ script {
 }
 
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -34,16 +34,16 @@ script {
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 1025,"
 
 //! block-prologue
 //! proposer: bob
 //! block-time: 3
 
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
 
 //! new-transaction
-//! sender: association
+//! sender: libraroot
 script {
     use 0x1::LibraSystem;
     fun main(account: &signer) {
@@ -52,4 +52,4 @@ script {
 }
 
 // check: NewEpochEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"

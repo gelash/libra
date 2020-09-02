@@ -5,13 +5,16 @@
 //! meant to be triggered by other threads as they commit new data to the DB.
 
 use crate::{
+    metrics::{
+        LIBRA_STORAGE_OTHER_TIMERS_SECONDS, LIBRA_STORAGE_PRUNER_LEAST_READABLE_STATE_VERSION,
+    },
     schema::{
         jellyfish_merkle_node::JellyfishMerkleNodeSchema, stale_node_index::StaleNodeIndexSchema,
     },
     OP_COUNTER,
 };
 use anyhow::Result;
-use jellyfish_merkle::StaleNodeIndex;
+use libra_jellyfish_merkle::StaleNodeIndex;
 use libra_logger::prelude::*;
 use libra_types::transaction::Version;
 use schemadb::{ReadOptions, SchemaBatch, SchemaIterator, DB};
@@ -33,6 +36,7 @@ use std::{
 ///
 /// It creates a worker thread on construction and joins it on destruction. When destructed, it
 /// quits the worker thread eagerly without waiting for all pending work to be done.
+#[derive(Debug)]
 pub(crate) struct Pruner {
     /// Other than the latest version, how many historical versions to keep being readable. For
     /// example, this being 0 means keep only the latest version.
@@ -182,14 +186,19 @@ impl Worker {
                         "pruner.least_readable_state_version",
                         least_readable_version as usize,
                     );
+                    LIBRA_STORAGE_PRUNER_LEAST_READABLE_STATE_VERSION
+                        .set(least_readable_version as i64);
 
                     // Try to purge the log.
                     if let Err(e) = self.maybe_purge_index() {
-                        crit!("Failed purging state state node index, ignored. Err: {}", e);
+                        error!(
+                            "Failed purging state state node index, ignored. Err: {}",
+                            error = e
+                        );
                     }
                 }
                 Err(e) => {
-                    crit!("Error pruning stale state nodes. {:?}", e);
+                    error!("Error pruning stale state nodes. {:?}", error = e);
                     // On error, stop retrying vigorously by making next recv() blocking.
                     self.blocking_recv = true;
                 }
@@ -342,6 +351,9 @@ pub fn prune_state(
     if indices.is_empty() {
         Ok(least_readable_version)
     } else {
+        let _timer = LIBRA_STORAGE_OTHER_TIMERS_SECONDS
+            .with_label_values(&["pruner_commit"])
+            .start_timer();
         let new_least_readable_version = indices.last().expect("Should exist.").stale_since_version;
         let mut batch = SchemaBatch::new();
         indices

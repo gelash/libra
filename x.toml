@@ -1,7 +1,11 @@
-[package-exceptions]
-libra-crypto = { path = "crypto/crypto", all-features = false }
-libra-node = { path = "libra-node" }
-testsuite = { path = "testsuite", system = true }
+[system-tests]
+testsuite = { path = "testsuite" }
+
+[cargo]
+toolchain = "nightly-2020-07-08"
+flags = "-Zfeatures=all"
+
+[fix]
 
 [clippy]
 allowed = [
@@ -10,6 +14,9 @@ allowed = [
     # Known to have false positive at the moment,
     "clippy::mutable_key_type",
     "clippy::eval-order-dependence",
+]
+warn = [
+    "clippy::wildcard_dependencies",
 ]
 
 # This follows the same syntax as CargoOptionsSummary in guppy.
@@ -65,7 +72,7 @@ features = ["fuzzing"]
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 [workspace.test-only]
 members = [
-    "common/option-future",
+    "common/libradoc",
     "common/proptest-helpers",
     "common/retrier",
     "common/workspace-builder",
@@ -77,15 +84,16 @@ members = [
     "language/benchmarks",
     "language/bytecode-verifier/bytecode-verifier-tests",
     "language/bytecode-verifier/invalid-mutations",
-    "language/e2e-tests",
-    "language/functional-tests",
+    "language/e2e-testsuite",
+    "language/testing-infra/e2e-tests",
+    "language/testing-infra/functional-tests",
+    "language/testing-infra/test-generation",
+    "language/testing-infra/module-generation",
     "language/ir-testsuite",
     "language/move-lang/functional-tests",
     "language/move-prover/test-utils",
-    "language/tools/test-generation",
-    "language/tools/utils",
     "language/vm/serializer-tests",
-    "network/onchain-discovery",
+    "network/memsocket",
     "network/socket-bench-server",
     "testsuite",
     "testsuite/cluster-test",
@@ -95,7 +103,9 @@ members = [
     "testsuite/libra-swarm",
 ]
 
-# Interesting subsets of the workspace, in this case representing parts of the TCB.
+# Interesting subsets of the workspace, These are used for generating and
+# checking dependency summaries.
+
 [workspace.subsets.lsr]
 # The Libra safety rules TCB.
 members = [
@@ -105,5 +115,17 @@ members = [
 [workspace.subsets.lec]
 # The Libra execution correctness TCB.
 members = [
-    "execution/execution-correctness"
+    "execution/execution-correctness",
+]
+
+[workspace.subsets.release]
+# The Libra release binaries
+members = [
+    "config/config-builder",
+    "config/management/genesis",
+    "consensus/safety-rules",
+    "execution/db-bootstrapper",
+    "libra-node",
+    "secure/key-manager",
+    "storage/backup/backup-cli",
 ]

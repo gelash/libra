@@ -12,7 +12,7 @@ script {
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 2,"
 
 //! new-transaction
 //! sender: alice
@@ -24,7 +24,7 @@ script {
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 2,"
 
 //! new-transaction
 //! sender: bob
@@ -36,4 +36,4 @@ script {
     }
 }
 
-// check: ABORTED
+// check: "Keep(ABORTED { code: 2,"

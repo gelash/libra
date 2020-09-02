@@ -13,6 +13,7 @@ use libra_config::{config::RoleType, network_id::NetworkId};
 use libra_crypto::{test_utils::TEST_SEED, x25519, Uniform};
 use libra_logger::info;
 use libra_network_address::NetworkAddress;
+use netcore::transport::ConnectionOrigin;
 use rand::rngs::StdRng;
 use std::{io, num::NonZeroUsize};
 use tokio::runtime::Runtime;
@@ -100,6 +101,15 @@ fn gen_peer() -> (
     (peer_id, pubkey, pubkeys, addr)
 }
 
+async fn get_connected_size(conn_mgr_reqs_tx: &mut channel::Sender<ConnectivityRequest>) -> usize {
+    let (queue_size_tx, queue_size_rx) = oneshot::channel();
+    conn_mgr_reqs_tx
+        .send(ConnectivityRequest::GetConnectedSize(queue_size_tx))
+        .await
+        .unwrap();
+    queue_size_rx.await.unwrap()
+}
+
 async fn get_dial_queue_size(conn_mgr_reqs_tx: &mut channel::Sender<ConnectivityRequest>) -> usize {
     let (queue_size_tx, queue_size_rx) = oneshot::channel();
     conn_mgr_reqs_tx
@@ -107,6 +117,37 @@ async fn get_dial_queue_size(conn_mgr_reqs_tx: &mut channel::Sender<Connectivity
         .await
         .unwrap();
     queue_size_rx.await.unwrap()
+}
+
+async fn send_new_peer_await_delivery(
+    connection_notifs_tx: &mut conn_notifs_channel::Sender,
+    peer_id: PeerId,
+    notif_peer_id: PeerId,
+    address: NetworkAddress,
+) {
+    let notif = peer_manager::ConnectionNotification::NewPeer(
+        notif_peer_id,
+        address,
+        ConnectionOrigin::Inbound,
+        NetworkContext::mock(),
+    );
+    send_notification_await_delivery(connection_notifs_tx, peer_id, notif).await;
+}
+
+async fn send_lost_peer_await_delivery(
+    connection_notifs_tx: &mut conn_notifs_channel::Sender,
+    peer_id: PeerId,
+    notif_peer_id: PeerId,
+    address: NetworkAddress,
+    reason: DisconnectReason,
+) {
+    let notif = peer_manager::ConnectionNotification::LostPeer(
+        notif_peer_id,
+        address,
+        ConnectionOrigin::Inbound,
+        reason,
+    );
+    send_notification_await_delivery(connection_notifs_tx, peer_id, notif).await;
 }
 
 async fn send_notification_await_delivery(
@@ -139,14 +180,12 @@ async fn expect_disconnect_request(
         }
     }
     if success {
-        send_notification_await_delivery(
+        send_lost_peer_await_delivery(
             connection_notifs_tx,
             peer_id,
-            peer_manager::ConnectionNotification::LostPeer(
-                peer_id,
-                address,
-                DisconnectReason::Requested,
-            ),
+            peer_id,
+            address,
+            DisconnectReason::Requested,
         )
         .await;
     }
@@ -176,12 +215,7 @@ async fn expect_dial_request(
             "Sending NewPeer notification for peer: {}",
             peer_id.short_str()
         );
-        send_notification_await_delivery(
-            connection_notifs_tx,
-            peer_id,
-            peer_manager::ConnectionNotification::NewPeer(peer_id, address, NetworkContext::mock()),
-        )
-        .await;
+        send_new_peer_await_delivery(connection_notifs_tx, peer_id, peer_id, address).await;
     }
 
     // Wait for dial queue to be empty. Without this, it's impossible to guarantee that a completed
@@ -212,16 +246,7 @@ async fn expect_num_dials(
                 "Sending NewPeer notification for peer: {}",
                 peer_id.short_str()
             );
-            send_notification_await_delivery(
-                connection_notifs_tx,
-                peer_id,
-                peer_manager::ConnectionNotification::NewPeer(
-                    peer_id,
-                    address,
-                    NetworkContext::mock(),
-                ),
-            )
-            .await;
+            send_new_peer_await_delivery(connection_notifs_tx, peer_id, peer_id, address).await;
         } else {
             panic!("unexpected request to peer manager");
         }
@@ -305,14 +330,12 @@ fn connect_to_seeds_on_startup() {
 
         // We expect the peer which changed its address to also disconnect.
         info!("Sending lost peer notification for seed peer at old address");
-        send_notification_await_delivery(
+        send_lost_peer_await_delivery(
             &mut connection_notifs_tx,
             seed_peer_id,
-            peer_manager::ConnectionNotification::LostPeer(
-                seed_peer_id,
-                seed_addr.clone(),
-                DisconnectReason::ConnectionLost,
-            ),
+            seed_peer_id,
+            seed_addr.clone(),
+            DisconnectReason::ConnectionLost,
         )
         .await;
 
@@ -415,13 +438,13 @@ fn addr_change() {
         info!("Sending tick to trigger connectivity check");
         ticker_tx.send(()).await.unwrap();
 
-        let other_address_new = NetworkAddress::from_str("/ip4/127.0.1.1/tcp/8080").unwrap();
+        let other_addr_new = NetworkAddress::from_str("/ip4/127.0.1.1/tcp/8080").unwrap();
         // Send new address of other peer.
         info!("Sending new address of other peer");
         conn_mgr_reqs_tx
             .send(ConnectivityRequest::UpdateAddresses(
                 DiscoverySource::Gossip,
-                [(other_peer_id, vec![other_address_new.clone()])]
+                [(other_peer_id, vec![other_addr_new.clone()])]
                     .iter()
                     .cloned()
                     .collect(),
@@ -432,19 +455,21 @@ fn addr_change() {
         // Trigger connectivity check.
         info!("Sending tick to trigger connectivity check");
         ticker_tx.send(()).await.unwrap();
-
-        // We expect the peer which changed its address to also disconnect.
+        let connected_size = get_connected_size(&mut conn_mgr_reqs_tx).await;
+        assert_eq!(1, connected_size);
+        // We expect the peer which changed its address to also disconnect. (even if the address doesn't match storage)
         info!("Sending lost peer notification for other peer at old address");
-        send_notification_await_delivery(
+        send_lost_peer_await_delivery(
             &mut connection_notifs_tx,
             other_peer_id,
-            peer_manager::ConnectionNotification::LostPeer(
-                other_peer_id,
-                other_addr,
-                DisconnectReason::ConnectionLost,
-            ),
+            other_peer_id,
+            other_addr_new.clone(),
+            DisconnectReason::ConnectionLost,
         )
         .await;
+
+        let connected_size = get_connected_size(&mut conn_mgr_reqs_tx).await;
+        assert_eq!(0, connected_size);
 
         // Trigger connectivity check.
         info!("Sending tick to trigger connectivity check");
@@ -457,7 +482,7 @@ fn addr_change() {
             &mut connection_notifs_tx,
             &mut conn_mgr_reqs_tx,
             other_peer_id,
-            other_address_new,
+            other_addr_new,
             Ok(()),
         )
         .await;
@@ -510,14 +535,12 @@ fn lost_connection() {
 
         // Notify connectivity actor of loss of connection to other_peer.
         info!("Sending LostPeer event to signal connection loss");
-        send_notification_await_delivery(
+        send_lost_peer_await_delivery(
             &mut connection_notifs_tx,
             other_peer_id,
-            peer_manager::ConnectionNotification::LostPeer(
-                other_peer_id,
-                other_addr.clone(),
-                DisconnectReason::ConnectionLost,
-            ),
+            other_peer_id,
+            other_addr.clone(),
+            DisconnectReason::ConnectionLost,
         )
         .await;
 
@@ -797,14 +820,11 @@ fn no_op_requests() {
 
         // Send a delayed NewPeer notification.
         info!("Sending delayed NewPeer notification for other peer");
-        send_notification_await_delivery(
+        send_new_peer_await_delivery(
             &mut connection_notifs_tx,
             other_peer_id,
-            peer_manager::ConnectionNotification::NewPeer(
-                other_peer_id,
-                other_addr.clone(),
-                NetworkContext::mock(),
-            ),
+            other_peer_id,
+            other_addr.clone(),
         )
         .await;
 
@@ -838,14 +858,12 @@ fn no_op_requests() {
         .await;
 
         // Send delayed LostPeer notification for other peer.
-        send_notification_await_delivery(
+        send_lost_peer_await_delivery(
             &mut connection_notifs_tx,
             other_peer_id,
-            peer_manager::ConnectionNotification::LostPeer(
-                other_peer_id,
-                other_addr.clone(),
-                DisconnectReason::ConnectionLost,
-            ),
+            other_peer_id,
+            other_addr,
+            DisconnectReason::ConnectionLost,
         )
         .await;
 
@@ -910,16 +928,7 @@ fn backoff_on_failure() {
 
         // Send NewPeer notification for peer_b.
         info!("Sending NewPeer notification for peer b");
-        send_notification_await_delivery(
-            &mut connection_notifs_tx,
-            peer_b,
-            peer_manager::ConnectionNotification::NewPeer(
-                peer_b,
-                peer_b_addr.clone(),
-                NetworkContext::mock(),
-            ),
-        )
-        .await;
+        send_new_peer_await_delivery(&mut connection_notifs_tx, peer_b, peer_b, peer_b_addr).await;
 
         // We fail 10 attempts and ensure that the elapsed duration between successive attempts is
         // always greater than 100ms (the fixed backoff). In production, an exponential backoff

@@ -5,218 +5,25 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "CurrencyInfo",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        "U128",
-        "U64",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "FixedPoint32",
-            "name": "FixedPoint32",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        "Bool",
-        "U64",
-        "U64",
-        {
-          "Vector": "U8"
-        },
-        "Bool",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "MintEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "BurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "PreburnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "CancelBurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "ToLBRExchangeRateUpdateEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
+            "type_params": []
           }
         }
       ]
     }
   ],
   [
-    "011ca7775d4db405f85e75b27d2fc7a8eb67bd56f9e5423aaf23b33b5eebc0f9fa",
+    "011a3c18d19411e76ac7acc442296296225ae5b5644bef0ab21f7efa2986fd9017",
     {
       "address": "00000000000000000000000000000001",
-      "module": "AccountLimits",
-      "name": "LimitsDefinition",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        "U64",
-        "U64",
-        "Bool"
-      ]
+      "module": "AccountFreezing",
+      "name": "FreezeEventsHolder",
+      "type_params": []
     }
   ],
   [
@@ -225,114 +32,13 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "LibraConfig",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LibraSystem",
             "name": "LibraSystem",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U8",
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "LibraSystem",
-                    "name": "ValidatorInfo",
-                    "is_resource": false,
-                    "ty_args": [],
-                    "layout": [
-                      "Address",
-                      "U64",
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "ValidatorConfig",
-                          "name": "Config",
-                          "is_resource": false,
-                          "ty_args": [],
-                          "layout": [
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraSystem",
-            "name": "LibraSystem",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U8",
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "LibraSystem",
-                    "name": "ValidatorInfo",
-                    "is_resource": false,
-                    "ty_args": [],
-                    "layout": [
-                      "Address",
-                      "U64",
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "ValidatorConfig",
-                          "name": "Config",
-                          "is_resource": false,
-                          "ty_args": [],
-                          "layout": [
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            },
-                            {
-                              "Vector": "U8"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -344,44 +50,34 @@
       "address": "00000000000000000000000000000001",
       "module": "DesignatedDealer",
       "name": "Dealer",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        "U64",
-        {
-          "Vector": "U64"
-        },
+      "type_params": []
+    }
+  ],
+  [
+    "01207c54074f90e1001b01acd5329c4a5b2a9d66cde5df80ed38bc1aa021feefed",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "Libra",
+      "name": "Preburn",
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "DesignatedDealer",
-                  "name": "ReceivedMintEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Address",
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
+            "module": "Coin2",
+            "name": "Coin2",
+            "type_params": []
           }
         }
       ]
+    }
+  ],
+  [
+    "0122494956c1923748f8b8b9bb1565668856b62cb7ec87267af01b52b977c3060f",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "ChainId",
+      "name": "ChainId",
+      "type_params": []
     }
   ],
   [
@@ -390,48 +86,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraTimestamp",
       "name": "TimeHasStarted",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "0128d0eaf69a1a49d792a7a577650f19fba726514446a1232a6349a9e0fbb485b9",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "DualAttestationLimit",
-      "name": "ModifyLimitCapability",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "ModifyConfigCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "DualAttestationLimit",
-                  "name": "DualAttestationLimit",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -440,233 +95,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LBR",
       "name": "Reserve",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "MintCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "BurnCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Preburn",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "Libra",
-                    "name": "Libra",
-                    "is_resource": true,
-                    "ty_args": [
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "LBR",
-                          "name": "LBR",
-                          "is_resource": true,
-                          "ty_args": [],
-                          "layout": [
-                            "Bool"
-                          ]
-                        }
-                      }
-                    ],
-                    "layout": [
-                      "U64"
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LBR",
-            "name": "ReserveComponent",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin1",
-                  "name": "Coin1",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "FixedPoint32",
-                  "name": "FixedPoint32",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              },
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "Libra",
-                  "is_resource": true,
-                  "ty_args": [
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "Coin1",
-                        "name": "Coin1",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          "Bool"
-                        ]
-                      }
-                    }
-                  ],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LBR",
-            "name": "ReserveComponent",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin2",
-                  "name": "Coin2",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "FixedPoint32",
-                  "name": "FixedPoint32",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              },
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "Libra",
-                  "is_resource": true,
-                  "ty_args": [
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "Coin2",
-                        "name": "Coin2",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          "Bool"
-                        ]
-                      }
-                    }
-                  ],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -675,62 +104,15 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "ModifyConfigCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LibraVMConfig",
             "name": "LibraVMConfig",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              {
-                "Vector": "U8"
-              },
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraVMConfig",
-                  "name": "GasSchedule",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "LibraVMConfig",
-                        "name": "GasConstants",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64"
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        "Bool"
       ]
     }
   ],
@@ -740,23 +122,15 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "MintCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        "Bool"
       ]
     }
   ],
@@ -766,12 +140,7 @@
       "address": "00000000000000000000000000000001",
       "module": "Event",
       "name": "EventHandleGenerator",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        "Address"
-      ]
+      "type_params": []
     }
   ],
   [
@@ -780,113 +149,25 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "LibraConfig",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LibraVMConfig",
             "name": "LibraVMConfig",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              {
-                "Vector": "U8"
-              },
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraVMConfig",
-                  "name": "GasSchedule",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "LibraVMConfig",
-                        "name": "GasConstants",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64"
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraVMConfig",
-            "name": "LibraVMConfig",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              {
-                "Vector": "U8"
-              },
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraVMConfig",
-                  "name": "GasSchedule",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "LibraVMConfig",
-                        "name": "GasConstants",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64",
-                          "U64"
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
+    }
+  ],
+  [
+    "01481b127d46a29910ad31024e76b978df6ed382dc09dcc8a04b182282ce9ba0c0",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "VASP",
+      "name": "VASPOperationsResource",
+      "type_params": []
     }
   ],
   [
@@ -895,48 +176,25 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "Balance",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin2",
-                  "name": "Coin2",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
+            "type_params": []
           }
         }
       ]
+    }
+  ],
+  [
+    "01551080891c02034478a6da89eefbdff38f1578ff7e46efccd518d06401fbee92",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "DualAttestation",
+      "name": "Credential",
+      "type_params": []
     }
   ],
   [
@@ -945,23 +203,15 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "MintCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        "Bool"
       ]
     }
   ],
@@ -971,47 +221,49 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "Preburn",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
+      ]
+    }
+  ],
+  [
+    "0171fbda992516e5fe261089fbfbe3699518ad6a81f087b042e8eecd36a5c50e76",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AccountLimits",
+      "name": "LimitsDefinition",
+      "type_params": [
         {
-          "Vector": {
-            "Struct": {
-              "address": "00000000000000000000000000000001",
-              "module": "Libra",
-              "name": "Libra",
-              "is_resource": true,
-              "ty_args": [
-                {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "Coin1",
-                    "name": "Coin1",
-                    "is_resource": false,
-                    "ty_args": [],
-                    "layout": [
-                      "Bool"
-                    ]
-                  }
-                }
-              ],
-              "layout": [
-                "U64"
-              ]
-            }
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "LBR",
+            "name": "LBR",
+            "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "0172cc3d56b1931722e278d74fdb32a2fe245f288ac9910ebe42833e7868675fb3",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "DesignatedDealer",
+      "name": "TierInfo",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Coin1",
+            "name": "Coin1",
+            "type_params": []
           }
         }
       ]
@@ -1023,96 +275,13 @@
       "address": "00000000000000000000000000000001",
       "module": "TransactionFee",
       "name": "TransactionFee",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin1",
-                  "name": "Coin1",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Preburn",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin1",
-                  "name": "Coin1",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "Libra",
-                    "name": "Libra",
-                    "is_resource": true,
-                    "ty_args": [
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "Coin1",
-                          "name": "Coin1",
-                          "is_resource": false,
-                          "ty_args": [],
-                          "layout": [
-                            "Bool"
-                          ]
-                        }
-                      }
-                    ],
-                    "layout": [
-                      "U64"
-                    ]
-                  }
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -1124,23 +293,15 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "BurnCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        "Bool"
       ]
     }
   ],
@@ -1150,96 +311,13 @@
       "address": "00000000000000000000000000000001",
       "module": "TransactionFee",
       "name": "TransactionFee",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LBR",
             "name": "LBR",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Preburn",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "Libra",
-                    "name": "Libra",
-                    "is_resource": true,
-                    "ty_args": [
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "LBR",
-                          "name": "LBR",
-                          "is_resource": true,
-                          "ty_args": [],
-                          "layout": [
-                            "Bool"
-                          ]
-                        }
-                      }
-                    ],
-                    "layout": [
-                      "U64"
-                    ]
-                  }
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -1251,161 +329,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "LibraAccount",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Vector": "U8"
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Option",
-            "name": "Option",
-            "is_resource": false,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "WithdrawCapability",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "LibraAccount",
-                    "name": "WithdrawCapability",
-                    "is_resource": true,
-                    "ty_args": [],
-                    "layout": [
-                      "Address"
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Option",
-            "name": "Option",
-            "is_resource": false,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "KeyRotationCapability",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "LibraAccount",
-                    "name": "KeyRotationCapability",
-                    "is_resource": true,
-                    "ty_args": [],
-                    "layout": [
-                      "Address"
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "ReceivedPaymentEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address",
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "SentPaymentEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address",
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        "U64",
-        "Bool"
-      ]
+      "type_params": []
     }
   ],
   [
@@ -1414,92 +338,7 @@
       "address": "00000000000000000000000000000001",
       "module": "ValidatorConfig",
       "name": "ValidatorConfig",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Option",
-            "name": "Option",
-            "is_resource": false,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "ValidatorConfig",
-                  "name": "Config",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "ValidatorConfig",
-                    "name": "Config",
-                    "is_resource": false,
-                    "ty_args": [],
-                    "layout": [
-                      {
-                        "Vector": "U8"
-                      },
-                      {
-                        "Vector": "U8"
-                      },
-                      {
-                        "Vector": "U8"
-                      },
-                      {
-                        "Vector": "U8"
-                      },
-                      {
-                        "Vector": "U8"
-                      }
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Option",
-            "name": "Option",
-            "is_resource": false,
-            "ty_args": [
-              "Address"
-            ],
-            "layout": [
-              {
-                "Vector": "Address"
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -1508,152 +347,22 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "AccountOperationsCapability",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "AccountLimits",
-            "name": "CallingCapability",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "FreezeAccountEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Address",
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraAccount",
-                  "name": "UnfreezeAccountEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Address",
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
-    "019326e8656ce9a76bfbca0468faf2c5c720d04e8a41acd39657a89e77adcdb79b",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Roles",
-      "name": "Privilege",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "PublishModule",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraAccount",
-            "name": "PublishModule",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "019343137f19a618bb7efe63151ea1ad1b45cd2730ac4eb629d0fa9ced78d241db",
+    "0192ed623a2d06d2cb84217bae54cec5ad0cba966b8933e2bf808b2dc69ff16d50",
     {
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
-      "name": "LibraConfig",
-      "is_resource": true,
-      "ty_args": [
+      "name": "ModifyConfigCapability",
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
-            "module": "DualAttestationLimit",
-            "name": "DualAttestationLimit",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "DualAttestationLimit",
-            "name": "DualAttestationLimit",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
+            "module": "RegisteredCurrencies",
+            "name": "RegisteredCurrencies",
+            "type_params": []
           }
         }
       ]
@@ -1665,40 +374,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraWriteSetManager",
       "name": "LibraWriteSetManager",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraWriteSetManager",
-                  "name": "UpgradeEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -1707,24 +383,25 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "ModifyConfigCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LibraVersion",
             "name": "LibraVersion",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        "Bool"
       ]
+    }
+  ],
+  [
+    "019ee9121a481430c723f6f34ebe7a47a3407e55037e177411480853d3c50b2f50",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AccountFreezing",
+      "name": "FreezingBit",
+      "type_params": []
     }
   ],
   [
@@ -1733,73 +410,13 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "BurnCapability",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        "Bool"
-      ]
-    }
-  ],
-  [
-    "01a4fefc10dba9da1256616bd83d57419130a185d97f41db2983fe35656d9231a6",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Libra",
-      "name": "CurrencyRegistrationCapability",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "RegisteredCurrencies",
-            "name": "RegistrationCapability",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraConfig",
-                  "name": "ModifyConfigCapability",
-                  "is_resource": true,
-                  "ty_args": [
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "RegisteredCurrencies",
-                        "name": "RegisteredCurrencies",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          {
-                            "Vector": {
-                              "Vector": "U8"
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -1811,40 +428,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "Configuration",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        "U64",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraConfig",
-                  "name": "NewEpochEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -1853,73 +437,22 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraSystem",
       "name": "CapabilityHolder",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
+      "type_params": []
+    }
+  ],
+  [
+    "01ab4c101bd87d1ef99c8049f0f90d991ef58de714b38ab94b9c0301c5d7ad042a",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AccountLimits",
+      "name": "LimitsDefinition",
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "ModifyConfigCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraSystem",
-                  "name": "LibraSystem",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U8",
-                    {
-                      "Vector": {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "LibraSystem",
-                          "name": "ValidatorInfo",
-                          "is_resource": false,
-                          "ty_args": [],
-                          "layout": [
-                            "Address",
-                            "U64",
-                            {
-                              "Struct": {
-                                "address": "00000000000000000000000000000001",
-                                "module": "ValidatorConfig",
-                                "name": "Config",
-                                "is_resource": false,
-                                "ty_args": [],
-                                "layout": [
-                                  {
-                                    "Vector": "U8"
-                                  },
-                                  {
-                                    "Vector": "U8"
-                                  },
-                                  {
-                                    "Vector": "U8"
-                                  },
-                                  {
-                                    "Vector": "U8"
-                                  },
-                                  {
-                                    "Vector": "U8"
-                                  }
-                                ]
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
+            "module": "Coin2",
+            "name": "Coin2",
+            "type_params": []
           }
         }
       ]
@@ -1931,10 +464,24 @@
       "address": "00000000000000000000000000000001",
       "module": "Roles",
       "name": "RoleId",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64"
+      "type_params": []
+    }
+  ],
+  [
+    "01c2ab0029e907c5912aee02f8e6f01142557648b0db0214089cb4a6e52f51a67d",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "DesignatedDealer",
+      "name": "TierInfo",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Coin2",
+            "name": "Coin2",
+            "type_params": []
+          }
+        }
       ]
     }
   ],
@@ -1944,45 +491,13 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "Balance",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LBR",
             "name": "LBR",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LBR",
-                  "name": "LBR",
-                  "is_resource": true,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
+            "type_params": []
           }
         }
       ]
@@ -1994,199 +509,13 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "CurrencyInfo",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        "U128",
-        "U64",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "FixedPoint32",
-            "name": "FixedPoint32",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        "Bool",
-        "U64",
-        "U64",
-        {
-          "Vector": "U8"
-        },
-        "Bool",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "MintEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "BurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "PreburnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "CancelBurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "ToLBRExchangeRateUpdateEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -2198,44 +527,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraBlock",
       "name": "BlockMetadata",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraBlock",
-                  "name": "NewBlockEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    "Address",
-                    {
-                      "Vector": "Address"
-                    },
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        }
-      ]
+      "type_params": []
     }
   ],
   [
@@ -2244,11 +536,7 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraTransactionTimeout",
       "name": "TTL",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64"
-      ]
+      "type_params": []
     }
   ],
   [
@@ -2257,38 +545,16 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraTimestamp",
       "name": "CurrentTimeMicroseconds",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64"
-      ]
+      "type_params": []
     }
   ],
   [
-    "01d4d3051e37613f8b531cd0556c88ad4e44a6d1e8369fe64109ac63278b387633",
+    "01ccf44896b2d4ffb26fd7318d744385a4c17c2ef345bd9bcb4988768201372b2b",
     {
       "address": "00000000000000000000000000000001",
-      "module": "MoneyOrder",
-      "name": "MoneyOrderCoinVector",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Vector": {
-            "Struct": {
-              "address": "00000000000000000000000000000001",
-              "module": "MoneyOrder",
-              "name": "MoneyOrderCoin",
-              "is_resource": true,
-              "ty_args": [],
-              "layout": [
-                "U64",
-                "Address"
-              ]
-            }
-          }
-        }
-      ]
+      "module": "DualAttestation",
+      "name": "Limit",
+      "type_params": []
     }
   ],
   [
@@ -2297,32 +563,31 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "LibraConfig",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LibraVersion",
             "name": "LibraVersion",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
+      ]
+    }
+  ],
+  [
+    "01d9b4de2efb7834d7af8f8857f631908ef3c546f479dabfc1da6e0f7585585f2a",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AccountLimits",
+      "name": "LimitsDefinition",
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
-            "module": "LibraVersion",
-            "name": "LibraVersion",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
+            "module": "Coin1",
+            "name": "Coin1",
+            "type_params": []
           }
         }
       ]
@@ -2334,12 +599,7 @@
       "address": "00000000000000000000000000000001",
       "module": "SlidingNonce",
       "name": "SlidingNonce",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        "U64",
-        "U128"
-      ]
+      "type_params": []
     }
   ],
   [
@@ -2348,189 +608,15 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "Balance",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
+            "type_params": []
           }
         }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin1",
-                  "name": "Coin1",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
-          }
-        }
-      ]
-    }
-  ],
-  [
-    "01eec77046097323bc2d03ff0ded403803ce69d22ce88e8ec4ad6b3bd513486003",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "Offer",
-      "name": "Offer",
-      "is_resource": true,
-      "ty_args": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "ModifyConfigCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraVMConfig",
-                  "name": "LibraVMConfig",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "LibraVMConfig",
-                        "name": "GasSchedule",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          {
-                            "Vector": "U8"
-                          },
-                          {
-                            "Vector": "U8"
-                          },
-                          {
-                            "Struct": {
-                              "address": "00000000000000000000000000000001",
-                              "module": "LibraVMConfig",
-                              "name": "GasConstants",
-                              "is_resource": false,
-                              "ty_args": [],
-                              "layout": [
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64"
-                              ]
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "LibraConfig",
-            "name": "ModifyConfigCapability",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "LibraVMConfig",
-                  "name": "LibraVMConfig",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    {
-                      "Struct": {
-                        "address": "00000000000000000000000000000001",
-                        "module": "LibraVMConfig",
-                        "name": "GasSchedule",
-                        "is_resource": false,
-                        "ty_args": [],
-                        "layout": [
-                          {
-                            "Vector": "U8"
-                          },
-                          {
-                            "Vector": "U8"
-                          },
-                          {
-                            "Struct": {
-                              "address": "00000000000000000000000000000001",
-                              "module": "LibraVMConfig",
-                              "name": "GasConstants",
-                              "is_resource": false,
-                              "ty_args": [],
-                              "layout": [
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64",
-                                "U64"
-                              ]
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "Bool"
-            ]
-          }
-        },
-        "Address"
       ]
     }
   ],
@@ -2540,173 +626,13 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraConfig",
       "name": "LibraConfig",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "RegisteredCurrencies",
             "name": "RegisteredCurrencies",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              {
-                "Vector": {
-                  "Vector": "U8"
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "RegisteredCurrencies",
-            "name": "RegisteredCurrencies",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              {
-                "Vector": {
-                  "Vector": "U8"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  ],
-  [
-    "01f473da8b92d598017f14946ca49a1ce0a3edd413c6bbdbd1c1dbffc4778708eb",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "MoneyOrder",
-      "name": "MoneyOrders",
-      "is_resource": true,
-      "ty_args": [],
-      "layout": [
-        {
-          "Vector": {
-            "Struct": {
-              "address": "00000000000000000000000000000001",
-              "module": "MoneyOrder",
-              "name": "MoneyOrderBatch",
-              "is_resource": true,
-              "ty_args": [],
-              "layout": [
-                {
-                  "Vector": "U8"
-                },
-                "U64"
-              ]
-            }
-          }
-        },
-        {
-          "Vector": "U8"
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "MoneyOrder",
-            "name": "MoneyOrderCoin",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "U64",
-              "Address"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "MoneyOrder",
-                  "name": "IssuedMoneyOrderEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "MoneyOrder",
-                  "name": "CanceledMoneyOrderEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "MoneyOrder",
-                  "name": "RedeemedMoneyOrderEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    "U64",
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -2718,96 +644,13 @@
       "address": "00000000000000000000000000000001",
       "module": "TransactionFee",
       "name": "TransactionFee",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Libra",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin2",
-                  "name": "Coin2",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Libra",
-            "name": "Preburn",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Coin2",
-                  "name": "Coin2",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "Bool"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              {
-                "Vector": {
-                  "Struct": {
-                    "address": "00000000000000000000000000000001",
-                    "module": "Libra",
-                    "name": "Libra",
-                    "is_resource": true,
-                    "ty_args": [
-                      {
-                        "Struct": {
-                          "address": "00000000000000000000000000000001",
-                          "module": "Coin2",
-                          "name": "Coin2",
-                          "is_resource": false,
-                          "ty_args": [],
-                          "layout": [
-                            "Bool"
-                          ]
-                        }
-                      }
-                    ],
-                    "layout": [
-                      "U64"
-                    ]
-                  }
-                }
-              }
-            ]
+            "type_params": []
           }
         }
       ]
@@ -2819,199 +662,13 @@
       "address": "00000000000000000000000000000001",
       "module": "Libra",
       "name": "CurrencyInfo",
-      "is_resource": true,
-      "ty_args": [
+      "type_params": [
         {
           "Struct": {
             "address": "00000000000000000000000000000001",
             "module": "LBR",
             "name": "LBR",
-            "is_resource": true,
-            "ty_args": [],
-            "layout": [
-              "Bool"
-            ]
-          }
-        }
-      ],
-      "layout": [
-        "U128",
-        "U64",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "FixedPoint32",
-            "name": "FixedPoint32",
-            "is_resource": false,
-            "ty_args": [],
-            "layout": [
-              "U64"
-            ]
-          }
-        },
-        "Bool",
-        "U64",
-        "U64",
-        {
-          "Vector": "U8"
-        },
-        "Bool",
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "MintEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    }
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "BurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "PreburnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "CancelBurnEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    "U64",
-                    {
-                      "Vector": "U8"
-                    },
-                    "Address"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
-          }
-        },
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "Event",
-            "name": "EventHandle",
-            "is_resource": true,
-            "ty_args": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "Libra",
-                  "name": "ToLBRExchangeRateUpdateEvent",
-                  "is_resource": false,
-                  "ty_args": [],
-                  "layout": [
-                    {
-                      "Vector": "U8"
-                    },
-                    "U64"
-                  ]
-                }
-              }
-            ],
-            "layout": [
-              "U64",
-              {
-                "Vector": "U8"
-              }
-            ]
+            "type_params": []
           }
         }
       ]

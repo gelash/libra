@@ -17,6 +17,7 @@ use libra_types::{
 use schemadb::{SchemaIterator, DB};
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub(crate) struct TransactionStore {
     db: Arc<DB>,
 }
@@ -56,7 +57,7 @@ impl TransactionStore {
     pub fn get_transaction_iter(
         &self,
         start_version: Version,
-        num_transactions: u64,
+        num_transactions: usize,
     ) -> Result<TransactionIter> {
         let mut iter = self.db.iter::<TransactionSchema>(Default::default())?;
         iter.seek(&start_version)?;
@@ -64,7 +65,7 @@ impl TransactionStore {
             inner: iter,
             expected_next_version: start_version,
             end_version: start_version
-                .checked_add(num_transactions)
+                .checked_add(num_transactions as u64)
                 .ok_or_else(|| format_err!("Too many transactions requested."))?,
         })
     }

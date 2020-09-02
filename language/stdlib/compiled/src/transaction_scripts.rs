@@ -3,8 +3,8 @@
 
 //! Rust representation of a Move transaction script that can be executed on the Libra blockchain.
 //! Libra does not allow arbitrary transaction scripts; only scripts whose hashes are present in
-//! the on-chain script whitelist. The genesis whitelist is derived from this file, and the
-//! `Stdlib` script enum will be modified to reflect changes in the on-chain whitelist as time goes
+//! the on-chain script allowlist. The genesis allowlist is derived from this file, and the
+//! `Stdlib` script enum will be modified to reflect changes in the on-chain allowlist as time goes
 //! on.
 
 use anyhow::{anyhow, Error, Result};
@@ -23,7 +23,8 @@ const TXN_SCRIPTS_ABI_DIR: Dir = include_dir!("transaction_scripts/abi");
 pub enum StdlibScript {
     AddCurrencyToAccount,
     AddRecoveryRotationCapability,
-    AddValidator,
+    AddScriptAllowList,
+    AddValidatorAndReconfigure,
     Burn,
     BurnTxnFees,
     CancelBurn,
@@ -32,7 +33,6 @@ pub enum StdlibScript {
     CreateDesignatedDealer,
     CreateParentVaspAccount,
     CreateRecoveryAddress,
-    CreateTestingAccount,
     CreateValidatorAccount,
     CreateValidatorOperatorAccount,
     DebugMoneyOrderCoinBalance,
@@ -42,30 +42,28 @@ pub enum StdlibScript {
     IssueMoneyOrder,
     IssueMoneyOrderBatch,
     IssuerCancelMoneyOrder,
-    TestnetMint,
     MintLbr,
-    ModifyPublishingOption,
     PeerToPeerWithMetadata,
     Preburn,
     PublishSharedEd2551PublicKey,
-    Reconfigure,
-    RemoveValidator,
+    RegisterValidatorConfig,
+    RemoveValidatorAndReconfigure,
     RotateAuthenticationKey,
     RotateAuthenticationKeyWithNonce,
+    RotateAuthenticationKeyWithNonceAdmin,
     RotateAuthenticationKeyWithRecoveryAddress,
-    RotateBaseUrl,
-    RotateCompliancePublicKey,
+    RotateDualAttestationInfo,
     RotateSharedEd2551PublicKey,
-    SetValidatorConfig,
+    SetValidatorConfigAndReconfigure,
     SetValidatorOperator,
+    SetValidatorOperatorWithNonceAdmin,
     TieredMint,
     UnfreezeAccount,
     UnmintLbr,
     UpdateExchangeRate,
     UpdateLibraVersion,
     UpdateMintingAbility,
-    UpdateTravelRuleLimit,
-    UpdateUnhostedWalletLimits,
+    UpdateDualAttestationLimit,
     // ...add new scripts here
 }
 
@@ -75,9 +73,10 @@ impl StdlibScript {
     pub fn all() -> Vec<Self> {
         use StdlibScript::*;
         vec![
-            AddValidator,
             AddCurrencyToAccount,
             AddRecoveryRotationCapability,
+            AddScriptAllowList,
+            AddValidatorAndReconfigure,
             Burn,
             BurnTxnFees,
             CancelBurn,
@@ -86,7 +85,6 @@ impl StdlibScript {
             CreateDesignatedDealer,
             CreateParentVaspAccount,
             CreateRecoveryAddress,
-            CreateTestingAccount,
             CreateValidatorAccount,
             CreateValidatorOperatorAccount,
             DebugMoneyOrderCoinBalance,
@@ -96,36 +94,35 @@ impl StdlibScript {
             IssueMoneyOrder,
             IssueMoneyOrderBatch,
             IssuerCancelMoneyOrder,
-            TestnetMint,
             MintLbr,
-            ModifyPublishingOption,
             PeerToPeerWithMetadata,
             Preburn,
             PublishSharedEd2551PublicKey,
-            Reconfigure,
-            RemoveValidator,
+            RegisterValidatorConfig,
+            RemoveValidatorAndReconfigure,
             RotateAuthenticationKey,
             RotateAuthenticationKeyWithNonce,
+            RotateAuthenticationKeyWithNonceAdmin,
             RotateAuthenticationKeyWithRecoveryAddress,
-            RotateBaseUrl,
-            RotateCompliancePublicKey,
+            RotateDualAttestationInfo,
             RotateSharedEd2551PublicKey,
-            SetValidatorConfig,
+            SetValidatorConfigAndReconfigure,
             SetValidatorOperator,
+            SetValidatorOperatorWithNonceAdmin,
             TieredMint,
-            UpdateTravelRuleLimit,
             UnfreezeAccount,
             UnmintLbr,
-            UpdateUnhostedWalletLimits,
-            UpdateLibraVersion,
             UpdateExchangeRate,
-            UpdateMintingAbility, // ...add new scripts here
+            UpdateLibraVersion,
+            UpdateMintingAbility,
+            UpdateDualAttestationLimit,
+            // ...add new scripts here
         ]
     }
 
-    /// Construct the whitelist of script hashes used to determine whether a transaction script can
+    /// Construct the allowlist of script hashes used to determine whether a transaction script can
     /// be executed on the Libra blockchain
-    pub fn whitelist() -> Vec<[u8; SCRIPT_HASH_LENGTH]> {
+    pub fn allowlist() -> Vec<[u8; SCRIPT_HASH_LENGTH]> {
         StdlibScript::all()
             .iter()
             .map(|script| *script.compiled_bytes().hash().as_ref())
@@ -208,9 +205,10 @@ impl fmt::Display for StdlibScript {
             f,
             "{}",
             match self {
-                AddValidator => "add_validator",
+                AddValidatorAndReconfigure => "add_validator_and_reconfigure",
                 AddCurrencyToAccount => "add_currency_to_account",
                 AddRecoveryRotationCapability => "add_recovery_rotation_capability",
+                AddScriptAllowList => "add_to_script_allow_list",
                 Burn => "burn",
                 BurnTxnFees => "burn_txn_fees",
                 CancelBurn => "cancel_burn",
@@ -219,7 +217,6 @@ impl fmt::Display for StdlibScript {
                 CreateDesignatedDealer => "create_designated_dealer",
                 CreateParentVaspAccount => "create_parent_vasp_account",
                 CreateRecoveryAddress => "create_recovery_address",
-                CreateTestingAccount => "create_testing_account",
                 CreateValidatorAccount => "create_validator_account",
                 CreateValidatorOperatorAccount => "create_validator_operator_account",
                 DebugMoneyOrderCoinBalance => "debug_money_order_coin_balance",
@@ -229,28 +226,27 @@ impl fmt::Display for StdlibScript {
                 IssueMoneyOrder => "issue_money_order",
                 IssueMoneyOrderBatch => "issue_money_order_batch",
                 IssuerCancelMoneyOrder => "issuer_cancel_money_order", 
-                TestnetMint => "testnet_mint",
                 MintLbr => "mint_lbr",
-                ModifyPublishingOption => "modify_publishing_option",
                 PeerToPeerWithMetadata => "peer_to_peer_with_metadata",
                 Preburn => "preburn",
                 PublishSharedEd2551PublicKey => "publish_shared_ed25519_public_key",
-                Reconfigure => "reconfigure",
-                RemoveValidator => "remove_validator",
+                RegisterValidatorConfig => "register_validator_config",
+                RemoveValidatorAndReconfigure => "remove_validator_and_reconfigure",
                 RotateAuthenticationKey => "rotate_authentication_key",
                 RotateAuthenticationKeyWithNonce => "rotate_authentication_key_with_nonce",
+                RotateAuthenticationKeyWithNonceAdmin =>
+                    "rotate_authentication_key_with_nonce_admin",
                 RotateAuthenticationKeyWithRecoveryAddress =>
                     "rotate_authentication_key_with_recovery_address",
-                RotateBaseUrl => "rotate_base_url",
-                RotateCompliancePublicKey => "rotate_compliance_public_key",
+                RotateDualAttestationInfo => "rotate_dual_attestation_info",
                 RotateSharedEd2551PublicKey => "rotate_shared_ed25519_public_key",
-                SetValidatorConfig => "set_validator_config",
+                SetValidatorConfigAndReconfigure => "set_validator_config_and_reconfigure",
                 SetValidatorOperator => "set_validator_operator",
+                SetValidatorOperatorWithNonceAdmin => "set_validator_operator_with_nonce_admin",
                 TieredMint => "tiered_mint",
-                UpdateTravelRuleLimit => "update_travel_rule_limit",
+                UpdateDualAttestationLimit => "update_dual_attestation_limit",
                 UnfreezeAccount => "unfreeze_account",
                 UnmintLbr => "unmint_lbr",
-                UpdateUnhostedWalletLimits => "update_unhosted_wallet_limits",
                 UpdateLibraVersion => "update_libra_version",
                 UpdateExchangeRate => "update_exchange_rate",
                 UpdateMintingAbility => "update_minting_ability",

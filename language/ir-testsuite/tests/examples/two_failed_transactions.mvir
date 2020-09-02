@@ -3,8 +3,7 @@ main() {
     return;
 }
 
-// check: ABORTED
-// check: 42
+// check: "Keep(ABORTED { code: 42,"
 
 
 //! new-transaction
@@ -13,5 +12,4 @@ main() {
     return;
 }
 
-// check: ABORTED
-// check: 43
+// check: "Keep(ABORTED { code: 43,"

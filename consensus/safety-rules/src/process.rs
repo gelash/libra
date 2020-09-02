@@ -15,13 +15,12 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new(mut config: SafetyRulesConfig) -> Self {
-        let storage = safety_rules_manager::storage(&mut config);
+    pub fn new(config: SafetyRulesConfig) -> Self {
+        let storage = safety_rules_manager::storage(&config);
 
         let verify_vote_proposal_signature = config.verify_vote_proposal_signature;
         let service = match &config.service {
             SafetyRulesService::Process(service) => service,
-            SafetyRulesService::SpawnedProcess(service) => service,
             _ => panic!("Unexpected SafetyRules service: {:?}", config.service),
         };
         let server_addr = service.server_address();
@@ -31,6 +30,7 @@ impl Process {
                 server_addr,
                 storage,
                 verify_vote_proposal_signature,
+                network_timeout: config.network_timeout_ms,
             }),
         }
     }
@@ -41,6 +41,7 @@ impl Process {
             data.storage,
             data.server_addr,
             data.verify_vote_proposal_signature,
+            data.network_timeout,
         );
     }
 }
@@ -49,20 +50,30 @@ struct ProcessData {
     server_addr: SocketAddr,
     storage: PersistentSafetyStorage,
     verify_vote_proposal_signature: bool,
+    // Timeout in Seconds for network operations
+    network_timeout: u64,
 }
 
 pub struct ProcessService {
     server_addr: SocketAddr,
+    network_timeout_ms: u64,
 }
 
 impl ProcessService {
-    pub fn new(server_addr: SocketAddr) -> Self {
-        Self { server_addr }
+    pub fn new(server_addr: SocketAddr, network_timeout: u64) -> Self {
+        Self {
+            server_addr,
+            network_timeout_ms: network_timeout,
+        }
     }
 }
 
 impl RemoteService for ProcessService {
     fn server_address(&self) -> SocketAddr {
         self.server_addr
+    }
+
+    fn network_timeout_ms(&self) -> u64 {
+        self.network_timeout_ms
     }
 }

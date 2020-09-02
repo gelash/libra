@@ -6,7 +6,7 @@ error:
     │         ^^ Invalid parameter for script function 't1'
     ·
  11 │     fun t1(s: signer) {
-    │               ------ Found: 'signer'. But expected: 'u8', 'u64', 'u128', 'bool', 'address', 'vector<u8>', '&signer'
+    │               ------ Found: 'signer'. But expected one of: 'u8', 'u64', 'u128', 'bool', 'address', 'vector<_>'
     │
 
 error: 
@@ -42,7 +42,7 @@ error:
     │         ^^ Invalid parameter for script function 't2'
     ·
  18 │     fun t2(s: &signer, s2: signer) {
-    │                            ------ Found: 'signer'. But expected: 'u8', 'u64', 'u128', 'bool', 'address', 'vector<u8>', '&signer'
+    │                            ------ Found: 'signer'. But expected one of: 'u8', 'u64', 'u128', 'bool', 'address', 'vector<_>'
     │
 
 error: 
@@ -68,16 +68,5 @@ error:
     ·
   4 │     public fun store_signer(s1: &signer, s: signer) {
     │                                 ------- Is not compatible with: '&signer'
-    │
-
-error: 
-
-    ┌── tests/move_check/translated_ir_tests/signer/address_arg_is_not_signer.move:25:9 ───
-    │
- 25 │     fun t3(s: &signer, s2: &signer) { }
-    │         ^^ Invalid parameter for script function 't3'
-    ·
- 25 │     fun t3(s: &signer, s2: &signer) { }
-    │                            ------- '&signer' must be the first argument to a script
     │
 

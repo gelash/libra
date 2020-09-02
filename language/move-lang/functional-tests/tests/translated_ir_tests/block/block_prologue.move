@@ -27,18 +27,6 @@ fun main() {
     assert(LibraTimestamp::now_microseconds() != 2000000, 77);
 }
 }
-//! new-transaction
-//! sender: vivian
-script{
-use 0x1::LibraBlock;
-use 0x1::Vector;
-
-fun main(account: &signer) {
-    LibraBlock::block_prologue(account, 1, 10, Vector::empty<address>(), {{vivian}});
-}
-}
-// check: ABORTED
-// check: 33
 
 //! new-transaction
 //! sender: vivian
@@ -49,5 +37,4 @@ fun main(account: &signer) {
     LibraTimestamp::update_global_time(account, {{vivian}}, 20);
 }
 }
-// check: ABORTED
-// check: 33
+// check: "Keep(ABORTED { code: 514,"

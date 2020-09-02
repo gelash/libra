@@ -20,8 +20,9 @@ pub enum ResponseLedgerInfo {
     ProgressiveLedgerInfo {
         // LedgerInfo that the corresponding GetChunkResponse is built relative to.
         target_li: LedgerInfoWithSignatures,
-        // LedgerInfo that is the highest LI of the responder
-        highest_li: LedgerInfoWithSignatures,
+        // LedgerInfo for a version later than that of `target_li`
+        // If `None`, this is the same as `target_li`
+        highest_li: Option<LedgerInfoWithSignatures>,
     },
     /// During the initial catchup upon startup the chunks carry LedgerInfo that is verified
     /// using the local waypoint.
@@ -48,7 +49,7 @@ impl ResponseLedgerInfo {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 /// The returned chunk is bounded by the end of the known_epoch of the requester
 /// (i.e., a chunk never crosses epoch boundaries).
 pub struct GetChunkResponse {
@@ -68,6 +69,11 @@ impl GetChunkResponse {
             response_li,
             txn_list_with_proof,
         }
+    }
+}
+impl fmt::Debug for GetChunkResponse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -91,7 +97,7 @@ impl fmt::Display for GetChunkResponse {
             } => format!(
                 "[progressive LI: target LI {}, highest LI {}]",
                 target_li.ledger_info(),
-                highest_li.ledger_info()
+                highest_li.as_ref().unwrap_or(target_li).ledger_info(),
             ),
             ResponseLedgerInfo::LedgerInfoForWaypoint {
                 waypoint_li,

@@ -3,15 +3,15 @@
 
 #![forbid(unsafe_code)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 
 use anyhow::{bail, format_err, Result};
 use async_trait::async_trait;
 
-use futures::{future::try_join_all, lock::Mutex};
+use futures::{future::try_join_all, lock::Mutex, Future, TryFuture};
 use k8s_openapi::api::core::v1::{ConfigMap, Node, Pod, Service};
 use kube::{
-    api::{Api, PostParams},
+    api::{Api, DeleteParams, PostParams},
     client::Client,
     Config,
 };
@@ -24,25 +24,30 @@ use crate::instance::{
     ApplicationConfig::{Fullnode, Validator, Vault, LSR},
     InstanceConfig,
 };
-use itertools::Itertools;
 use k8s_openapi::api::batch::v1::Job;
 use kube::api::ListParams;
 use libra_config::config::DEFAULT_JSON_RPC_PORT;
 use reqwest::Client as HttpClient;
-use std::{collections::HashSet, convert::TryFrom, process::Command};
+use rusoto_core::Region;
+use rusoto_s3::{PutObjectRequest, S3Client, S3};
+use rusoto_sts::WebIdentityProvider;
+use std::{collections::HashSet, convert::TryFrom, process::Command, time::Duration};
+use tokio::sync::Semaphore;
 
 const DEFAULT_NAMESPACE: &str = "default";
 
-const CFG_SEED: &str = "1337133713371337133713371337133713371337133713371337133713371337";
-const CFG_FULLNODE_SEED: &str = "2674267426742674267426742674267426742674267426742674267426742674";
+pub const CFG_SEED: &str = "1337133713371337133713371337133713371337133713371337133713371337";
 
 const ERROR_NOT_FOUND: u16 = 404;
+
+const GENESIS_PATH: &str = "/tmp/genesis.blob";
 
 #[derive(Clone)]
 pub struct ClusterSwarmKube {
     client: Client,
-    node_map: Arc<Mutex<HashMap<String, KubeNode>>>,
     http_client: HttpClient,
+    s3_client: S3Client,
+    pub node_map: Arc<Mutex<HashMap<String, KubeNode>>>,
 }
 
 impl ClusterSwarmKube {
@@ -52,7 +57,7 @@ impl ClusterSwarmKube {
         Command::new("/usr/local/bin/kubectl")
             .arg("proxy")
             .spawn()?;
-        libra_retrier::retry_async(libra_retrier::fixed_retry_strategy(2000, 60), || {
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
             Box::pin(async move {
                 debug!("Running local kube pod healthcheck on http://127.0.0.1:8001");
                 reqwest::get("http://127.0.0.1:8001").await?.text().await?;
@@ -66,11 +71,16 @@ impl ClusterSwarmKube {
                 .expect("Failed to parse kubernetes endpoint url"),
         );
         let client = Client::new(config);
+        let credentials_provider = WebIdentityProvider::from_k8s_env();
+        let dispatcher =
+            rusoto_core::HttpClient::new().expect("failed to create request dispatcher");
+        let s3_client = S3Client::new_with(dispatcher, credentials_provider, Region::UsWest2);
         let node_map = Arc::new(Mutex::new(HashMap::new()));
         Ok(Self {
             client,
             node_map,
             http_client,
+            s3_client,
         })
     }
 
@@ -86,22 +96,12 @@ impl ClusterSwarmKube {
             .unwrap()
     }
 
-    fn lsr_spec(
-        &self,
-        validator_index: u32,
-        num_validators: u32,
-        node_name: &str,
-        image_tag: &str,
-        lsr_backend: &str,
-    ) -> Result<(Pod, Service)> {
+    fn lsr_spec(&self, pod_name: &str, node_name: &str, image_tag: &str) -> Result<(Pod, Service)> {
         let pod_yaml = format!(
             include_str!("lsr_spec_template.yaml"),
-            validator_index = validator_index,
-            num_validators = num_validators,
+            pod_name = pod_name,
             image_tag = image_tag,
             node_name = node_name,
-            lsr_backend = lsr_backend,
-            cfg_seed = CFG_SEED,
         );
         let pod_spec: serde_yaml::Value = serde_yaml::from_str(&pod_yaml)?;
         let pod_spec = serde_json::value::to_value(pod_spec)?;
@@ -109,7 +109,7 @@ impl ClusterSwarmKube {
             .map_err(|e| format_err!("serde_json::from_value failed: {}", e))?;
         let service_yaml = format!(
             include_str!("lsr_service_template.yaml"),
-            validator_index = validator_index,
+            pod_name = pod_name,
         );
         let service_spec: serde_yaml::Value = serde_yaml::from_str(&service_yaml).unwrap();
         let service_spec = serde_json::value::to_value(service_spec).unwrap();
@@ -139,36 +139,19 @@ impl ClusterSwarmKube {
         Ok((pod_spec, service_spec))
     }
 
-    fn validator_spec(
+    fn libra_node_spec(
         &self,
-        index: u32,
-        num_validators: u32,
-        num_fullnodes: u32,
-        enable_lsr: bool,
+        pod_app: &str,
+        pod_name: &str,
         node_name: &str,
         image_tag: &str,
-        cfg_overrides: &str,
-        delete_data: bool,
     ) -> Result<Pod> {
-        let cfg_fullnode_seed = if num_fullnodes > 0 {
-            CFG_FULLNODE_SEED
-        } else {
-            ""
-        };
-        let fluentbit_enabled = "true";
         let pod_yaml = format!(
-            include_str!("validator_spec_template.yaml"),
-            index = index,
-            num_validators = num_validators,
-            num_fullnodes = num_fullnodes,
-            enable_lsr = enable_lsr,
+            include_str!("libra_node_spec_template.yaml"),
+            pod_app = pod_app,
+            pod_name = pod_name,
             image_tag = image_tag,
             node_name = node_name,
-            cfg_overrides = cfg_overrides,
-            delete_data = delete_data,
-            cfg_seed = CFG_SEED,
-            cfg_fullnode_seed = cfg_fullnode_seed,
-            fluentbit_enabled = fluentbit_enabled,
         );
         let pod_spec: serde_yaml::Value = serde_yaml::from_str(&pod_yaml)?;
         let pod_spec = serde_json::value::to_value(pod_spec)?;
@@ -176,40 +159,43 @@ impl ClusterSwarmKube {
             .map_err(|e| format_err!("serde_json::from_value failed: {}", e))
     }
 
-    fn fullnode_spec(
+    fn job_spec(
         &self,
-        fullnode_index: u32,
-        num_fullnodes: u32,
-        validator_index: u32,
-        num_validators: u32,
-        node_name: &str,
-        image_tag: &str,
-        cfg_overrides: &str,
-        delete_data: bool,
-    ) -> Result<Pod> {
-        let fluentbit_enabled = "true";
-        let pod_yaml = format!(
-            include_str!("fullnode_spec_template.yaml"),
-            fullnode_index = fullnode_index,
-            num_fullnodes = num_fullnodes,
-            validator_index = validator_index,
-            num_validators = num_validators,
-            node_name = node_name,
-            image_tag = image_tag,
-            cfg_overrides = cfg_overrides,
-            delete_data = delete_data,
-            cfg_seed = CFG_SEED,
-            cfg_fullnode_seed = CFG_FULLNODE_SEED,
-            fluentbit_enabled = fluentbit_enabled,
+        k8s_node: &str,
+        docker_image: &str,
+        command: &str,
+        job_name: &str,
+        back_off_limit: u32,
+    ) -> Result<(Job, String)> {
+        let suffix = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(10)
+            .collect::<String>()
+            .to_ascii_lowercase();
+        let job_full_name = format!("{}-{}", job_name, suffix);
+        let job_yaml = format!(
+            include_str!("job_template.yaml"),
+            name = &job_full_name,
+            label = job_name,
+            image = docker_image,
+            node_name = k8s_node,
+            command = command,
+            back_off_limit = back_off_limit,
         );
-        let pod_spec: serde_yaml::Value = serde_yaml::from_str(&pod_yaml)?;
-        let pod_spec = serde_json::value::to_value(pod_spec)?;
-        serde_json::from_value(pod_spec)
-            .map_err(|e| format_err!("serde_json::from_value failed: {}", e))
+        let job_spec: serde_yaml::Value = serde_yaml::from_str(&job_yaml)?;
+        let job_spec = serde_json::value::to_value(job_spec)?;
+        let job_spec = serde_json::from_value(job_spec)
+            .map_err(|e| format_err!("serde_json::from_value failed: {}", e))?;
+        Ok((job_spec, job_full_name))
     }
 
-    async fn wait_job_completion(&self, job_name: &str, back_off_limit: u32) -> Result<bool> {
-        libra_retrier::retry_async(libra_retrier::fixed_retry_strategy(5000, 20), || {
+    async fn wait_job_completion(
+        &self,
+        job_name: &str,
+        back_off_limit: u32,
+        killed: bool,
+    ) -> Result<bool> {
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
             let job_api: Api<Job> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
             let job_name = job_name.to_string();
             Box::pin(async move {
@@ -231,35 +217,69 @@ impl ClusterSwarmKube {
                         }
                         bail!("job in still in progress {}", job_name)
                     }
-                    Err(e) => bail!("job_api.get failed for job {} : {:?}", job_name, e),
+                    Err(e) => {
+                        if killed {
+                            info!("Job {} has been killed already", job_name);
+                            return Ok(true);
+                        }
+                        bail!("job_api.get failed for job {} : {:?}", job_name, e)
+                    }
                 }
             })
         })
         .await
     }
 
-    async fn run_jobs(&self, jobs: Vec<Job>, back_off_limit: u32) -> Result<()> {
+    pub async fn kill_job(&self, job_full_name: &str) -> Result<()> {
+        let dp = DeleteParams::default();
+        let job_api: Api<Job> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
+        job_api
+            .delete(job_full_name, &dp)
+            .await?
+            .map_left(|o| debug!("Deleting Job: {:?}", o.status))
+            .map_right(|s| debug!("Deleted Job: {:?}", s));
+        let back_off_limit = 0;
+        // the job night have been deleted already, so we do not handle error
+        match self
+            .wait_job_completion(job_full_name, back_off_limit, true)
+            .await
+        {
+            Ok(_) => debug!("Killing job {} returned job_status.success", job_full_name),
+            Err(error) => info!(
+                "Killing job {} returned job_status.failed: {}",
+                job_full_name, error
+            ),
+        }
+
+        Ok(())
+    }
+
+    // just ensures jobs are started, but does not wait on completion
+    async fn start_jobs(&self, jobs: Vec<Job>) -> Result<Vec<String>> {
         let pp = PostParams::default();
         let job_api: Api<Job> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
         let create_jobs_futures = jobs.iter().map(|job| job_api.create(&pp, job));
-        let job_names: Vec<String> = try_join_all(create_jobs_futures)
+        let job_names: Vec<String> = try_join_all_limit(create_jobs_futures.collect())
             .await?
             .iter()
             .map(|job| -> Result<String, anyhow::Error> {
                 Ok(job
                     .metadata
-                    .as_ref()
-                    .ok_or_else(|| format_err!("metadata not found for job {:?}", &job))?
                     .name
                     .as_ref()
                     .ok_or_else(|| format_err!("name not found for job {:?}", &job))?
                     .clone())
             })
             .collect::<Result<_, _>>()?;
+        Ok(job_names)
+    }
+
+    async fn run_jobs(&self, jobs: Vec<Job>, back_off_limit: u32) -> Result<()> {
+        let job_names: Vec<String> = self.start_jobs(jobs).await?;
         let wait_jobs_futures = job_names
             .iter()
-            .map(|job_name| self.wait_job_completion(job_name, back_off_limit));
-        let wait_jobs_results = try_join_all(wait_jobs_futures).await?;
+            .map(|job_name| self.wait_job_completion(job_name, back_off_limit, false));
+        let wait_jobs_results = try_join_all_limit(wait_jobs_futures.collect()).await?;
         if wait_jobs_results.iter().any(|r| !r) {
             bail!("one of the jobs failed")
         }
@@ -284,7 +304,7 @@ impl ClusterSwarmKube {
     {
         debug!("Deleting {} {}", T::KIND, name);
         let resource_api: Api<T> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
-        libra_retrier::retry_async(libra_retrier::fixed_retry_strategy(5000, 30), || {
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
             let resource_api = resource_api.clone();
             let name = name.to_string();
             Box::pin(async move {
@@ -379,6 +399,21 @@ impl ClusterSwarmKube {
         Ok(workspace.clone())
     }
 
+    pub async fn spawn_job(
+        &self,
+        k8s_node: &str,
+        docker_image: &str,
+        command: &str,
+        job_name: &str,
+    ) -> Result<String> {
+        let back_off_limit = 0;
+        let (job_spec, job_full_name) =
+            self.job_spec(k8s_node, docker_image, command, job_name, back_off_limit)?;
+        debug!("Starting job {} for node {}", job_name, k8s_node);
+        self.start_jobs(vec![job_spec]).await?;
+        Ok(job_full_name)
+    }
+
     pub async fn run(
         &self,
         k8s_node: &str,
@@ -387,31 +422,14 @@ impl ClusterSwarmKube {
         job_name: &str,
     ) -> Result<()> {
         let back_off_limit = 0;
-        let suffix = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(10)
-            .collect::<String>()
-            .to_ascii_lowercase();
-        let job_full_name = format!("{}-{}", job_name, suffix);
-        let job_yaml = format!(
-            include_str!("job_template.yaml"),
-            name = &job_full_name,
-            label = job_name,
-            image = docker_image,
-            node_name = k8s_node,
-            command = command,
-            back_off_limit = back_off_limit,
-        );
-        let job_spec: serde_yaml::Value = serde_yaml::from_str(&job_yaml)?;
-        let job_spec = serde_json::value::to_value(job_spec)?;
-        let job_spec = serde_json::from_value(job_spec)
-            .map_err(|e| format_err!("serde_json::from_value failed: {}", e))?;
+        let (job_spec, _) =
+            self.job_spec(k8s_node, docker_image, command, job_name, back_off_limit)?;
         debug!("Running job {} for node {}", job_name, k8s_node);
         self.run_jobs(vec![job_spec], back_off_limit).await
     }
 
-    async fn allocate_node(&self, pod_name: &str) -> Result<KubeNode> {
-        libra_retrier::retry_async(libra_retrier::fixed_retry_strategy(5000, 15), || {
+    pub async fn allocate_node(&self, pod_name: &str) -> Result<KubeNode> {
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
             Box::pin(async move { self.allocate_node_impl(pod_name).await })
         })
         .await
@@ -438,11 +456,7 @@ impl ClusterSwarmKube {
         ))
     }
 
-    pub async fn upsert_node(
-        &self,
-        instance_config: InstanceConfig,
-        delete_data: bool,
-    ) -> Result<Instance> {
+    pub async fn upsert_node(&self, instance_config: InstanceConfig) -> Result<Instance> {
         let pod_name = instance_config.pod_name();
         let pod_api: Api<Pod> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
         if pod_api.get(&pod_name).await.is_ok() {
@@ -452,50 +466,53 @@ impl ClusterSwarmKube {
             .allocate_node(&pod_name)
             .await
             .map_err(|e| format_err!("Failed to allocate node: {}", e))?;
+        debug!(
+            "Configuring fluent-bit, genesis and config for pod {} on {}",
+            pod_name, node.name
+        );
+        if instance_config.application_config.needs_fluentbit() {
+            self.config_fluentbit("events", &pod_name, &node.name)
+                .await?;
+        }
+        if instance_config.application_config.needs_genesis() {
+            self.put_genesis_file(&pod_name, &node.name).await?;
+        }
+        if instance_config.application_config.needs_config() {
+            self.generate_config(&instance_config, &pod_name, &node.name)
+                .await?;
+        }
         debug!("Creating pod {} on {:?}", pod_name, node);
         let (p, s): (Pod, Service) = match &instance_config.application_config {
             Validator(validator_config) => (
-                self.validator_spec(
-                    instance_config.validator_group,
-                    validator_config.num_validators,
-                    validator_config.num_fullnodes,
-                    validator_config.enable_lsr,
+                self.libra_node_spec(
+                    "libra-validator",
+                    pod_name.as_str(),
                     &node.name,
                     &validator_config.image_tag,
-                    &validator_config.config_overrides.iter().join(","),
-                    delete_data,
                 )?,
-                self.service_spec(instance_config.pod_name()),
+                self.service_spec(pod_name.clone()),
             ),
             Fullnode(fullnode_config) => (
-                self.fullnode_spec(
-                    fullnode_config.fullnode_index,
-                    fullnode_config.num_fullnodes_per_validator,
-                    instance_config.validator_group,
-                    fullnode_config.num_validators,
+                self.libra_node_spec(
+                    "libra-fullnode",
+                    pod_name.as_str(),
                     &node.name,
                     &fullnode_config.image_tag,
-                    &fullnode_config.config_overrides.iter().join(","),
-                    delete_data,
                 )?,
-                self.service_spec(instance_config.pod_name()),
+                self.service_spec(pod_name.clone()),
             ),
-            Vault(_vault_config) => self.vault_spec(instance_config.validator_group, &node.name)?,
-            LSR(lsr_config) => self.lsr_spec(
-                instance_config.validator_group,
-                lsr_config.num_validators,
-                &node.name,
-                &lsr_config.image_tag,
-                &lsr_config.lsr_backend,
-            )?,
+            Vault(_vault_config) => {
+                self.vault_spec(instance_config.validator_group.index_only(), &node.name)?
+            }
+            LSR(lsr_config) => {
+                self.lsr_spec(pod_name.as_str(), &node.name, &lsr_config.image_tag)?
+            }
         };
         match pod_api.create(&PostParams::default(), &p).await {
             Ok(o) => {
                 debug!(
                     "Created pod {}",
                     o.metadata
-                        .as_ref()
-                        .ok_or_else(|| { format_err!("metadata not found for pod {}", pod_name) })?
                         .name
                         .as_ref()
                         .ok_or_else(|| { format_err!("name not found for pod {}", pod_name) })?
@@ -509,8 +526,6 @@ impl ClusterSwarmKube {
                 debug!(
                     "Created service {}",
                     o.metadata
-                        .as_ref()
-                        .ok_or_else(|| { format_err!("metadata not found for service") })?
                         .name
                         .as_ref()
                         .ok_or_else(|| { format_err!("name not found for service") })?
@@ -528,7 +543,7 @@ impl ClusterSwarmKube {
         }
         let ac_port = DEFAULT_JSON_RPC_PORT as u32;
         let instance = Instance::new_k8s(
-            pod_name,
+            pod_name.clone(),
             node.internal_ip,
             ac_port,
             node.name.clone(),
@@ -547,7 +562,7 @@ impl ClusterSwarmKube {
     }
 
     async fn remove_all_network_effects(&self) -> Result<()> {
-        libra_retrier::retry_async(libra_retrier::fixed_retry_strategy(5000, 3), || {
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
             Box::pin(async move { self.remove_all_network_effects_helper().await })
         })
         .await
@@ -562,7 +577,7 @@ impl ClusterSwarmKube {
             .map_err(|e| format_err!("remove_all_network_effects: {}", e))
     }
 
-    async fn delete_all(&self) -> Result<()> {
+    pub async fn delete_all(&self) -> Result<()> {
         let pod_api: Api<Pod> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
         let pod_names: Vec<String> = pod_api
             .list(&ListParams {
@@ -574,8 +589,6 @@ impl ClusterSwarmKube {
             .map(|pod| -> Result<String, anyhow::Error> {
                 Ok(pod
                     .metadata
-                    .as_ref()
-                    .ok_or_else(|| format_err!("metadata not found for pod"))?
                     .name
                     .as_ref()
                     .ok_or_else(|| format_err!("name not found for pod"))?
@@ -585,7 +598,7 @@ impl ClusterSwarmKube {
         let delete_futures = pod_names
             .iter()
             .map(|pod_name| self.delete_resource::<Pod>(pod_name));
-        try_join_all(delete_futures).await?;
+        try_join_all_limit(delete_futures.collect()).await?;
         let service_api: Api<Service> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
         let service_names: Vec<String> = service_api
             .list(&ListParams {
@@ -597,8 +610,6 @@ impl ClusterSwarmKube {
             .map(|service| -> Result<String, anyhow::Error> {
                 Ok(service
                     .metadata
-                    .as_ref()
-                    .ok_or_else(|| format_err!("metadata not found for service"))?
                     .name
                     .as_ref()
                     .ok_or_else(|| format_err!("name not found for service"))?
@@ -608,7 +619,7 @@ impl ClusterSwarmKube {
         let delete_futures = service_names
             .iter()
             .map(|service_name| self.delete_resource::<Service>(service_name));
-        try_join_all(delete_futures).await?;
+        try_join_all_limit(delete_futures.collect()).await?;
         let job_api: Api<Job> = Api::namespaced(self.client.clone(), DEFAULT_NAMESPACE);
         let job_names: Vec<String> = job_api
             .list(&ListParams {
@@ -620,8 +631,6 @@ impl ClusterSwarmKube {
             .map(|job| -> Result<String, anyhow::Error> {
                 Ok(job
                     .metadata
-                    .as_ref()
-                    .ok_or_else(|| format_err!("metadata not found for job"))?
                     .name
                     .as_ref()
                     .ok_or_else(|| format_err!("name not found for job"))?
@@ -631,19 +640,137 @@ impl ClusterSwarmKube {
         let delete_futures = job_names
             .iter()
             .map(|job_name| self.delete_resource::<Job>(job_name));
-        try_join_all(delete_futures).await?;
+        try_join_all_limit(delete_futures.collect()).await?;
+        Ok(())
+    }
+
+    /// Runs command on the provided host in separate utility container based on cluster-test-util image
+    pub async fn util_cmd<S: AsRef<str>>(
+        &self,
+        command: S,
+        k8s_node: &str,
+        job_name: &str,
+    ) -> Result<()> {
+        self.run(
+            k8s_node,
+            "853397791086.dkr.ecr.us-west-2.amazonaws.com/cluster-test-util:latest",
+            command.as_ref(),
+            job_name,
+        )
+        .await
+    }
+
+    async fn config_fluentbit(&self, input_tag: &str, pod_name: &str, node: &str) -> Result<()> {
+        let parsers_config = include_str!("fluent-bit/parsers.conf").to_string();
+        let fluentbit_config = format!(
+            include_str!("fluent-bit/fluent-bit.conf"),
+            input_tag = input_tag,
+            pod_name = pod_name
+        );
+        let dir = "/opt/libra/data/fluent-bit/";
+        self.put_file(
+            node,
+            pod_name,
+            format!("{}parser.conf", dir).as_str(),
+            parsers_config.as_bytes(),
+        )
+        .await?;
+        self.put_file(
+            node,
+            pod_name,
+            format!("{}fluent-bit.conf", dir).as_str(),
+            fluentbit_config.as_bytes(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn put_genesis_file(&self, pod_name: &str, node: &str) -> Result<()> {
+        let genesis = std::fs::read(GENESIS_PATH)
+            .map_err(|e| format_err!("Failed to read {} : {}", GENESIS_PATH, e))?;
+        self.put_file(
+            node,
+            pod_name,
+            "/opt/libra/etc/genesis.blob",
+            genesis.as_slice(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn generate_config(
+        &self,
+        instance_config: &InstanceConfig,
+        pod_name: &str,
+        node: &str,
+    ) -> Result<()> {
+        let node_config = match &instance_config.application_config {
+            Validator(validator_config) => Some(format!(
+                include_str!("configs/validator.yaml"),
+                vault_addr = validator_config
+                    .vault_addr
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+                vault_ns = validator_config
+                    .vault_namespace
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+                safety_rules_addr = validator_config
+                    .safety_rules_addr
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+            )),
+            Fullnode(fullnode_config) => Some(format!(
+                include_str!("configs/fullnode.yaml"),
+                vault_addr = fullnode_config
+                    .vault_addr
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+                vault_ns = fullnode_config
+                    .vault_namespace
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+                seed_peer_ip = fullnode_config.seed_peer_ip,
+            )),
+            LSR(lsr_config) => Some(format!(
+                include_str!("configs/safetyrules.yaml"),
+                vault_addr = lsr_config.vault_addr.as_ref().unwrap_or(&"".to_string()),
+                vault_ns = lsr_config
+                    .vault_namespace
+                    .as_ref()
+                    .unwrap_or(&"".to_string()),
+            )),
+            _ => None,
+        };
+
+        if let Some(node_config) = node_config {
+            self.put_file(
+                node,
+                pod_name,
+                "/opt/libra/etc/node.yaml",
+                node_config.as_bytes(),
+            )
+            .await?;
+        }
+
         Ok(())
     }
 }
 
 #[async_trait]
 impl ClusterSwarm for ClusterSwarmKube {
-    async fn spawn_new_instance(
-        &self,
-        instance_config: InstanceConfig,
-        delete_data: bool,
-    ) -> Result<Instance> {
-        self.upsert_node(instance_config, delete_data).await
+    async fn spawn_new_instance(&self, instance_config: InstanceConfig) -> Result<Instance> {
+        self.upsert_node(instance_config).await
+    }
+
+    async fn clean_data(&self, node: &str) -> Result<()> {
+        self.util_cmd("rm -rf /opt/libra/data/*", node, "clean-data")
+            .await
+    }
+
+    async fn get_node_name(&self, pod_name: &str) -> Result<String> {
+        let node = self.allocate_node(pod_name).await?;
+        Ok(node.name)
     }
 
     async fn get_grafana_baseurl(&self) -> Result<String> {
@@ -652,6 +779,41 @@ impl ClusterSwarm for ClusterSwarmKube {
             "http://grafana.{}-k8s-testnet.aws.hlw3truzy4ls.com",
             workspace
         ))
+    }
+
+    async fn put_file(&self, node: &str, pod_name: &str, path: &str, content: &[u8]) -> Result<()> {
+        let bucket = "toro-cluster-test-flamegraphs";
+        let run_id = env::var("RUN_ID").expect("RUN_ID is not set.");
+        libra_retrier::retry_async(k8s_retry_strategy(), || {
+            let run_id = &run_id;
+            let content = content.to_vec();
+            Box::pin(async move {
+                self.s3_client
+                    .put_object(PutObjectRequest {
+                        bucket: bucket.to_string(),
+                        key: format!("data/{}/{}/{}", run_id, pod_name, path),
+                        body: Some(content.into()),
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|e| format_err!("put_object failed : {}", e))
+            })
+        })
+        .await?;
+        self.util_cmd(
+            format!(
+                "aws s3 cp s3://{}/data/{}/{}/{path} {path}",
+                bucket,
+                run_id,
+                pod_name,
+                path = path
+            ),
+            node,
+            "put-file",
+        )
+        .await
+        .map_err(|e| format_err!("aws s3 cp failed : {}", e))?;
+        Ok(())
     }
 }
 
@@ -666,9 +828,7 @@ impl TryFrom<Node> for KubeNode {
     type Error = anyhow::Error;
 
     fn try_from(node: Node) -> Result<Self, Self::Error> {
-        let metadata = node
-            .metadata
-            .ok_or_else(|| format_err!("metadata not found for node"))?;
+        let metadata = node.metadata;
         let spec = node
             .spec
             .ok_or_else(|| format_err!("spec not found for node"))?;
@@ -695,4 +855,23 @@ impl TryFrom<Node> for KubeNode {
             internal_ip,
         })
     }
+}
+
+async fn try_join_all_limit<O, E, F: Future<Output = std::result::Result<O, E>>>(
+    futures: Vec<F>,
+) -> std::result::Result<Vec<O>, E> {
+    let semaphore = Semaphore::new(32);
+    let futures = futures
+        .into_iter()
+        .map(|f| acquire_and_execute(&semaphore, f));
+    try_join_all(futures).await
+}
+
+async fn acquire_and_execute<F: TryFuture>(semaphore: &Semaphore, f: F) -> F::Output {
+    let _permit = semaphore.acquire().await;
+    f.await
+}
+
+fn k8s_retry_strategy() -> impl Iterator<Item = Duration> {
+    libra_retrier::exp_retry_strategy(1000, 5000, 30)
 }

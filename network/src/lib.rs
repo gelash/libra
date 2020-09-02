@@ -8,7 +8,6 @@
 
 pub use interface::NetworkProvider;
 
-pub mod common;
 pub mod connectivity_manager;
 pub mod constants;
 pub mod error;
@@ -19,9 +18,13 @@ pub mod protocols;
 
 pub mod counters;
 mod peer;
-mod sink;
 pub mod transport;
 
+#[cfg(test)]
+mod transport_tests;
+
+#[cfg(feature = "fuzzing")]
+pub mod fuzzing;
 #[cfg(not(any(feature = "testing", feature = "fuzzing")))]
 mod noise;
 #[cfg(any(feature = "testing", feature = "fuzzing"))]

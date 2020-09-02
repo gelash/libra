@@ -16,13 +16,14 @@ script {
 script {
 use 0x1::TransactionFee;
 fun burn_txn_fees<CoinType>(blessed_account: &signer) {
-//    let tc_capability =
     TransactionFee::burn_fees<CoinType>(blessed_account);
 }
 }
 // check: PreburnEvent
 // check: BurnEvent
-// check: EXECUTED
+// check: "Keep(EXECUTED)"
+
+// No txn fee balance left to burn
 
 //! new-transaction
 //! sender: blessed
@@ -30,10 +31,8 @@ fun burn_txn_fees<CoinType>(blessed_account: &signer) {
 script {
 use 0x1::TransactionFee;
 fun burn_txn_fees<CoinType>(blessed_account: &signer) {
-//    let tc_capability =
     TransactionFee::burn_fees<CoinType>(blessed_account);
 }
 }
-// check: PreburnEvent
-// check: BurnEvent
-// check: EXECUTED
+
+// check: "Keep(ABORTED { code: 1799,"

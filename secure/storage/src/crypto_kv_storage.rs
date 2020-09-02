@@ -1,12 +1,14 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CryptoStorage, Error, KVStorage, PublicKeyResponse, Value};
+use crate::{CryptoStorage, Error, KVStorage, PublicKeyResponse};
 use libra_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
-    HashValue, PrivateKey, SigningKey, Uniform,
+    hash::CryptoHash,
+    PrivateKey, SigningKey, Uniform,
 };
 use rand::{rngs::OsRng, Rng, SeedableRng};
+use serde::ser::Serialize;
 
 /// CryptoKVStorage offers a CryptoStorage implementation by extending a key value store (KVStorage)
 /// to create and manage cryptographic keys. This is useful for providing a simple CryptoStorage
@@ -22,10 +24,7 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
     }
 
     fn export_private_key(&self, name: &str) -> Result<Ed25519PrivateKey, Error> {
-        match self.get(name)?.value {
-            Value::Ed25519PrivateKey(private_key) => Ok(private_key),
-            _ => Err(Error::UnexpectedValueType),
-        }
+        self.get(name).map(|v| v.value)
     }
 
     fn export_private_key_for_version(
@@ -52,51 +51,52 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
     }
 
     fn import_private_key(&mut self, name: &str, key: Ed25519PrivateKey) -> Result<(), Error> {
-        self.set(name, Value::Ed25519PrivateKey(key))
+        self.set(name, key)
     }
 
     fn get_public_key(&self, name: &str) -> Result<PublicKeyResponse, Error> {
         let response = self.get(name)?;
-
-        let public_key = match &response.value {
-            Value::Ed25519PrivateKey(private_key) => private_key.public_key(),
-            _ => return Err(Error::UnexpectedValueType),
-        };
+        let key: Ed25519PrivateKey = response.value;
 
         Ok(PublicKeyResponse {
             last_update: response.last_update,
-            public_key,
+            public_key: key.public_key(),
         })
     }
 
-    fn rotate_key(&mut self, name: &str) -> Result<Ed25519PublicKey, Error> {
-        match self.get(name)?.value {
-            Value::Ed25519PrivateKey(private_key) => {
-                let (new_private_key, new_public_key) = new_ed25519_key_pair()?;
-                self.set(
-                    &get_previous_version_name(name),
-                    Value::Ed25519PrivateKey(private_key),
-                )?;
-                self.set(name, Value::Ed25519PrivateKey(new_private_key))?;
-                Ok(new_public_key)
-            }
-            _ => Err(Error::UnexpectedValueType),
+    fn get_public_key_previous_version(&self, name: &str) -> Result<Ed25519PublicKey, Error> {
+        match self.export_private_key(&get_previous_version_name(name)) {
+            Ok(previous_private_key) => Ok(previous_private_key.public_key()),
+            Err(Error::KeyNotSet(_)) => Err(Error::KeyVersionNotFound(name.to_string())),
+            Err(e) => Err(e),
         }
     }
 
-    fn sign_message(&mut self, name: &str, message: &HashValue) -> Result<Ed25519Signature, Error> {
-        let private_key = self.export_private_key(name)?;
-        Ok(private_key.sign_message(message))
+    fn rotate_key(&mut self, name: &str) -> Result<Ed25519PublicKey, Error> {
+        let private_key: Ed25519PrivateKey = self.get(name)?.value;
+        let (new_private_key, new_public_key) = new_ed25519_key_pair()?;
+        self.set(&get_previous_version_name(name), private_key)?;
+        self.set(name, new_private_key)?;
+        Ok(new_public_key)
     }
 
-    fn sign_message_using_version(
+    fn sign<U: CryptoHash + Serialize>(
+        &mut self,
+        name: &str,
+        message: &U,
+    ) -> Result<Ed25519Signature, Error> {
+        let private_key = self.export_private_key(name)?;
+        Ok(private_key.sign(message))
+    }
+
+    fn sign_using_version<U: CryptoHash + Serialize>(
         &mut self,
         name: &str,
         version: Ed25519PublicKey,
-        message: &HashValue,
+        message: &U,
     ) -> Result<Ed25519Signature, Error> {
         let private_key = self.export_private_key_for_version(name, version)?;
-        Ok(private_key.sign_message(message))
+        Ok(private_key.sign(message))
     }
 }
 

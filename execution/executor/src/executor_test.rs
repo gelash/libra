@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    db_bootstrapper::bootstrap_db_if_empty,
+    db_bootstrapper::{generate_waypoint, maybe_bootstrap},
     mock_vm::{
         encode_mint_transaction, encode_reconfiguration_transaction, encode_transfer_transaction,
         MockVM, DISCARD_STATUS, KEEP_STATUS,
@@ -32,7 +32,9 @@ fn build_test_config() -> (NodeConfig, Ed25519PrivateKey) {
 
 fn create_storage(config: &NodeConfig) -> DbReaderWriter {
     let db = DbReaderWriter::new(LibraDB::new_for_test(config.storage.dir()));
-    bootstrap_db_if_empty::<MockVM>(&db, get_genesis_txn(&config).unwrap())
+    // can't use executor-test-helper because the static op_counter conflict
+    let waypoint = generate_waypoint::<MockVM>(&db, get_genesis_txn(&config).unwrap()).unwrap();
+    maybe_bootstrap::<MockVM>(&db, get_genesis_txn(&config).unwrap(), waypoint)
         .expect("Db-bootstrapper should not fail.");
     db
 }
@@ -208,6 +210,28 @@ fn test_executor_two_blocks_with_failed_txns() {
     executor
         .commit_blocks(vec![block1_id, block2_id], ledger_info)
         .unwrap();
+}
+
+#[test]
+fn test_executor_commit_twice() {
+    let mut executor = TestExecutor::new();
+    let parent_block_id = executor.committed_block_id();
+    let block1_txns = (0..5)
+        .map(|i| encode_mint_transaction(gen_address(i), 100))
+        .collect::<Vec<_>>();
+    let block1_id = gen_block_id(1);
+    let output1 = executor
+        .execute_block((block1_id, block1_txns), parent_block_id)
+        .unwrap();
+    let ledger_info = gen_ledger_info(5, output1.root_hash(), block1_id, 1);
+    let res = executor
+        .commit_blocks(vec![block1_id], ledger_info.clone())
+        .unwrap();
+    // commit with the same ledger info again.
+    let res_retry = executor
+        .commit_blocks(vec![block1_id], ledger_info)
+        .unwrap();
+    assert_eq!(res, res_retry);
 }
 
 #[test]
@@ -574,7 +598,7 @@ proptest! {
         }
 
     #[test]
-    fn test_executor_restart(a_size in 0..30u64, b_size in 0..30u64, amount in any::<u32>()) {
+    fn test_executor_restart(a_size in 1..30u64, b_size in 1..30u64, amount in any::<u32>()) {
         let block_a = TestBlock::new(0..a_size, amount, gen_block_id(1));
         let block_b = TestBlock::new(0..b_size, amount, gen_block_id(2));
 
