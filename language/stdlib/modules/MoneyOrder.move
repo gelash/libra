@@ -1,3 +1,4 @@
+// TODO: port to using move Errors
 // 8001 - money order expired
 // 8002 - signature did not verify
 // 8003 - money order already deposited or canceled
@@ -11,22 +12,6 @@ address 0x1 {
         use 0x1::Signature;
         use 0x1::Signer;
         use 0x1::Vector;
-
-        // TODO: decide exactly what should be a resource among these structs below.
-        // TODO: switch to Libra<MoneyOrderCoin> when that's allowed.
-        resource struct MoneyOrderCoin {
-            amount: u64,
-
-            issuer_address: address,
-        }
-
-        // Since we use MoneyOrderCoin as a token that varies by the issuer, have a
-        // resource for accounts to keep MoneyOrderCoins from different issuers.
-        // TODO: get rid of if and when we don't use tokens, otherwise should use
-        // a more suitable data-structure than Vector (e.g. Map) when available.
-        resource struct MoneyOrderCoinVector {
-            coins: vector<MoneyOrderCoin>,
-        }
 
         resource struct MoneyOrderBatch {
             // bit-packed, 0: redeemable, 1: deposited/canceled.
@@ -43,9 +28,6 @@ address 0x1 {
             // Public key associated with the money orders, the issuing VASP holds
             // the corresponding private key.
             public_key: vector<u8>,
-
-            // Money orders will be fulfilled from this balance.
-            balance: MoneyOrderCoin,
 
             // Event handle for issue event.
             issued_events: EventHandle<IssuedMoneyOrderEvent>,
@@ -64,6 +46,8 @@ address 0x1 {
         struct MoneyOrderDescriptor {
             // The amount of MoneyOrderCoin redeemable with the money order.
             amount: u64,
+
+            // TODO: Add CurrencyType - own encoding for now.
 
             issuer_address: address,
             // Index of the batch among batches.
@@ -115,17 +99,18 @@ address 0x1 {
         // Minting the MoneyOrderCoin (fake currency declared within this module). Note:
         // only ever called from API with the issuer as a signer, i.e. a caller can only
         // mint to the MoneyOrder balance published on its account.
-        fun mint_money_order_coin(amount: u64,
-                                  issuer_address: address,
-        ): MoneyOrderCoin {
-            MoneyOrderCoin {
-                amount: amount,
-                issuer_address: issuer_address,
-            }
-        }
+        // fun mint_money_order_coin(amount: u64,
+                                  // issuer_address: address,
+        // ): MoneyOrderCoin {
+            // MoneyOrderCoin {
+                // amount: amount,
+                // issuer_address: issuer_address,
+            // }
+        // }
 
         // Initialize the capability to issue money orders by publishing a MoneyOrders
-        // resource. Mints starting_balance MoneyOrderCoin. Note: we could add
+        // resource. 
+        // Note: we could add
         // temporary APIs for topping up the balance, but eventually should just
         // switch to using Libra<coin> types and not reimplement coin functionality.
         public fun initialize_money_orders(issuer: &signer,
@@ -135,7 +120,7 @@ address 0x1 {
             move_to(issuer, MoneyOrders {
                 batches: Vector::empty(),
                 public_key: public_key,
-                balance: mint_money_order_coin(starting_balance, Signer::address_of(issuer)),
+                // balance: mint_money_order_coin(starting_balance, Signer::address_of(issuer)),
                 issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
                 redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
@@ -323,7 +308,7 @@ address 0x1 {
                                       money_order_descriptor: MoneyOrderDescriptor,
                                       issuer_signature: vector<u8>,
                                       user_signature: vector<u8>,
-        ): MoneyOrderCoin acquires MoneyOrders {
+        ): IssuerToken<DefaultToken> acquires MoneyOrders {
             verify_user_signature(receiver,
                                   *&money_order_descriptor,
                                   user_signature,
@@ -358,57 +343,12 @@ address 0x1 {
                 }
             );
 
-            MoneyOrderCoin {
+            // TODO: Can't create - need to get rid of redeem and use deposit.
+            // TODO: later will do burn as well.
+            IssuerToken< {
                 amount: money_order_descriptor.amount,
                 issuer_address: issuer_address,
             }
-        }
-
-        // Implements finding a MoneyOrderCoin based on address in a Vector.
-        // TODO: Replace w. Map<Address, MoneyOrderCoin> find(addr) when Map is
-        // available (or get rid of if we don't use tokens and use real coins instead).
-        fun index_of_coin(coins_vector: &vector<MoneyOrderCoin>,
-                          issuer_address: address,
-        ): (bool, u64) {
-            let i = 0;
-            while (i < Vector::length(coins_vector)) {
-                let coin = Vector::borrow(coins_vector, i);
-                if (coin.issuer_address == issuer_address) return (true, i);
-                i = i + 1;
-            };
-            (false, 0)
-        }
-
-        public fun money_order_coin_balance(sender: &signer,
-                                            issuer_address: address,
-        ) : u64 acquires MoneyOrderCoinVector {
-            let sender_address = Signer::address_of(sender);
-
-            if (!exists<MoneyOrderCoinVector>(sender_address)) return 0;
-
-            let coins_vec = borrow_global<MoneyOrderCoinVector>(sender_address);
-            let (found, coin_index) = index_of_coin(&coins_vec.coins,
-                                                    issuer_address);
-            if (!found) return 0;
-
-            let target_coin = Vector::borrow(&coins_vec.coins, coin_index);
-            target_coin.amount
-        }
-
-        public fun init_coins_money_order(receiver: &signer)
-             {
-
-            let receiver_address = Signer::address_of(receiver);
-
-            // Get receiver's storage of MoneyOrderCoin, currently a Vector. Publish an
-            // empty Vector<MoneyOrderCoin> if none exists at receiver's account yet.
-            // TODO: Switch to a Map when that exists to merge coins based on address.
-            if (!exists<MoneyOrderCoinVector>(receiver_address)) {
-                move_to(receiver, MoneyOrderCoinVector {
-                    coins: Vector::empty(),
-                });
-            };
-
         }
 
         public fun deposit_money_order(receiver: &signer,

@@ -11,6 +11,7 @@ module Genesis {
     use 0x1::Coin2;
     use 0x1::DualAttestation;
     use 0x1::Event;
+    use 0x1::IssuerToken;
     use 0x1::LBR;
     use 0x1::Libra;
     use 0x1::LibraAccount;
@@ -22,6 +23,7 @@ module Genesis {
     use 0x1::LibraVersion;
     use 0x1::LibraWriteSetManager;
     use 0x1::Signer;
+    use 0x1::TokenWallet;
     use 0x1::TransactionFee;
     use 0x1::Roles;
     use 0x1::LibraVMConfig;
@@ -119,13 +121,14 @@ module Genesis {
         // Mark that genesis has finished. This must appear as the last call.
         LibraTimestamp::set_time_has_started(lr_account);
 
+        // Initialize token wallets.
+        TokenWallet::Initialize<IssuerToken<DefaultToken>>(lr_account);
+        
         MoneyOrder::initialize_money_orders(
             lr_account,
             x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1",
             100000
             );
-        MoneyOrder::init_coins_money_order(lr_account);
-
     }
 
 }
