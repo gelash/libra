@@ -80,6 +80,18 @@ pub enum ScriptCall {
         preburn_address: AccountAddress,
     },
 
+    /// A doc to make the test not fail TODO.
+    /// Another doc.
+    CancelMoneyOrder {
+        amount: u64,
+        issuer: AccountAddress,
+        batch_index: u64,
+        order_index: u64,
+        user_public_key: Bytes,
+        issuer_signature: Bytes,
+        user_signature: Bytes,
+    },
+
     /// Create a `ChildVASP` account for sender `parent_vasp` at `child_address` with a balance of
     /// `child_initial_balance` in `CoinType` and an initial authentication_key
     /// `auth_key_prefix | child_address`.
@@ -155,12 +167,48 @@ pub enum ScriptCall {
         human_name: Bytes,
     },
 
+    /// TODO Some docs
+    DebugMoneyOrderCoinBalance { issuer_address: AccountAddress },
+
+    /// TODO Some docs
+    DepositMoneyOrder {
+        amount: u64,
+        issuer: AccountAddress,
+        batch_index: u64,
+        order_index: u64,
+        user_public_key: Bytes,
+        issuer_signature: Bytes,
+        user_signature: Bytes,
+    },
+
     /// Freeze account `address`. Initiator must be authorized.
     /// `sliding_nonce` is a unique nonce for operation, see sliding_nonce.move for details.
     FreezeAccount {
         sliding_nonce: u64,
         to_freeze_account: AccountAddress,
     },
+
+    /// TODO Some docs
+    InitializeMoneyOrders {
+        public_key: Bytes,
+        starting_balance: u64,
+    },
+
+    /// TODO Some docs
+    IssueMoneyOrder {
+        validity_microseconds: u64,
+        grace_period_microseconds: u64,
+    },
+
+    /// TODO Some docs
+    IssueMoneyOrderBatch {
+        batch_size: u64,
+        validity_microseconds: u64,
+        grace_period_microseconds: u64,
+    },
+
+    /// TODO Some docs
+    IssuerCancelMoneyOrder { batch_index: u64, order_index: u64 },
 
     /// Mint `amount_lbr` LBR from the sending account's constituent coins and deposits the
     /// resulting LBR into the sending account.
@@ -386,6 +434,23 @@ impl ScriptCall {
                 token,
                 preburn_address,
             } => encode_cancel_burn_script(token, preburn_address),
+            CancelMoneyOrder {
+                amount,
+                issuer,
+                batch_index,
+                order_index,
+                user_public_key,
+                issuer_signature,
+                user_signature,
+            } => encode_cancel_money_order_script(
+                amount,
+                issuer,
+                batch_index,
+                order_index,
+                user_public_key,
+                issuer_signature,
+                user_signature,
+            ),
             CreateChildVaspAccount {
                 coin_type,
                 child_address,
@@ -452,10 +517,51 @@ impl ScriptCall {
                 auth_key_prefix,
                 human_name,
             ),
+            DebugMoneyOrderCoinBalance { issuer_address } => {
+                encode_debug_money_order_coin_balance_script(issuer_address)
+            }
+            DepositMoneyOrder {
+                amount,
+                issuer,
+                batch_index,
+                order_index,
+                user_public_key,
+                issuer_signature,
+                user_signature,
+            } => encode_deposit_money_order_script(
+                amount,
+                issuer,
+                batch_index,
+                order_index,
+                user_public_key,
+                issuer_signature,
+                user_signature,
+            ),
             FreezeAccount {
                 sliding_nonce,
                 to_freeze_account,
             } => encode_freeze_account_script(sliding_nonce, to_freeze_account),
+            InitializeMoneyOrders {
+                public_key,
+                starting_balance,
+            } => encode_initialize_money_orders_script(public_key, starting_balance),
+            IssueMoneyOrder {
+                validity_microseconds,
+                grace_period_microseconds,
+            } => encode_issue_money_order_script(validity_microseconds, grace_period_microseconds),
+            IssueMoneyOrderBatch {
+                batch_size,
+                validity_microseconds,
+                grace_period_microseconds,
+            } => encode_issue_money_order_batch_script(
+                batch_size,
+                validity_microseconds,
+                grace_period_microseconds,
+            ),
+            IssuerCancelMoneyOrder {
+                batch_index,
+                order_index,
+            } => encode_issuer_cancel_money_order_script(batch_index, order_index),
             MintLbr { amount_lbr } => encode_mint_lbr_script(amount_lbr),
             PeerToPeerWithMetadata {
                 currency,
@@ -689,6 +795,32 @@ pub fn encode_cancel_burn_script(token: TypeTag, preburn_address: AccountAddress
     )
 }
 
+/// A doc to make the test not fail TODO.
+/// Another doc.
+pub fn encode_cancel_money_order_script(
+    amount: u64,
+    issuer: AccountAddress,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+) -> Script {
+    Script::new(
+        CANCEL_MONEY_ORDER_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(amount),
+            TransactionArgument::Address(issuer),
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
+            TransactionArgument::U8Vector(user_public_key),
+            TransactionArgument::U8Vector(issuer_signature),
+            TransactionArgument::U8Vector(user_signature),
+        ],
+    )
+}
+
 /// Create a `ChildVASP` account for sender `parent_vasp` at `child_address` with a balance of
 /// `child_initial_balance` in `CoinType` and an initial authentication_key
 /// `auth_key_prefix | child_address`.
@@ -823,6 +955,40 @@ pub fn encode_create_validator_operator_account_script(
     )
 }
 
+/// TODO Some docs
+pub fn encode_debug_money_order_coin_balance_script(issuer_address: AccountAddress) -> Script {
+    Script::new(
+        DEBUG_MONEY_ORDER_COIN_BALANCE_CODE.to_vec(),
+        vec![],
+        vec![TransactionArgument::Address(issuer_address)],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_deposit_money_order_script(
+    amount: u64,
+    issuer: AccountAddress,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+) -> Script {
+    Script::new(
+        DEPOSIT_MONEY_ORDER_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(amount),
+            TransactionArgument::Address(issuer),
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
+            TransactionArgument::U8Vector(user_public_key),
+            TransactionArgument::U8Vector(issuer_signature),
+            TransactionArgument::U8Vector(user_signature),
+        ],
+    )
+}
+
 /// Freeze account `address`. Initiator must be authorized.
 /// `sliding_nonce` is a unique nonce for operation, see sliding_nonce.move for details.
 pub fn encode_freeze_account_script(
@@ -835,6 +1001,62 @@ pub fn encode_freeze_account_script(
         vec![
             TransactionArgument::U64(sliding_nonce),
             TransactionArgument::Address(to_freeze_account),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_initialize_money_orders_script(public_key: Vec<u8>, starting_balance: u64) -> Script {
+    Script::new(
+        INITIALIZE_MONEY_ORDERS_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U8Vector(public_key),
+            TransactionArgument::U64(starting_balance),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issue_money_order_script(
+    validity_microseconds: u64,
+    grace_period_microseconds: u64,
+) -> Script {
+    Script::new(
+        ISSUE_MONEY_ORDER_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(validity_microseconds),
+            TransactionArgument::U64(grace_period_microseconds),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issue_money_order_batch_script(
+    batch_size: u64,
+    validity_microseconds: u64,
+    grace_period_microseconds: u64,
+) -> Script {
+    Script::new(
+        ISSUE_MONEY_ORDER_BATCH_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(batch_size),
+            TransactionArgument::U64(validity_microseconds),
+            TransactionArgument::U64(grace_period_microseconds),
+        ],
+    )
+}
+
+/// TODO Some docs
+pub fn encode_issuer_cancel_money_order_script(batch_index: u64, order_index: u64) -> Script {
+    Script::new(
+        ISSUER_CANCEL_MONEY_ORDER_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(batch_index),
+            TransactionArgument::U64(order_index),
         ],
     )
 }
@@ -1270,6 +1492,18 @@ fn decode_cancel_burn_script(script: &Script) -> Option<ScriptCall> {
     })
 }
 
+fn decode_cancel_money_order_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::CancelMoneyOrder {
+        amount: decode_u64_argument(script.args().get(0)?.clone())?,
+        issuer: decode_address_argument(script.args().get(1)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+    })
+}
+
 fn decode_create_child_vasp_account_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::CreateChildVaspAccount {
         coin_type: script.ty_args().get(0)?.clone(),
@@ -1324,10 +1558,57 @@ fn decode_create_validator_operator_account_script(script: &Script) -> Option<Sc
     })
 }
 
+fn decode_debug_money_order_coin_balance_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::DebugMoneyOrderCoinBalance {
+        issuer_address: decode_address_argument(script.args().get(0)?.clone())?,
+    })
+}
+
+fn decode_deposit_money_order_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::DepositMoneyOrder {
+        amount: decode_u64_argument(script.args().get(0)?.clone())?,
+        issuer: decode_address_argument(script.args().get(1)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+    })
+}
+
 fn decode_freeze_account_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::FreezeAccount {
         sliding_nonce: decode_u64_argument(script.args().get(0)?.clone())?,
         to_freeze_account: decode_address_argument(script.args().get(1)?.clone())?,
+    })
+}
+
+fn decode_initialize_money_orders_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::InitializeMoneyOrders {
+        public_key: decode_u8vector_argument(script.args().get(0)?.clone())?,
+        starting_balance: decode_u64_argument(script.args().get(1)?.clone())?,
+    })
+}
+
+fn decode_issue_money_order_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::IssueMoneyOrder {
+        validity_microseconds: decode_u64_argument(script.args().get(0)?.clone())?,
+        grace_period_microseconds: decode_u64_argument(script.args().get(1)?.clone())?,
+    })
+}
+
+fn decode_issue_money_order_batch_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::IssueMoneyOrderBatch {
+        batch_size: decode_u64_argument(script.args().get(0)?.clone())?,
+        validity_microseconds: decode_u64_argument(script.args().get(1)?.clone())?,
+        grace_period_microseconds: decode_u64_argument(script.args().get(2)?.clone())?,
+    })
+}
+
+fn decode_issuer_cancel_money_order_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::IssuerCancelMoneyOrder {
+        batch_index: decode_u64_argument(script.args().get(0)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(1)?.clone())?,
     })
 }
 
@@ -1530,6 +1811,10 @@ static SCRIPT_DECODER_MAP: once_cell::sync::Lazy<DecoderMap> = once_cell::sync::
         Box::new(decode_cancel_burn_script),
     );
     map.insert(
+        CANCEL_MONEY_ORDER_CODE.to_vec(),
+        Box::new(decode_cancel_money_order_script),
+    );
+    map.insert(
         CREATE_CHILD_VASP_ACCOUNT_CODE.to_vec(),
         Box::new(decode_create_child_vasp_account_script),
     );
@@ -1554,8 +1839,32 @@ static SCRIPT_DECODER_MAP: once_cell::sync::Lazy<DecoderMap> = once_cell::sync::
         Box::new(decode_create_validator_operator_account_script),
     );
     map.insert(
+        DEBUG_MONEY_ORDER_COIN_BALANCE_CODE.to_vec(),
+        Box::new(decode_debug_money_order_coin_balance_script),
+    );
+    map.insert(
+        DEPOSIT_MONEY_ORDER_CODE.to_vec(),
+        Box::new(decode_deposit_money_order_script),
+    );
+    map.insert(
         FREEZE_ACCOUNT_CODE.to_vec(),
         Box::new(decode_freeze_account_script),
+    );
+    map.insert(
+        INITIALIZE_MONEY_ORDERS_CODE.to_vec(),
+        Box::new(decode_initialize_money_orders_script),
+    );
+    map.insert(
+        ISSUE_MONEY_ORDER_CODE.to_vec(),
+        Box::new(decode_issue_money_order_script),
+    );
+    map.insert(
+        ISSUE_MONEY_ORDER_BATCH_CODE.to_vec(),
+        Box::new(decode_issue_money_order_batch_script),
+    );
+    map.insert(
+        ISSUER_CANCEL_MONEY_ORDER_CODE.to_vec(),
+        Box::new(decode_issuer_cancel_money_order_script),
     );
     map.insert(MINT_LBR_CODE.to_vec(), Box::new(decode_mint_lbr_script));
     map.insert(
@@ -1733,6 +2042,18 @@ const CANCEL_BURN_CODE: &[u8] = &[
     0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 4, 11, 0, 10, 1, 56, 0, 2,
 ];
 
+const CANCEL_MONEY_ORDER_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 37, 7, 53, 74, 8, 127, 16,
+    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 1, 1, 6, 6, 12,
+    3, 5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 0, 10, 77, 111, 110,
+    101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101,
+    115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110, 99, 101, 108, 95, 109, 111, 110, 101,
+    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
+    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 4, 5, 13, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 1,
+    2,
+];
+
 const CREATE_CHILD_VASP_ACCOUNT_CODE: &[u8] = &[
     161, 28, 235, 11, 1, 0, 0, 0, 8, 1, 0, 2, 2, 2, 4, 3, 6, 22, 4, 28, 4, 5, 32, 35, 7, 67, 123,
     8, 190, 1, 16, 6, 206, 1, 4, 0, 0, 0, 1, 1, 0, 0, 2, 0, 1, 1, 1, 0, 3, 2, 3, 0, 0, 4, 4, 1, 1,
@@ -1803,6 +2124,26 @@ const CREATE_VALIDATOR_OPERATOR_ACCOUNT_CODE: &[u8] = &[
     0, 10, 2, 11, 3, 11, 4, 17, 1, 2,
 ];
 
+const DEBUG_MONEY_ORDER_COIN_BALANCE_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 11, 7, 28, 48, 8, 76, 16,
+    0, 0, 0, 1, 0, 2, 0, 1, 1, 1, 1, 3, 2, 3, 0, 0, 3, 1, 6, 9, 0, 0, 2, 6, 12, 5, 1, 3, 5, 68,
+    101, 98, 117, 103, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 5, 112, 114, 105, 110,
+    116, 24, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 99, 111, 105, 110, 95, 98,
+    97, 108, 97, 110, 99, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 3, 7, 11, 0,
+    10, 1, 17, 1, 12, 2, 14, 2, 56, 0, 2,
+];
+
+const DEPOSIT_MONEY_ORDER_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 35, 7, 51, 75, 8, 126, 16,
+    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 6, 6, 12, 3,
+    5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10, 77, 111, 110, 101, 121,
+    79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101, 115, 99,
+    114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111, 115, 105, 116, 95, 109, 111, 110, 101,
+    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
+    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 4, 1, 12, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 2,
+];
+
 const FREEZE_ACCOUNT_CODE: &[u8] = &[
     161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 14, 7, 28, 66, 8, 94, 16, 0, 0, 0,
     1, 0, 2, 0, 1, 0, 1, 3, 2, 1, 0, 2, 6, 12, 5, 0, 2, 6, 12, 3, 3, 6, 12, 3, 5, 15, 65, 99, 99,
@@ -1811,6 +2152,37 @@ const FREEZE_ACCOUNT_CODE: &[u8] = &[
     116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98,
     111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 7, 10, 0, 10, 1, 17, 1,
     11, 0, 10, 2, 17, 0, 2,
+];
+
+const INITIALIZE_MONEY_ORDERS_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 7, 7, 14, 35, 8, 49, 16, 0, 0, 0, 1,
+    0, 1, 0, 3, 6, 12, 10, 2, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 23, 105,
+    110, 105, 116, 105, 97, 108, 105, 122, 101, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100,
+    101, 114, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 11, 0, 11, 1, 10, 2,
+    17, 0, 2,
+];
+
+const ISSUE_MONEY_ORDER_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 29, 8, 42, 16, 0, 0, 0, 1,
+    0, 1, 0, 3, 6, 12, 3, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 17, 105, 115,
+    115, 117, 101, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 11, 0, 10, 1, 10, 2, 17, 0, 2,
+];
+
+const ISSUE_MONEY_ORDER_BATCH_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 7, 7, 14, 35, 8, 49, 16, 0, 0, 0, 1,
+    0, 1, 0, 4, 6, 12, 3, 3, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 23, 105,
+    115, 115, 117, 101, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 98, 97, 116,
+    99, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 6, 11, 0, 10, 1, 10, 2, 10,
+    3, 17, 0, 2,
+];
+
+const ISSUER_CANCEL_MONEY_ORDER_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 8, 7, 15, 37, 8, 52, 16, 0, 0, 0, 1,
+    0, 1, 0, 3, 6, 12, 3, 3, 1, 1, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 25, 105,
+    115, 115, 117, 101, 114, 95, 99, 97, 110, 99, 101, 108, 95, 109, 111, 110, 101, 121, 95, 111,
+    114, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 6, 11, 0, 10, 1,
+    10, 2, 17, 0, 1, 2,
 ];
 
 const MINT_LBR_CODE: &[u8] = &[
