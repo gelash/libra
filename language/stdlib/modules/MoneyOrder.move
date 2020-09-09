@@ -1,12 +1,13 @@
 // TODO: port to using move Errors
-// 8001 - money order expired
-// 8002 - signature did not verify
-// 8003 - money order already deposited or canceled
-// 8004 - insufficient balance on issuer's account
+// 8001: money order expired
+// 8002: signature did not verify
+// 8003: money order already deposited or canceled
 address 0x1 {
 
     module MoneyOrder {
+        use 0x1::AssetHolder::{Self, AssetHolder};
         use 0x1::Event::{Self, EventHandle};
+        use 0x1::IssuerToken::{IssuerToken, DefaultToken};
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
         use 0x1::Signature;
@@ -39,23 +40,28 @@ address 0x1 {
             redeemed_events: EventHandle<RedeemedMoneyOrderEvent>,
         }
 
-        // Describes a money order: amount, issuer, where to find the status bit
-        // (batch index and order_index within batch), and user_public_key. The issuing
-        // VASP creates user_public_key and user_secret_key pair for the user when
-        // preparing the money order.
+        /// Describes a money order: amount, type of asset, issuer, where to find the
+        /// status bit (batch index and order_index within batch), and user_public_key.
+        /// The issuing VASP creates user_public_key and user_secret_key pair for the
+        /// user when preparing the money order.
         struct MoneyOrderDescriptor {
-            // The amount of MoneyOrderCoin redeemable with the money order.
+            /// The redeemable amount with the given money order.
             amount: u64,
 
-            // TODO: Add CurrencyType - own encoding for now.
+            /// Type of asset with specific encoding, first 32 bits represent currency,
+            /// (e.g. 0 = IssuerToken, 1 = Libra), and second 32 bits represent
+            /// specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
+            /// IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra).
+            asset_type_id: u64,
 
+            /// Address of the account that issued the given money order.
             issuer_address: address,
-            // Index of the batch among batches.
+            /// Index of the batch among batches.
             batch_index: u64,
-            // Index among the money order status bits.
+            /// Index among the money order status bits.
             order_index: u64,
 
-            // Issuer creates corresponding private key for the user.
+            /// Issuer creates corresponding private key for the user.
             user_public_key: vector<u8>,
         }
 
@@ -78,6 +84,89 @@ address 0x1 {
             order_index: u64,
         }
 
+        resource struct MoneyOrderAssetHolder<AssetType> {
+            holder: AssetHolder<AssetType>,
+        }
+
+        public fun initialize_money_order_asset_holder(issuer: &signer,
+                                                       asset_type_id: u64,
+                                                       starting_amount: u64,
+        ) {
+            // TODO: This dispatching itself can't be moved to AssetHolder because
+            // the fact that AssetHolder APIs are called from MoneyOrders module
+            // provides access control. TODO: However, the mapping from type_id to
+            // the function calls for creation, loading & depositing assets maybe
+            // could be re-used if language allows.
+            if (asset_type_id == 0) {
+                move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
+                    holder: AssetHolder::create_default_issuer_token_holder(
+                        issuer,
+                        starting_amount),
+                });
+            };
+        }
+
+        public fun top_up_money_order_asset_holder(issuer: &signer,
+                                                   asset_type_id: u64,
+                                                   top_up_amount: u64,
+        ) acquires MoneyOrderAssetHolder {
+            let issuer_address = Signer::address_of(issuer);
+            
+            if (asset_type_id == 0) {
+                let mo_holder =
+                    borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                        issuer_address);
+                
+                AssetHolder::top_up_default_issuer_token_holder(
+                    issuer,
+                    &mut mo_holder.holder,
+                    top_up_amount);
+            };
+        }
+
+        // This function must be private, so the caller does access control.
+        fun deposit_from_issuer(receiver: &signer,
+                                issuer_address: address,
+                                asset_type_id: u64,
+                                amount: u64
+        ) acquires MoneyOrderAssetHolder {
+            if (asset_type_id == 0) {
+                let mo_holder =
+                    borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                        issuer_address);
+
+                AssetHolder::deposit_default_issuer_token(receiver,
+                                                          &mut mo_holder.holder,
+                                                          amount);
+            };
+        }
+
+        /// Initialize the capability to issue money orders by publishing a MoneyOrders
+        /// resource. MoneyOrderHolder
+        public fun publish_money_orders(issuer: &signer,
+                                        public_key: vector<u8>,
+        ) {
+            move_to(issuer, MoneyOrders {
+                batches: Vector::empty(),
+                public_key: public_key,
+                issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
+                canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
+                redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
+            });
+        }
+
+        /// Can only be called during genesis with libra root account.
+        public fun initialize(lr_account: &signer) {
+            LibraTimestamp::assert_genesis();
+
+            // Initialize money order asset holder for all asset type ids.
+            initialize_money_order_asset_holder(lr_account, 0, 0);
+            
+            // Publish MoneyOrders resource w. some fixed public key.
+            publish_money_orders(lr_account,
+                                 x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1");
+        }
+
         // The only way to create a MoneyOrderDescriptor.
         public fun money_order_descriptor(
             _sender: &signer,
@@ -89,6 +178,7 @@ address 0x1 {
         ): MoneyOrderDescriptor {
             MoneyOrderDescriptor {
                 amount: amount,
+                asset_type_id: 1,
                 issuer_address: issuer_address,
                 batch_index: batch_index,
                 order_index: order_index,
@@ -96,36 +186,6 @@ address 0x1 {
             }
         }
 
-        // Minting the MoneyOrderCoin (fake currency declared within this module). Note:
-        // only ever called from API with the issuer as a signer, i.e. a caller can only
-        // mint to the MoneyOrder balance published on its account.
-        // fun mint_money_order_coin(amount: u64,
-                                  // issuer_address: address,
-        // ): MoneyOrderCoin {
-            // MoneyOrderCoin {
-                // amount: amount,
-                // issuer_address: issuer_address,
-            // }
-        // }
-
-        // Initialize the capability to issue money orders by publishing a MoneyOrders
-        // resource. 
-        // Note: we could add
-        // temporary APIs for topping up the balance, but eventually should just
-        // switch to using Libra<coin> types and not reimplement coin functionality.
-        public fun initialize_money_orders(issuer: &signer,
-                                           public_key: vector<u8>,
-                                           starting_balance: u64,
-        ) {
-            move_to(issuer, MoneyOrders {
-                batches: Vector::empty(),
-                public_key: public_key,
-                // balance: mint_money_order_coin(starting_balance, Signer::address_of(issuer)),
-                issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
-                canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
-                redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
-            });
-        }
 
         // Checks whether a particular expiration time has passed.
         fun time_expired(expiration_time: u64): bool {
@@ -304,11 +364,11 @@ address 0x1 {
         // plus the user_signature. Note that the receiver is the authenticated
         // author of the transaction.
         // TODO: think if this is enough.
-        public fun redeem_money_order(receiver: &signer,
-                                      money_order_descriptor: MoneyOrderDescriptor,
-                                      issuer_signature: vector<u8>,
-                                      user_signature: vector<u8>,
-        ): IssuerToken<DefaultToken> acquires MoneyOrders {
+        public fun deposit_money_order(receiver: &signer,
+                                       money_order_descriptor: MoneyOrderDescriptor,
+                                       issuer_signature: vector<u8>,
+                                       user_signature: vector<u8>,
+        ) acquires MoneyOrderAssetHolder, MoneyOrders {
             verify_user_signature(receiver,
                                   *&money_order_descriptor,
                                   user_signature,
@@ -327,13 +387,16 @@ address 0x1 {
             assert(!test_and_set_order_status(&mut order_batch.order_status,
                                              money_order_descriptor.order_index), 8003);
 
-            // Actually withdraw the coins from issuer's account.
-            let issuer_coin_value = &mut orders.balance.amount;
-            // orders.balance.issuer == money_order_descriptor.issuer, issuer's MOCoin.
-            assert(*issuer_coin_value >= money_order_descriptor.amount, 8004);
-            *issuer_coin_value = *issuer_coin_value - money_order_descriptor.amount;
-
-            // Log a redeemed event.
+            // Actually withdraw the asset from issuer's account (AssetHolder) and
+            // deposit to receiver's account (as determined by the convention
+            // of the asset type, e.g. Libra will be deposited to Balance and
+            // IssuerToken will be deposited to IssuerTokens).
+            deposit_from_issuer(receiver,
+                                issuer_address,
+                                0, // TODO: generalize
+                                money_order_descriptor.amount);
+            
+             // Log a redeemed event.
             Event::emit_event<RedeemedMoneyOrderEvent>(
                 &mut orders.redeemed_events,
                 RedeemedMoneyOrderEvent {
@@ -342,53 +405,6 @@ address 0x1 {
                     order_index: money_order_descriptor.order_index,
                 }
             );
-
-            // TODO: Can't create - need to get rid of redeem and use deposit.
-            // TODO: later will do burn as well.
-            IssuerToken< {
-                amount: money_order_descriptor.amount,
-                issuer_address: issuer_address,
-            }
-        }
-
-        public fun deposit_money_order(receiver: &signer,
-                                       money_order_descriptor: MoneyOrderDescriptor,
-                                       issuer_signature: vector<u8>,
-                                       user_signature: vector<u8>,
-        ) acquires MoneyOrderCoinVector, MoneyOrders {
-            let MoneyOrderCoin { amount, issuer_address } =
-                redeem_money_order(receiver,
-                                   money_order_descriptor,
-                                   issuer_signature,
-                                   user_signature);
-
-            let receiver_address = Signer::address_of(receiver);
-
-            // Get receiver's storage of MoneyOrderCoin, currently a Vector. Publish an
-            // empty Vector<MoneyOrderCoin> if none exists at receiver's account yet.
-            // TODO: Switch to a Map when that exists to merge coins based on address.
-            if (!exists<MoneyOrderCoinVector>(receiver_address)) {
-                move_to(receiver, MoneyOrderCoinVector {
-                    coins: Vector::empty(),
-                });
-            };
-            let receiver_vec =
-                borrow_global_mut<MoneyOrderCoinVector>(receiver_address);
-
-            let (found, coin_index) = index_of_coin(&receiver_vec.coins,
-                                                    issuer_address);
-            if (!found)
-            {
-                coin_index = Vector::length(&receiver_vec.coins);
-                Vector::push_back(&mut receiver_vec.coins,
-                                  mint_money_order_coin(0, issuer_address));
-            };
-
-            // Actually increment the MoneyOrderCoin's value (issued by issuer).
-            let target_coin = Vector::borrow_mut(&mut receiver_vec.coins,
-                                                 coin_index);
-            let target_coin_value = &mut target_coin.amount;
-            *target_coin_value = *target_coin_value + amount;
         }
 
         // Money order cancellation by the receiver/user - doesn't redeem, just sets
