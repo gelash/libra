@@ -10,6 +10,8 @@ address 0x1 {
 
         /// Default empty info struct for templating IssuerToken on, i.e. having
         /// different specializations of the same issuer token functionality.
+        /// By convention, DefaultToken won't make use of IssuerToken's 'band'
+        /// functionality (i.e. band_id will always be set to 0).
         struct DefaultToken { }
 
         /// Empty struct that's used for money orders issuer token functionality.
@@ -67,7 +69,7 @@ address 0x1 {
             publish_issuer_tokens<IssuerToken<MoneyOrderToken>>(lr_account);
         }
         
-        /// Find the issuer token based on address.
+        // Find the issuer token based on address.
         fun find_issuer_token<TokenType>(
             issuer_token_vector: &vector<IssuerToken<TokenType>>,
             issuer_address: address,
@@ -75,36 +77,15 @@ address 0x1 {
         ): (bool, u64) {
             let i = 0;
             while (i < Vector::length(issuer_token_vector)) {
-                let coin = Vector::borrow(issuer_token_vector, i);
-                if (coin.issuer_address == issuer_address &&
-                    coin.band_id == band_id) {
+                let token = Vector::borrow(issuer_token_vector, i);
+                if (token.issuer_address == issuer_address &&
+                    token.band_id == band_id) {
                     return (true, i)
                 };
                 
                 i = i + 1;
             };
             (false, 0)
-        }
-
-        public fun issuer_token_balance<TokenType>(sender: &signer,
-                                                   issuer_address: address,
-                                                   band_id: u64,
-        ): u64 acquires IssuerTokens {
-            let sender_address = Signer::address_of(sender);
-            if (!exists<IssuerTokens<IssuerToken<TokenType>>>(sender_address)) {
-                return 0
-            };
-            let sender_tokens =
-                borrow_global<IssuerTokens<IssuerToken<TokenType>>>(sender_address);
-            
-            let (found, target_index) =
-                find_issuer_token<TokenType>(&sender_tokens.issuer_tokens,
-                                             issuer_address,
-                                             band_id);
-            if (!found) return 0;
-
-            let issuer_token = Vector::borrow(&sender_tokens.issuer_tokens, target_index);
-            issuer_token.amount
         }
 
         fun create_issuer_token<TokenType>(issuer_address: address,
@@ -143,6 +124,7 @@ address 0x1 {
             *token_amount = *token_amount + amount;
         }
 
+        // TODO: caller should make sure to destroy 0?
         public fun split_issuer_token<TokenType>(
             issuer_token: &mut IssuerToken<TokenType>,
             amount: u64,
@@ -159,30 +141,51 @@ address 0x1 {
             }
         }
         
-        /// Deposits the issuer token in the IssuerTokens structure on sender's account.
-        /// It's asserted that sender != issuer, and IssuerTokens<TokenType> is created
-        /// if not already published on the sender's account.
-        public fun deposit_issuer_token<TokenType>(sender: &signer,
-                                                   issuer_token: IssuerToken<TokenType>
-        ) acquires IssuerTokens {
+        public fun issuer_token_balance<TokenType>(sender: &signer,
+                                                   issuer_address: address,
+                                                   band_id: u64,
+        ): u64 acquires IssuerTokens {
             let sender_address = Signer::address_of(sender);
-            assert(issuer_token.issuer_address != sender_address, 8005);
-            
             if (!exists<IssuerTokens<IssuerToken<TokenType>>>(sender_address)) {
-                publish_issuer_tokens<IssuerToken<TokenType>>(sender);
+                return 0
             };
             let sender_tokens =
-                borrow_global_mut<IssuerTokens<IssuerToken<TokenType>>>(sender_address);
-
+                borrow_global<IssuerTokens<IssuerToken<TokenType>>>(sender_address);
+            
             let (found, target_index) =
                 find_issuer_token<TokenType>(&sender_tokens.issuer_tokens,
+                                             issuer_address,
+                                             band_id);
+            if (!found) return 0;
+
+            let issuer_token = Vector::borrow(&sender_tokens.issuer_tokens, target_index);
+            issuer_token.amount
+        }
+        
+        /// Deposits the issuer token in the IssuerTokens structure on receiver's account.
+        /// It's asserted that receiver != issuer, and IssuerTokens<TokenType> is created
+        /// if not already published on the receiver's account.
+        public fun deposit_issuer_token<TokenType>(receiver: &signer,
+                                                   issuer_token: IssuerToken<TokenType>
+        ) acquires IssuerTokens {
+            let receiver_address = Signer::address_of(receiver);
+            assert(issuer_token.issuer_address != receiver_address, 8005);
+            
+            if (!exists<IssuerTokens<IssuerToken<TokenType>>>(receiver_address)) {
+                publish_issuer_tokens<IssuerToken<TokenType>>(receiver);
+            };
+            let receiver_tokens =
+                borrow_global_mut<IssuerTokens<IssuerToken<TokenType>>>(receiver_address);
+
+            let (found, target_index) =
+                find_issuer_token<TokenType>(&receiver_tokens.issuer_tokens,
                                              issuer_token.issuer_address,
                                              issuer_token.band_id);
             if (!found) {
                 // If a issuer token with given type and band_id is not stored,
                 // store one with 0 amount.
-                target_index = Vector::length(&sender_tokens.issuer_tokens);
-                Vector::push_back(&mut sender_tokens.issuer_tokens,
+                target_index = Vector::length(&receiver_tokens.issuer_tokens);
+                Vector::push_back(&mut receiver_tokens.issuer_tokens,
                                   create_issuer_token<TokenType>(
                                       issuer_token.issuer_address,
                                       issuer_token.band_id,
@@ -190,7 +193,7 @@ address 0x1 {
             };
             
             // Actually increment the issuer token amount.
-            merge_issuer_token(Vector::borrow_mut(&mut sender_tokens.issuer_tokens,
+            merge_issuer_token(Vector::borrow_mut(&mut receiver_tokens.issuer_tokens,
                                                   target_index),
                                issuer_token);
         }

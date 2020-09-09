@@ -53,6 +53,7 @@ address 0x1 {
             holder: &mut AssetHolder<IssuerToken<DefaultToken>>,
             amount: u64,
         ) {
+            // TODO: maybe assert that it's for holder is for the same issuer.
             IssuerToken::merge_issuer_token<DefaultToken>(
                 &mut holder.asset,
                 IssuerToken::mint_issuer_token<DefaultToken>(issuer,
@@ -68,6 +69,7 @@ address 0x1 {
             holder: &mut AssetHolder<IssuerToken<DefaultToken>>,
             amount: u64,
         ) {
+            // TODO: check receiver != issuer.
             let issuer_tokens =
                 IssuerToken::split_issuer_token<DefaultToken>(&mut holder.asset,
                                                               amount);

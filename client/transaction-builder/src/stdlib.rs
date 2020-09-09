@@ -36,7 +36,9 @@ pub enum ScriptCall {
     /// Aborts with NOT_A_CURRENCY if `Currency` is not an accepted currency type in the Libra system
     /// Aborts with `LibraAccount::ADD_EXISTING_CURRENCY` if the account already holds a balance in
     /// `Currency`.
-    AddCurrencyToAccount { currency: TypeTag },
+    AddCurrencyToAccount {
+        currency: TypeTag,
+    },
 
     /// Add the `KeyRotationCapability` for `to_recover_account` to the `RecoveryAddress` resource under `recovery_address`.
     ///
@@ -44,10 +46,15 @@ pub enum ScriptCall {
     /// * Aborts with `LibraAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` if `account` has already delegated its `KeyRotationCapability`.
     /// * Aborts with `RecoveryAddress:ENOT_A_RECOVERY_ADDRESS` if `recovery_address` does not have a `RecoveryAddress` resource.
     /// * Aborts with `RecoveryAddress::EINVALID_KEY_ROTATION_DELEGATION` if `to_recover_account` and `recovery_address` do not belong to the same VASP.
-    AddRecoveryRotationCapability { recovery_address: AccountAddress },
+    AddRecoveryRotationCapability {
+        recovery_address: AccountAddress,
+    },
 
     /// Append the `hash` to script hashes list allowed to be executed by the network.
-    AddToScriptAllowList { hash: Bytes, sliding_nonce: u64 },
+    AddToScriptAllowList {
+        hash: Bytes,
+        sliding_nonce: u64,
+    },
 
     /// Add `new_validator` to the validator set.
     /// Fails if the `new_validator` address is already in the validator set
@@ -71,7 +78,9 @@ pub enum ScriptCall {
 
     /// Burn transaction fees that have been collected in the given `currency`
     /// and relinquish to the association. The currency must be non-synthetic.
-    BurnTxnFees { coin_type: TypeTag },
+    BurnTxnFees {
+        coin_type: TypeTag,
+    },
 
     /// Cancel the oldest burn request from `preburn_address` and return the funds.
     /// Fails if the sender does not have a published `BurnCapability<Token>`.
@@ -168,9 +177,6 @@ pub enum ScriptCall {
     },
 
     /// TODO Some docs
-    DebugMoneyOrderCoinBalance { issuer_address: AccountAddress },
-
-    /// TODO Some docs
     DepositMoneyOrder {
         amount: u64,
         issuer: AccountAddress,
@@ -189,12 +195,6 @@ pub enum ScriptCall {
     },
 
     /// TODO Some docs
-    InitializeMoneyOrders {
-        public_key: Bytes,
-        starting_balance: u64,
-    },
-
-    /// TODO Some docs
     IssueMoneyOrder {
         validity_microseconds: u64,
         grace_period_microseconds: u64,
@@ -208,11 +208,16 @@ pub enum ScriptCall {
     },
 
     /// TODO Some docs
-    IssuerCancelMoneyOrder { batch_index: u64, order_index: u64 },
+    IssuerCancelMoneyOrder {
+        batch_index: u64,
+        order_index: u64,
+    },
 
     /// Mint `amount_lbr` LBR from the sending account's constituent coins and deposits the
     /// resulting LBR into the sending account.
-    MintLbr { amount_lbr: u64 },
+    MintLbr {
+        amount_lbr: u64,
+    },
 
     /// Transfer `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
     /// `metadata` and an (optional) `metadata_signature` on the message
@@ -258,14 +263,23 @@ pub enum ScriptCall {
 
     /// Preburn `amount` `Token`s from `account`.
     /// This will only succeed if `account` already has a published `Preburn<Token>` resource.
-    Preburn { token: TypeTag, amount: u64 },
+    Preburn {
+        token: TypeTag,
+        amount: u64,
+    },
+
+    PublishMoneyOrders {
+        public_key: Bytes,
+    },
 
     /// (1) Rotate the authentication key of the sender to `public_key`
     /// (2) Publish a resource containing a 32-byte ed25519 public key and the rotation capability
     ///     of the sender under the sender's address.
     /// Aborts if the sender already has a `SharedEd25519PublicKey` resource.
     /// Aborts if the length of `new_public_key` is not 32.
-    PublishSharedEd25519PublicKey { public_key: Bytes },
+    PublishSharedEd25519PublicKey {
+        public_key: Bytes,
+    },
 
     /// Set validator's config locally.
     /// Does not emit NewEpochEvent, the config is NOT changed in the validator set.
@@ -290,17 +304,25 @@ pub enum ScriptCall {
     /// * Aborts with `LibraAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` if the `KeyRotationCapability` for `account` has already been extracted.
     /// * Aborts with `0` if the key rotation capability held by the account doesn't match the sender's address.
     /// * Aborts with `LibraAccount::EMALFORMED_AUTHENTICATION_KEY` if the length of `new_key` != 32.
-    RotateAuthenticationKey { new_key: Bytes },
+    RotateAuthenticationKey {
+        new_key: Bytes,
+    },
 
     /// Rotate `account`'s authentication key to `new_key`.
     /// `new_key` should be a 256 bit sha3 hash of an ed25519 public key. This script also takes
     /// `sliding_nonce`, as a unique nonce for this operation. See sliding_nonce.move for details.
-    RotateAuthenticationKeyWithNonce { sliding_nonce: u64, new_key: Bytes },
+    RotateAuthenticationKeyWithNonce {
+        sliding_nonce: u64,
+        new_key: Bytes,
+    },
 
     /// Rotate `account`'s authentication key to `new_key`.
     /// `new_key` should be a 256 bit sha3 hash of an ed25519 public key. This script also takes
     /// `sliding_nonce`, as a unique nonce for this operation. See sliding_nonce.move for details.
-    RotateAuthenticationKeyWithNonceAdmin { sliding_nonce: u64, new_key: Bytes },
+    RotateAuthenticationKeyWithNonceAdmin {
+        sliding_nonce: u64,
+        new_key: Bytes,
+    },
 
     /// Rotate the authentication key of `account` to `new_key` using the `KeyRotationCapability`
     /// stored under `recovery_address`.
@@ -319,7 +341,10 @@ pub enum ScriptCall {
     /// Rotate `account`'s base URL to `new_url` and its compliance public key to `new_key`.
     /// Aborts if `account` is not a ParentVASP or DesignatedDealer
     /// Aborts if `new_key` is not a well-formed public key
-    RotateDualAttestationInfo { new_url: Bytes, new_key: Bytes },
+    RotateDualAttestationInfo {
+        new_url: Bytes,
+        new_key: Bytes,
+    },
 
     /// (1) Rotate the public key stored in `account`'s `SharedEd25519PublicKey` resource to
     /// `new_public_key`
@@ -327,7 +352,9 @@ pub enum ScriptCall {
     /// `SharedEd25519PublicKey` to a new value derived from `new_public_key`
     /// Aborts if `account` does not have a `SharedEd25519PublicKey` resource.
     /// Aborts if the length of `new_public_key` is not 32.
-    RotateSharedEd25519PublicKey { public_key: Bytes },
+    RotateSharedEd25519PublicKey {
+        public_key: Bytes,
+    },
 
     /// Set validator's config and updates the config in the validator set.
     /// NewEpochEvent is emitted.
@@ -365,6 +392,14 @@ pub enum ScriptCall {
         tier_index: u64,
     },
 
+    /// For now, we receive and forward asset_type_id (as u64), as it's
+    /// stored (compactly) in 4 bytes in every money order anyway
+    /// according to a fixed convention. Note: explore using TypeTags.
+    TopUpMoneyOrderAssetHolder {
+        asset_type_id: u64,
+        top_up_amount: u64,
+    },
+
     /// Unfreeze account `address`. Initiator must be authorized.
     /// `sliding_nonce` is a unique nonce for operation, see sliding_nonce.move for details.
     UnfreezeAccount {
@@ -374,7 +409,9 @@ pub enum ScriptCall {
 
     /// Unmints `amount_lbr` LBR from the sending account into the constituent coins and deposits
     /// the resulting coins into the sending account.
-    UnmintLbr { amount_lbr: u64 },
+    UnmintLbr {
+        amount_lbr: u64,
+    },
 
     /// Update the dual attesation limit to `new_micro_lbr_limit`.
     UpdateDualAttestationLimit {
@@ -393,7 +430,10 @@ pub enum ScriptCall {
 
     /// Update Libra version.
     /// `sliding_nonce` is a unique nonce for operation, see sliding_nonce.move for details.
-    UpdateLibraVersion { sliding_nonce: u64, major: u64 },
+    UpdateLibraVersion {
+        sliding_nonce: u64,
+        major: u64,
+    },
 
     /// Allows--true--or disallows--false--minting of `currency` based upon `allow_minting`.
     UpdateMintingAbility {
@@ -517,9 +557,6 @@ impl ScriptCall {
                 auth_key_prefix,
                 human_name,
             ),
-            DebugMoneyOrderCoinBalance { issuer_address } => {
-                encode_debug_money_order_coin_balance_script(issuer_address)
-            }
             DepositMoneyOrder {
                 amount,
                 issuer,
@@ -541,10 +578,6 @@ impl ScriptCall {
                 sliding_nonce,
                 to_freeze_account,
             } => encode_freeze_account_script(sliding_nonce, to_freeze_account),
-            InitializeMoneyOrders {
-                public_key,
-                starting_balance,
-            } => encode_initialize_money_orders_script(public_key, starting_balance),
             IssueMoneyOrder {
                 validity_microseconds,
                 grace_period_microseconds,
@@ -577,6 +610,7 @@ impl ScriptCall {
                 metadata_signature,
             ),
             Preburn { token, amount } => encode_preburn_script(token, amount),
+            PublishMoneyOrders { public_key } => encode_publish_money_orders_script(public_key),
             PublishSharedEd25519PublicKey { public_key } => {
                 encode_publish_shared_ed25519_public_key_script(public_key)
             }
@@ -661,6 +695,10 @@ impl ScriptCall {
                 mint_amount,
                 tier_index,
             ),
+            TopUpMoneyOrderAssetHolder {
+                asset_type_id,
+                top_up_amount,
+            } => encode_top_up_money_order_asset_holder_script(asset_type_id, top_up_amount),
             UnfreezeAccount {
                 sliding_nonce,
                 to_unfreeze_account,
@@ -956,15 +994,6 @@ pub fn encode_create_validator_operator_account_script(
 }
 
 /// TODO Some docs
-pub fn encode_debug_money_order_coin_balance_script(issuer_address: AccountAddress) -> Script {
-    Script::new(
-        DEBUG_MONEY_ORDER_COIN_BALANCE_CODE.to_vec(),
-        vec![],
-        vec![TransactionArgument::Address(issuer_address)],
-    )
-}
-
-/// TODO Some docs
 pub fn encode_deposit_money_order_script(
     amount: u64,
     issuer: AccountAddress,
@@ -1001,18 +1030,6 @@ pub fn encode_freeze_account_script(
         vec![
             TransactionArgument::U64(sliding_nonce),
             TransactionArgument::Address(to_freeze_account),
-        ],
-    )
-}
-
-/// TODO Some docs
-pub fn encode_initialize_money_orders_script(public_key: Vec<u8>, starting_balance: u64) -> Script {
-    Script::new(
-        INITIALIZE_MONEY_ORDERS_CODE.to_vec(),
-        vec![],
-        vec![
-            TransactionArgument::U8Vector(public_key),
-            TransactionArgument::U64(starting_balance),
         ],
     )
 }
@@ -1131,6 +1148,14 @@ pub fn encode_preburn_script(token: TypeTag, amount: u64) -> Script {
         PREBURN_CODE.to_vec(),
         vec![token],
         vec![TransactionArgument::U64(amount)],
+    )
+}
+
+pub fn encode_publish_money_orders_script(public_key: Vec<u8>) -> Script {
+    Script::new(
+        PUBLISH_MONEY_ORDERS_CODE.to_vec(),
+        vec![],
+        vec![TransactionArgument::U8Vector(public_key)],
     )
 }
 
@@ -1362,6 +1387,23 @@ pub fn encode_tiered_mint_script(
     )
 }
 
+/// For now, we receive and forward asset_type_id (as u64), as it's
+/// stored (compactly) in 4 bytes in every money order anyway
+/// according to a fixed convention. Note: explore using TypeTags.
+pub fn encode_top_up_money_order_asset_holder_script(
+    asset_type_id: u64,
+    top_up_amount: u64,
+) -> Script {
+    Script::new(
+        TOP_UP_MONEY_ORDER_ASSET_HOLDER_CODE.to_vec(),
+        vec![],
+        vec![
+            TransactionArgument::U64(asset_type_id),
+            TransactionArgument::U64(top_up_amount),
+        ],
+    )
+}
+
 /// Unfreeze account `address`. Initiator must be authorized.
 /// `sliding_nonce` is a unique nonce for operation, see sliding_nonce.move for details.
 pub fn encode_unfreeze_account_script(
@@ -1558,12 +1600,6 @@ fn decode_create_validator_operator_account_script(script: &Script) -> Option<Sc
     })
 }
 
-fn decode_debug_money_order_coin_balance_script(script: &Script) -> Option<ScriptCall> {
-    Some(ScriptCall::DebugMoneyOrderCoinBalance {
-        issuer_address: decode_address_argument(script.args().get(0)?.clone())?,
-    })
-}
-
 fn decode_deposit_money_order_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::DepositMoneyOrder {
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
@@ -1580,13 +1616,6 @@ fn decode_freeze_account_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::FreezeAccount {
         sliding_nonce: decode_u64_argument(script.args().get(0)?.clone())?,
         to_freeze_account: decode_address_argument(script.args().get(1)?.clone())?,
-    })
-}
-
-fn decode_initialize_money_orders_script(script: &Script) -> Option<ScriptCall> {
-    Some(ScriptCall::InitializeMoneyOrders {
-        public_key: decode_u8vector_argument(script.args().get(0)?.clone())?,
-        starting_balance: decode_u64_argument(script.args().get(1)?.clone())?,
     })
 }
 
@@ -1632,6 +1661,12 @@ fn decode_preburn_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::Preburn {
         token: script.ty_args().get(0)?.clone(),
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
+    })
+}
+
+fn decode_publish_money_orders_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::PublishMoneyOrders {
+        public_key: decode_u8vector_argument(script.args().get(0)?.clone())?,
     })
 }
 
@@ -1732,6 +1767,13 @@ fn decode_tiered_mint_script(script: &Script) -> Option<ScriptCall> {
         designated_dealer_address: decode_address_argument(script.args().get(1)?.clone())?,
         mint_amount: decode_u64_argument(script.args().get(2)?.clone())?,
         tier_index: decode_u64_argument(script.args().get(3)?.clone())?,
+    })
+}
+
+fn decode_top_up_money_order_asset_holder_script(script: &Script) -> Option<ScriptCall> {
+    Some(ScriptCall::TopUpMoneyOrderAssetHolder {
+        asset_type_id: decode_u64_argument(script.args().get(0)?.clone())?,
+        top_up_amount: decode_u64_argument(script.args().get(1)?.clone())?,
     })
 }
 
@@ -1839,20 +1881,12 @@ static SCRIPT_DECODER_MAP: once_cell::sync::Lazy<DecoderMap> = once_cell::sync::
         Box::new(decode_create_validator_operator_account_script),
     );
     map.insert(
-        DEBUG_MONEY_ORDER_COIN_BALANCE_CODE.to_vec(),
-        Box::new(decode_debug_money_order_coin_balance_script),
-    );
-    map.insert(
         DEPOSIT_MONEY_ORDER_CODE.to_vec(),
         Box::new(decode_deposit_money_order_script),
     );
     map.insert(
         FREEZE_ACCOUNT_CODE.to_vec(),
         Box::new(decode_freeze_account_script),
-    );
-    map.insert(
-        INITIALIZE_MONEY_ORDERS_CODE.to_vec(),
-        Box::new(decode_initialize_money_orders_script),
     );
     map.insert(
         ISSUE_MONEY_ORDER_CODE.to_vec(),
@@ -1872,6 +1906,10 @@ static SCRIPT_DECODER_MAP: once_cell::sync::Lazy<DecoderMap> = once_cell::sync::
         Box::new(decode_peer_to_peer_with_metadata_script),
     );
     map.insert(PREBURN_CODE.to_vec(), Box::new(decode_preburn_script));
+    map.insert(
+        PUBLISH_MONEY_ORDERS_CODE.to_vec(),
+        Box::new(decode_publish_money_orders_script),
+    );
     map.insert(
         PUBLISH_SHARED_ED25519_PUBLIC_KEY_CODE.to_vec(),
         Box::new(decode_publish_shared_ed25519_public_key_script),
@@ -1923,6 +1961,10 @@ static SCRIPT_DECODER_MAP: once_cell::sync::Lazy<DecoderMap> = once_cell::sync::
     map.insert(
         TIERED_MINT_CODE.to_vec(),
         Box::new(decode_tiered_mint_script),
+    );
+    map.insert(
+        TOP_UP_MONEY_ORDER_ASSET_HOLDER_CODE.to_vec(),
+        Box::new(decode_top_up_money_order_asset_holder_script),
     );
     map.insert(
         UNFREEZE_ACCOUNT_CODE.to_vec(),
@@ -2124,15 +2166,6 @@ const CREATE_VALIDATOR_OPERATOR_ACCOUNT_CODE: &[u8] = &[
     0, 10, 2, 11, 3, 11, 4, 17, 1, 2,
 ];
 
-const DEBUG_MONEY_ORDER_COIN_BALANCE_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 11, 7, 28, 48, 8, 76, 16,
-    0, 0, 0, 1, 0, 2, 0, 1, 1, 1, 1, 3, 2, 3, 0, 0, 3, 1, 6, 9, 0, 0, 2, 6, 12, 5, 1, 3, 5, 68,
-    101, 98, 117, 103, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 5, 112, 114, 105, 110,
-    116, 24, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 99, 111, 105, 110, 95, 98,
-    97, 108, 97, 110, 99, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 3, 7, 11, 0,
-    10, 1, 17, 1, 12, 2, 14, 2, 56, 0, 2,
-];
-
 const DEPOSIT_MONEY_ORDER_CODE: &[u8] = &[
     161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 35, 7, 51, 75, 8, 126, 16,
     0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 6, 6, 12, 3,
@@ -2152,14 +2185,6 @@ const FREEZE_ACCOUNT_CODE: &[u8] = &[
     116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98,
     111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 7, 10, 0, 10, 1, 17, 1,
     11, 0, 10, 2, 17, 0, 2,
-];
-
-const INITIALIZE_MONEY_ORDERS_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 7, 7, 14, 35, 8, 49, 16, 0, 0, 0, 1,
-    0, 1, 0, 3, 6, 12, 10, 2, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 23, 105,
-    110, 105, 116, 105, 97, 108, 105, 122, 101, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100,
-    101, 114, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 11, 0, 11, 1, 10, 2,
-    17, 0, 2,
 ];
 
 const ISSUE_MONEY_ORDER_CODE: &[u8] = &[
@@ -2220,6 +2245,13 @@ const PREBURN_CODE: &[u8] = &[
     101, 115, 116, 111, 114, 101, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97,
     98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 1, 10,
     10, 0, 17, 0, 12, 2, 11, 0, 14, 2, 10, 1, 56, 0, 11, 2, 17, 2, 2,
+];
+
+const PUBLISH_MONEY_ORDERS_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 32, 8, 45, 16, 0, 0, 0, 1,
+    0, 1, 0, 2, 6, 12, 10, 2, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 112, 117,
+    98, 108, 105, 115, 104, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 115, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 4, 11, 0, 11, 1, 17, 0, 2,
 ];
 
 const PUBLISH_SHARED_ED25519_PUBLIC_KEY_CODE: &[u8] = &[
@@ -2367,6 +2399,14 @@ const TIERED_MINT_CODE: &[u8] = &[
     1, 17, 0, 11, 0, 10, 2, 10, 3, 10, 4, 56, 0, 2,
 ];
 
+const TOP_UP_MONEY_ORDER_ASSET_HOLDER_CODE: &[u8] = &[
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 43, 8, 56, 16, 0, 0, 0, 1,
+    0, 1, 0, 3, 6, 12, 3, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 31, 116, 111,
+    112, 95, 117, 112, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 97, 115, 115,
+    101, 116, 95, 104, 111, 108, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+    0, 1, 5, 11, 0, 10, 1, 10, 2, 17, 0, 2,
+];
+
 const UNFREEZE_ACCOUNT_CODE: &[u8] = &[
     161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 14, 7, 28, 68, 8, 96, 16, 0, 0, 0,
     1, 0, 2, 0, 1, 0, 1, 3, 2, 1, 0, 2, 6, 12, 5, 0, 2, 6, 12, 3, 3, 6, 12, 3, 5, 15, 65, 99, 99,
@@ -2401,15 +2441,15 @@ const UPDATE_DUAL_ATTESTATION_LIMIT_CODE: &[u8] = &[
 
 const UPDATE_EXCHANGE_RATE_CODE: &[u8] = &[
     161, 28, 235, 11, 1, 0, 0, 0, 7, 1, 0, 6, 2, 6, 4, 3, 10, 16, 4, 26, 2, 5, 28, 25, 7, 53, 100,
-    8, 153, 1, 16, 0, 0, 0, 1, 0, 2, 0, 0, 2, 0, 0, 3, 0, 1, 0, 2, 4, 2, 3, 0, 1, 5, 4, 3, 1, 1, 2,
-    6, 2, 3, 3, 1, 8, 0, 2, 6, 12, 3, 0, 2, 6, 12, 8, 0, 4, 6, 12, 3, 3, 3, 1, 9, 0, 12, 70, 105,
+    8, 153, 1, 16, 0, 0, 0, 1, 0, 2, 0, 0, 2, 0, 2, 3, 0, 1, 0, 0, 4, 2, 3, 0, 1, 5, 4, 1, 1, 1, 2,
+    6, 2, 6, 12, 3, 0, 2, 3, 3, 1, 8, 0, 2, 6, 12, 8, 0, 4, 6, 12, 3, 3, 3, 1, 9, 0, 12, 70, 105,
     120, 101, 100, 80, 111, 105, 110, 116, 51, 50, 5, 76, 105, 98, 114, 97, 12, 83, 108, 105, 100,
-    105, 110, 103, 78, 111, 110, 99, 101, 20, 99, 114, 101, 97, 116, 101, 95, 102, 114, 111, 109,
-    95, 114, 97, 116, 105, 111, 110, 97, 108, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110,
-    99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 24, 117, 112, 100, 97, 116, 101, 95, 108, 98,
-    114, 95, 101, 120, 99, 104, 97, 110, 103, 101, 95, 114, 97, 116, 101, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 5, 1, 11, 10, 0, 10, 1, 17, 1, 10, 2, 10, 3, 17, 0, 12, 4, 11, 0,
-    11, 4, 56, 0, 2,
+    105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99,
+    101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 20, 99, 114, 101, 97, 116, 101, 95, 102, 114,
+    111, 109, 95, 114, 97, 116, 105, 111, 110, 97, 108, 24, 117, 112, 100, 97, 116, 101, 95, 108,
+    98, 114, 95, 101, 120, 99, 104, 97, 110, 103, 101, 95, 114, 97, 116, 101, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 5, 3, 11, 10, 0, 10, 1, 17, 0, 10, 2, 10, 3, 17, 1, 12, 4, 11,
+    0, 11, 4, 56, 0, 2,
 ];
 
 const UPDATE_LIBRA_VERSION_CODE: &[u8] = &[

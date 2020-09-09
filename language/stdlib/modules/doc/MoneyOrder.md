@@ -5,17 +5,19 @@
 
 ### Table of Contents
 
--  [Resource `MoneyOrderCoin`](#0x1_MoneyOrder_MoneyOrderCoin)
--  [Resource `MoneyOrderCoinVector`](#0x1_MoneyOrder_MoneyOrderCoinVector)
 -  [Resource `MoneyOrderBatch`](#0x1_MoneyOrder_MoneyOrderBatch)
 -  [Resource `MoneyOrders`](#0x1_MoneyOrder_MoneyOrders)
 -  [Struct `MoneyOrderDescriptor`](#0x1_MoneyOrder_MoneyOrderDescriptor)
 -  [Struct `IssuedMoneyOrderEvent`](#0x1_MoneyOrder_IssuedMoneyOrderEvent)
 -  [Struct `CanceledMoneyOrderEvent`](#0x1_MoneyOrder_CanceledMoneyOrderEvent)
 -  [Struct `RedeemedMoneyOrderEvent`](#0x1_MoneyOrder_RedeemedMoneyOrderEvent)
+-  [Resource `MoneyOrderAssetHolder`](#0x1_MoneyOrder_MoneyOrderAssetHolder)
+-  [Function `initialize_money_order_asset_holder`](#0x1_MoneyOrder_initialize_money_order_asset_holder)
+-  [Function `top_up_money_order_asset_holder`](#0x1_MoneyOrder_top_up_money_order_asset_holder)
+-  [Function `deposit_from_issuer`](#0x1_MoneyOrder_deposit_from_issuer)
+-  [Function `publish_money_orders`](#0x1_MoneyOrder_publish_money_orders)
+-  [Function `initialize`](#0x1_MoneyOrder_initialize)
 -  [Function `money_order_descriptor`](#0x1_MoneyOrder_money_order_descriptor)
--  [Function `mint_money_order_coin`](#0x1_MoneyOrder_mint_money_order_coin)
--  [Function `initialize_money_orders`](#0x1_MoneyOrder_initialize_money_orders)
 -  [Function `time_expired`](#0x1_MoneyOrder_time_expired)
 -  [Function `div_ceil`](#0x1_MoneyOrder_div_ceil)
 -  [Function `vector_with_copies`](#0x1_MoneyOrder_vector_with_copies)
@@ -26,10 +28,6 @@
 -  [Function `test_and_set_order_status`](#0x1_MoneyOrder_test_and_set_order_status)
 -  [Function `cancel_order_impl`](#0x1_MoneyOrder_cancel_order_impl)
 -  [Function `issuer_cancel_money_order`](#0x1_MoneyOrder_issuer_cancel_money_order)
--  [Function `redeem_money_order`](#0x1_MoneyOrder_redeem_money_order)
--  [Function `index_of_coin`](#0x1_MoneyOrder_index_of_coin)
--  [Function `money_order_coin_balance`](#0x1_MoneyOrder_money_order_coin_balance)
--  [Function `init_coins_money_order`](#0x1_MoneyOrder_init_coins_money_order)
 -  [Function `deposit_money_order`](#0x1_MoneyOrder_deposit_money_order)
 -  [Function `cancel_money_order`](#0x1_MoneyOrder_cancel_money_order)
 -  [Function `clear_vector`](#0x1_MoneyOrder_clear_vector)
@@ -38,69 +36,6 @@
 -  [Function `compress_expired_batches`](#0x1_MoneyOrder_compress_expired_batches)
 
 
-
-<a name="0x1_MoneyOrder_MoneyOrderCoin"></a>
-
-## Resource `MoneyOrderCoin`
-
-
-
-<pre><code><b>resource</b> <b>struct</b> <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-
-<code>amount: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-
-<code>issuer_address: address</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x1_MoneyOrder_MoneyOrderCoinVector"></a>
-
-## Resource `MoneyOrderCoinVector`
-
-
-
-<pre><code><b>resource</b> <b>struct</b> <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-
-<code>coins: vector&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrder::MoneyOrderCoin</a>&gt;</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
 
 <a name="0x1_MoneyOrder_MoneyOrderBatch"></a>
 
@@ -169,13 +104,6 @@
 </dd>
 <dt>
 
-<code>balance: <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrder::MoneyOrderCoin</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-
 <code>issued_events: <a href="Event.md#0x1_Event_EventHandle">Event::EventHandle</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">MoneyOrder::IssuedMoneyOrderEvent</a>&gt;</code>
 </dt>
 <dd>
@@ -204,6 +132,10 @@
 
 ## Struct `MoneyOrderDescriptor`
 
+Describes a money order: amount, type of asset, issuer, where to find the
+status bit (batch index and order_index within batch), and user_public_key.
+The issuing VASP creates user_public_key and user_secret_key pair for the
+user when preparing the money order.
 
 
 <pre><code><b>struct</b> <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a>
@@ -221,35 +153,46 @@
 <code>amount: u64</code>
 </dt>
 <dd>
+ The redeemable amount with the given money order.
+</dd>
+<dt>
 
+<code>asset_type_id: u64</code>
+</dt>
+<dd>
+ Type of asset with specific encoding, first 16 bits represent currency,
+ (e.g. 0 = IssuerToken, 1 = Libra), and second 16 bits represent
+ specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
+ IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra). Note: It's
+ u64 because u32 didn't exist.
 </dd>
 <dt>
 
 <code>issuer_address: address</code>
 </dt>
 <dd>
-
+ Address of the account that issued the given money order.
 </dd>
 <dt>
 
 <code>batch_index: u64</code>
 </dt>
 <dd>
-
+ Index of the batch among batches.
 </dd>
 <dt>
 
 <code>order_index: u64</code>
 </dt>
 <dd>
-
+ Index among the money order status bits.
 </dd>
 <dt>
 
 <code>user_public_key: vector&lt;u8&gt;</code>
 </dt>
 <dd>
-
+ Issuer creates corresponding private key for the user.
 </dd>
 </dl>
 
@@ -368,6 +311,226 @@
 
 </details>
 
+<a name="0x1_MoneyOrder_MoneyOrderAssetHolder"></a>
+
+## Resource `MoneyOrderAssetHolder`
+
+
+
+<pre><code><b>resource</b> <b>struct</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;AssetType&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+
+<code>holder: <a href="AssetHolder.md#0x1_AssetHolder_AssetHolder">AssetHolder::AssetHolder</a>&lt;AssetType&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x1_MoneyOrder_initialize_money_order_asset_holder"></a>
+
+## Function `initialize_money_order_asset_holder`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer: &signer,
+                                        asset_type_id: u64,
+) {
+    <b>if</b> (asset_type_id == 0) {
+        move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt; {
+            holder: <a href="AssetHolder.md#0x1_AssetHolder_create_default_issuer_token_holder">AssetHolder::create_default_issuer_token_holder</a>(
+                issuer,
+                0),
+        });
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_top_up_money_order_asset_holder"></a>
+
+## Function `top_up_money_order_asset_holder`
+
+If it doesn't yet exist, initializes the asset holder for money orders -
+i.e. the structure where the receivers will redeem their money orders from.
+Then it adds top_up_amount of the specified asset (based on asset_type_id)
+to the money order asset holder. Money order asset holder is just a wrapper
+around AssetHolder that allows the MoneyOrder module to do access control
+on withdrawal, while AssetHolder has methods to deal with different assets.
+Asset_type_id is an integer that determines the type of asset stored
+(e.g. whether it's Libra<Coin1>, IssuerToken<DefaultToken>, or some other
+type or specialization).
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_asset_holder">top_up_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u64, top_up_amount: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_asset_holder">top_up_money_order_asset_holder</a>(issuer: &signer,
+                                           asset_type_id: u64,
+                                           top_up_amount: u64,
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
+    <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
+
+    // TODO: This dispatching itself can't be moved <b>to</b> <a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a> because
+    // the fact that <a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a> APIs are called from <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> <b>module</b>
+    // provides access control. TODO: However, the mapping from type_id <b>to</b>
+    // the function calls for creation, loading & depositing assets maybe
+    // could be re-used <b>if</b> language allows.
+    <b>if</b> (asset_type_id == 0) {
+        <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+            issuer_address)) {
+            <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer, asset_type_id);
+        };
+
+        <b>let</b> mo_holder =
+            borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+                issuer_address);
+
+        <a href="AssetHolder.md#0x1_AssetHolder_top_up_default_issuer_token_holder">AssetHolder::top_up_default_issuer_token_holder</a>(
+            issuer,
+            &<b>mut</b> mo_holder.holder,
+            top_up_amount);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_deposit_from_issuer"></a>
+
+## Function `deposit_from_issuer`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver: &signer, issuer_address: address, asset_type_id: u64, amount: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver: &signer,
+                        issuer_address: address,
+                        asset_type_id: u64,
+                        amount: u64
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
+    <b>if</b> (asset_type_id == 0) {
+        <b>let</b> mo_holder =
+            borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+                issuer_address);
+
+        <a href="AssetHolder.md#0x1_AssetHolder_deposit_default_issuer_token">AssetHolder::deposit_default_issuer_token</a>(receiver,
+                                                  &<b>mut</b> mo_holder.holder,
+                                                  amount);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_publish_money_orders"></a>
+
+## Function `publish_money_orders`
+
+Initialize the capability to issue money orders by publishing a MoneyOrders
+resource. MoneyOrderHolder
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(issuer: &signer, public_key: vector&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(issuer: &signer,
+                                public_key: vector&lt;u8&gt;,
+) {
+    move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+        batches: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
+        public_key: public_key,
+        issued_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(issuer),
+        canceled_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_CanceledMoneyOrderEvent">CanceledMoneyOrderEvent</a>&gt;(issuer),
+        redeemed_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a>&gt;(issuer),
+    });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_initialize"></a>
+
+## Function `initialize`
+
+Can only be called during genesis with libra root account.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_initialize">initialize</a>(lr_account: &signer)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_initialize">initialize</a>(lr_account: &signer
+) {
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_genesis">LibraTimestamp::assert_genesis</a>();
+
+    // Initialize money order asset holder for all asset type ids.
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 0);
+
+    // Publish <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> <b>resource</b> w. some fixed <b>public</b> key.
+    <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(lr_account,
+                         x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1");
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x1_MoneyOrder_money_order_descriptor"></a>
 
 ## Function `money_order_descriptor`
@@ -393,74 +556,12 @@
 ): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
     <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
         amount: amount,
+        asset_type_id: 1,
         issuer_address: issuer_address,
         batch_index: batch_index,
         order_index: order_index,
         user_public_key: user_public_key
     }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_mint_money_order_coin"></a>
-
-## Function `mint_money_order_coin`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_mint_money_order_coin">mint_money_order_coin</a>(amount: u64, issuer_address: address): <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrder::MoneyOrderCoin</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_mint_money_order_coin">mint_money_order_coin</a>(amount: u64,
-                          issuer_address: address,
-): <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a> {
-    <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a> {
-        amount: amount,
-        issuer_address: issuer_address,
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_initialize_money_orders"></a>
-
-## Function `initialize_money_orders`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_orders">initialize_money_orders</a>(issuer: &signer, public_key: vector&lt;u8&gt;, starting_balance: u64)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_orders">initialize_money_orders</a>(issuer: &signer,
-                                   public_key: vector&lt;u8&gt;,
-                                   starting_balance: u64,
-) {
-    move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-        batches: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
-        public_key: public_key,
-        balance: <a href="#0x1_MoneyOrder_mint_money_order_coin">mint_money_order_coin</a>(starting_balance, <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer)),
-        issued_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(issuer),
-        canceled_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_CanceledMoneyOrderEvent">CanceledMoneyOrderEvent</a>&gt;(issuer),
-        redeemed_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a>&gt;(issuer),
-    });
 }
 </code></pre>
 
@@ -806,175 +907,6 @@
 
 </details>
 
-<a name="0x1_MoneyOrder_redeem_money_order"></a>
-
-## Function `redeem_money_order`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_redeem_money_order">redeem_money_order</a>(receiver: &signer, money_order_descriptor: <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrder::MoneyOrderDescriptor</a>, issuer_signature: vector&lt;u8&gt;, user_signature: vector&lt;u8&gt;): <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrder::MoneyOrderCoin</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_redeem_money_order">redeem_money_order</a>(receiver: &signer,
-                              money_order_descriptor: <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a>,
-                              issuer_signature: vector&lt;u8&gt;,
-                              user_signature: vector&lt;u8&gt;,
-): <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a> <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <a href="#0x1_MoneyOrder_verify_user_signature">verify_user_signature</a>(receiver,
-                          *&money_order_descriptor,
-                          user_signature,
-                          b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
-    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
-
-    <b>let</b> issuer_address = money_order_descriptor.issuer_address;
-    <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
-    <b>let</b> order_batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches,
-                                         money_order_descriptor.batch_index);
-
-    // Verify that money order is not expired.
-    <b>assert</b>(!<a href="#0x1_MoneyOrder_time_expired">time_expired</a>(order_batch.expiration_time), 8001);
-
-    // Update the status bit, verify that it was 0.
-    <b>assert</b>(!<a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(&<b>mut</b> order_batch.order_status,
-                                     money_order_descriptor.order_index), 8003);
-
-    // Actually withdraw the coins from issuer's account.
-    <b>let</b> issuer_coin_value = &<b>mut</b> orders.balance.amount;
-    // orders.balance.issuer == money_order_descriptor.issuer, issuer's MOCoin.
-    <b>assert</b>(*issuer_coin_value &gt;= money_order_descriptor.amount, 8004);
-    *issuer_coin_value = *issuer_coin_value - money_order_descriptor.amount;
-
-    // Log a redeemed event.
-    <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>&lt;<a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a>&gt;(
-        &<b>mut</b> orders.redeemed_events,
-        <a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a> {
-            amount: money_order_descriptor.amount,
-            batch_index: money_order_descriptor.batch_index,
-            order_index: money_order_descriptor.order_index,
-        }
-    );
-
-    <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a> {
-        amount: money_order_descriptor.amount,
-        issuer_address: issuer_address,
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_index_of_coin"></a>
-
-## Function `index_of_coin`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_index_of_coin">index_of_coin</a>(coins_vector: &vector&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrder::MoneyOrderCoin</a>&gt;, issuer_address: address): (bool, u64)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_index_of_coin">index_of_coin</a>(coins_vector: &vector&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>&gt;,
-                  issuer_address: address,
-): (bool, u64) {
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; <a href="Vector.md#0x1_Vector_length">Vector::length</a>(coins_vector)) {
-        <b>let</b> coin = <a href="Vector.md#0x1_Vector_borrow">Vector::borrow</a>(coins_vector, i);
-        <b>if</b> (coin.issuer_address == issuer_address) <b>return</b> (<b>true</b>, i);
-        i = i + 1;
-    };
-    (<b>false</b>, 0)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_money_order_coin_balance"></a>
-
-## Function `money_order_coin_balance`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_coin_balance">money_order_coin_balance</a>(sender: &signer, issuer_address: address): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_coin_balance">money_order_coin_balance</a>(sender: &signer,
-                                    issuer_address: address,
-) : u64 <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a> {
-    <b>let</b> sender_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(sender);
-
-    <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(sender_address)) <b>return</b> 0;
-
-    <b>let</b> coins_vec = borrow_global&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(sender_address);
-    <b>let</b> (found, coin_index) = <a href="#0x1_MoneyOrder_index_of_coin">index_of_coin</a>(&coins_vec.coins,
-                                            issuer_address);
-    <b>if</b> (!found) <b>return</b> 0;
-
-    <b>let</b> target_coin = <a href="Vector.md#0x1_Vector_borrow">Vector::borrow</a>(&coins_vec.coins, coin_index);
-    target_coin.amount
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_init_coins_money_order"></a>
-
-## Function `init_coins_money_order`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_init_coins_money_order">init_coins_money_order</a>(receiver: &signer)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_init_coins_money_order">init_coins_money_order</a>(receiver: &signer)
-     {
-
-    <b>let</b> receiver_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver);
-
-    // Get receiver's storage of <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>, currently a <a href="Vector.md#0x1_Vector">Vector</a>. Publish an
-    // empty <a href="Vector.md#0x1_Vector">Vector</a>&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>&gt; <b>if</b> none exists at receiver's account yet.
-    // TODO: Switch <b>to</b> a Map when that exists <b>to</b> merge coins based on address.
-    <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(receiver_address)) {
-        move_to(receiver, <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a> {
-            coins: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
-        });
-    };
-
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_MoneyOrder_deposit_money_order"></a>
 
 ## Function `deposit_money_order`
@@ -994,40 +926,43 @@
                                money_order_descriptor: <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a>,
                                issuer_signature: vector&lt;u8&gt;,
                                user_signature: vector&lt;u8&gt;,
-) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <b>let</b> <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a> { amount, issuer_address } =
-        <a href="#0x1_MoneyOrder_redeem_money_order">redeem_money_order</a>(receiver,
-                           money_order_descriptor,
-                           issuer_signature,
-                           user_signature);
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+    <a href="#0x1_MoneyOrder_verify_user_signature">verify_user_signature</a>(receiver,
+                          *&money_order_descriptor,
+                          user_signature,
+                          b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
+    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
 
-    <b>let</b> receiver_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver);
+    <b>let</b> issuer_address = money_order_descriptor.issuer_address;
+    <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
+    <b>let</b> order_batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches,
+                                         money_order_descriptor.batch_index);
 
-    // Get receiver's storage of <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>, currently a <a href="Vector.md#0x1_Vector">Vector</a>. Publish an
-    // empty <a href="Vector.md#0x1_Vector">Vector</a>&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>&gt; <b>if</b> none exists at receiver's account yet.
-    // TODO: Switch <b>to</b> a Map when that exists <b>to</b> merge coins based on address.
-    <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(receiver_address)) {
-        move_to(receiver, <a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a> {
-            coins: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
-        });
-    };
-    <b>let</b> receiver_vec =
-        borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderCoinVector">MoneyOrderCoinVector</a>&gt;(receiver_address);
+    // Verify that money order is not expired.
+    <b>assert</b>(!<a href="#0x1_MoneyOrder_time_expired">time_expired</a>(order_batch.expiration_time), 8001);
 
-    <b>let</b> (found, coin_index) = <a href="#0x1_MoneyOrder_index_of_coin">index_of_coin</a>(&receiver_vec.coins,
-                                            issuer_address);
-    <b>if</b> (!found)
-    {
-        coin_index = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&receiver_vec.coins);
-        <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> receiver_vec.coins,
-                          <a href="#0x1_MoneyOrder_mint_money_order_coin">mint_money_order_coin</a>(0, issuer_address));
-    };
+    // Update the status bit, verify that it was 0.
+    <b>assert</b>(!<a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(&<b>mut</b> order_batch.order_status,
+                                     money_order_descriptor.order_index), 8003);
 
-    // Actually increment the <a href="#0x1_MoneyOrder_MoneyOrderCoin">MoneyOrderCoin</a>'s value (issued by issuer).
-    <b>let</b> target_coin = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> receiver_vec.coins,
-                                         coin_index);
-    <b>let</b> target_coin_value = &<b>mut</b> target_coin.amount;
-    *target_coin_value = *target_coin_value + amount;
+    // Actually withdraw the asset from issuer's account (<a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a>) and
+    // deposit <b>to</b> receiver's account (<b>as</b> determined by the convention
+    // of the asset type, e.g. <a href="Libra.md#0x1_Libra">Libra</a> will be deposited <b>to</b> Balance and
+    // <a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a> will be deposited <b>to</b> IssuerTokens).
+    <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver,
+                        issuer_address,
+                        0, // TODO: generalize
+                        money_order_descriptor.amount);
+
+     // Log a redeemed event.
+    <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>&lt;<a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a>&gt;(
+        &<b>mut</b> orders.redeemed_events,
+        <a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a> {
+            amount: money_order_descriptor.amount,
+            batch_index: money_order_descriptor.batch_index,
+            order_index: money_order_descriptor.order_index,
+        }
+    );
 }
 </code></pre>
 

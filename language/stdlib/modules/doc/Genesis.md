@@ -116,13 +116,12 @@
     // Mark that genesis has finished. This must appear <b>as</b> the last call.
     <a href="LibraTimestamp.md#0x1_LibraTimestamp_set_time_has_started">LibraTimestamp::set_time_has_started</a>(lr_account);
 
-    <a href="MoneyOrder.md#0x1_MoneyOrder_initialize_money_orders">MoneyOrder::initialize_money_orders</a>(
-        lr_account,
-        x"27274e2350dcddaa0398abdee291a1ac5d26ac83d9b1ce78200b9defaf2447c1",
-        100000
-        );
-    <a href="MoneyOrder.md#0x1_MoneyOrder_init_coins_money_order">MoneyOrder::init_coins_money_order</a>(lr_account);
+    // Initialize issuer tokens and asset holder before money orders.
+    <a href="IssuerToken.md#0x1_IssuerToken_initialize">IssuerToken::initialize</a>(lr_account);
+    <a href="AssetHolder.md#0x1_AssetHolder_initialize">AssetHolder::initialize</a>(lr_account);
 
+    // Initialize money orders.
+    <a href="MoneyOrder.md#0x1_MoneyOrder_initialize">MoneyOrder::initialize</a>(lr_account);
 }
 </code></pre>
 

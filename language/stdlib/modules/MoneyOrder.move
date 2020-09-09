@@ -48,10 +48,11 @@ address 0x1 {
             /// The redeemable amount with the given money order.
             amount: u64,
 
-            /// Type of asset with specific encoding, first 32 bits represent currency,
-            /// (e.g. 0 = IssuerToken, 1 = Libra), and second 32 bits represent
+            /// Type of asset with specific encoding, first 16 bits represent currency,
+            /// (e.g. 0 = IssuerToken, 1 = Libra), and second 16 bits represent
             /// specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
-            /// IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra).
+            /// IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra). Note: It's
+            /// u64 because u32 didn't exist.
             asset_type_id: u64,
 
             /// Address of the account that issued the given money order.
@@ -88,31 +89,44 @@ address 0x1 {
             holder: AssetHolder<AssetType>,
         }
 
-        public fun initialize_money_order_asset_holder(issuer: &signer,
-                                                       asset_type_id: u64,
-                                                       starting_amount: u64,
+        fun initialize_money_order_asset_holder(issuer: &signer,
+                                                asset_type_id: u64,
         ) {
+            if (asset_type_id == 0) {
+                move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
+                    holder: AssetHolder::create_default_issuer_token_holder(
+                        issuer,
+                        0),
+                });
+            };
+        }
+                                                
+        /// If it doesn't yet exist, initializes the asset holder for money orders -
+        /// i.e. the structure where the receivers will redeem their money orders from.
+        /// Then it adds top_up_amount of the specified asset (based on asset_type_id)
+        /// to the money order asset holder. Money order asset holder is just a wrapper
+        /// around AssetHolder that allows the MoneyOrder module to do access control
+        /// on withdrawal, while AssetHolder has methods to deal with different assets.
+        /// Asset_type_id is an integer that determines the type of asset stored
+        /// (e.g. whether it's Libra<Coin1>, IssuerToken<DefaultToken>, or some other
+        /// type or specialization). 
+        public fun top_up_money_order_asset_holder(issuer: &signer,
+                                                   asset_type_id: u64,
+                                                   top_up_amount: u64,
+        ) acquires MoneyOrderAssetHolder {
+            let issuer_address = Signer::address_of(issuer);
+
             // TODO: This dispatching itself can't be moved to AssetHolder because
             // the fact that AssetHolder APIs are called from MoneyOrders module
             // provides access control. TODO: However, the mapping from type_id to
             // the function calls for creation, loading & depositing assets maybe
             // could be re-used if language allows.
             if (asset_type_id == 0) {
-                move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
-                    holder: AssetHolder::create_default_issuer_token_holder(
-                        issuer,
-                        starting_amount),
-                });
-            };
-        }
-
-        public fun top_up_money_order_asset_holder(issuer: &signer,
-                                                   asset_type_id: u64,
-                                                   top_up_amount: u64,
-        ) acquires MoneyOrderAssetHolder {
-            let issuer_address = Signer::address_of(issuer);
-            
-            if (asset_type_id == 0) {
+                if (!exists<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                    issuer_address)) {
+                    initialize_money_order_asset_holder(issuer, asset_type_id);
+                };
+                
                 let mo_holder =
                     borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
                         issuer_address);
@@ -156,11 +170,12 @@ address 0x1 {
         }
 
         /// Can only be called during genesis with libra root account.
-        public fun initialize(lr_account: &signer) {
+        public fun initialize(lr_account: &signer
+        ) {
             LibraTimestamp::assert_genesis();
 
             // Initialize money order asset holder for all asset type ids.
-            initialize_money_order_asset_holder(lr_account, 0, 0);
+            initialize_money_order_asset_holder(lr_account, 0);
             
             // Publish MoneyOrders resource w. some fixed public key.
             publish_money_orders(lr_account,
