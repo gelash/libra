@@ -50,8 +50,9 @@ address 0x1 {
         }
 
         /// Takes IssuerToken<DefaultToken> from the AssetHolder on issuer's
-        /// account and deposits on receivers account (stored in IssuerTokens
-        /// struct). Note: For now, band for DefaultToken is always 0. 
+        /// account and deposits on receivers account (stored in the
+        /// IssuerTokenContainer struct).
+        /// Note: For now, band for DefaultToken is always 0. 
         public fun deposit_default_issuer_token(
             receiver: &signer,
             holder: &mut AssetHolder<IssuerToken<DefaultToken>>,

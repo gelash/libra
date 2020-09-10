@@ -144,8 +144,9 @@ account. Note: For now, band for DefaultToken is always 0.
 ## Function `deposit_default_issuer_token`
 
 Takes IssuerToken<DefaultToken> from the AssetHolder on issuer's
-account and deposits on receivers account (stored in IssuerTokens
-struct). Note: For now, band for DefaultToken is always 0.
+account and deposits on receivers account (stored in the
+IssuerTokenContainer struct).
+Note: For now, band for DefaultToken is always 0.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_AssetHolder_deposit_default_issuer_token">deposit_default_issuer_token</a>(receiver: &signer, holder: &<b>mut</b> <a href="#0x1_AssetHolder_AssetHolder">AssetHolder::AssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken_IssuerToken">IssuerToken::IssuerToken</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken_DefaultToken">IssuerToken::DefaultToken</a>&gt;&gt;, amount: u64)
