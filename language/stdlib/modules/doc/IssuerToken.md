@@ -7,6 +7,7 @@
 
 -  [Struct `DefaultToken`](#0x1_IssuerToken_DefaultToken)
 -  [Struct `MoneyOrderToken`](#0x1_IssuerToken_MoneyOrderToken)
+-  [Struct `BurnEvent`](#0x1_IssuerToken_BurnEvent)
 -  [Resource `IssuerToken`](#0x1_IssuerToken_IssuerToken)
 -  [Resource `IssuerTokens`](#0x1_IssuerToken_IssuerTokens)
 -  [Function `publish_issuer_tokens`](#0x1_IssuerToken_publish_issuer_tokens)
@@ -18,6 +19,9 @@
 -  [Function `split_issuer_token`](#0x1_IssuerToken_split_issuer_token)
 -  [Function `issuer_token_balance`](#0x1_IssuerToken_issuer_token_balance)
 -  [Function `deposit_issuer_token`](#0x1_IssuerToken_deposit_issuer_token)
+-  [Function `burn_to_issuer`](#0x1_IssuerToken_burn_to_issuer)
+-  [Function `burn_all_to_issuer`](#0x1_IssuerToken_burn_all_to_issuer)
+-  [Function `burn_issuer_token`](#0x1_IssuerToken_burn_issuer_token)
 
 
 
@@ -76,6 +80,55 @@ when that's not required, DefaultToken can be used instead).
 <dt>
 
 <code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x1_IssuerToken_BurnEvent"></a>
+
+## Struct `BurnEvent`
+
+
+
+<pre><code><b>struct</b> <a href="#0x1_IssuerToken_BurnEvent">BurnEvent</a>
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+
+<code>issuer_address: address</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+
+<code>band_id: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+
+<code>burnt_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+
+<code>left_amount: u64</code>
 </dt>
 <dd>
 
@@ -161,6 +214,14 @@ on accounts other than the issuer).
 <dd>
 
 </dd>
+<dt>
+
+<code>burn_events: <a href="Event.md#0x1_Event_EventHandle">Event::EventHandle</a>&lt;<a href="#0x1_IssuerToken_BurnEvent">IssuerToken::BurnEvent</a>&gt;</code>
+</dt>
+<dd>
+ Event stream for burning, and where
+<code><a href="#0x1_IssuerToken_BurnEvent">BurnEvent</a></code>s will be emitted.
+</dd>
 </dl>
 
 
@@ -189,6 +250,7 @@ to hold tokens of IssuerTokenType issued by other accounts.
     <b>if</b> (!exists&lt;<a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a>&lt;IssuerTokenType&gt;&gt;(sender_address)) {
         move_to(sender, <a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a>&lt;IssuerTokenType&gt; {
             issuer_tokens: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
+            burn_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_IssuerToken_BurnEvent">BurnEvent</a>&gt;(sender)
         });
     };
 }
@@ -487,6 +549,162 @@ if not already published on the receiver's account.
     <a href="#0x1_IssuerToken_merge_issuer_token">merge_issuer_token</a>(<a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> receiver_tokens.issuer_tokens,
                                           target_index),
                        issuer_token);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_IssuerToken_burn_to_issuer"></a>
+
+## Function `burn_to_issuer`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_to_issuer">burn_to_issuer</a>&lt;TokenType&gt;(sender: &signer, issuer_address: address, band_id: u64, to_burn: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_to_issuer">burn_to_issuer</a>&lt;TokenType&gt;(sender: &signer,
+issuer_address: address,
+band_id: u64,
+to_burn: u64,
+) <b>acquires</b> <a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a> {
+    <b>assert</b>(to_burn &gt; 0, 9000);
+    <b>let</b> sender_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(sender);
+    <b>assert</b>(exists&lt;<a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address), 9000);
+    <b>let</b> sender_tokens =
+        borrow_global_mut&lt;<a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address);
+
+    <b>let</b> (found, target_index) =
+        <a href="#0x1_IssuerToken_find_issuer_token">find_issuer_token</a>&lt;TokenType&gt;(&sender_tokens.issuer_tokens,
+                                     issuer_address,
+                                     band_id);
+    <b>assert</b>(found, 9000);
+    <b>let</b> issuer_token = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> sender_tokens.issuer_tokens, target_index);
+    <b>assert</b>(issuer_token.amount &gt;= to_burn, 9000);
+
+    <b>let</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {issuer_address,
+        band_id,
+        amount } = <a href="#0x1_IssuerToken_split_issuer_token">split_issuer_token</a>&lt;TokenType&gt;(issuer_token, to_burn);
+
+    <b>if</b> (issuer_token.amount == 0){
+        <b>let</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {issuer_address: _,
+            band_id: _,
+            amount: _ } = <a href="Vector.md#0x1_Vector_swap_remove">Vector::swap_remove</a>(&<b>mut</b> sender_tokens.issuer_tokens, target_index);
+    };
+
+    // emit burn events
+    <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>(
+        &<b>mut</b> sender_tokens.burn_events,
+        <a href="#0x1_IssuerToken_BurnEvent">BurnEvent</a> {
+            issuer_address: issuer_address,
+            band_id: band_id,
+            burnt_amount: to_burn,
+            left_amount: amount,
+        }
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_IssuerToken_burn_all_to_issuer"></a>
+
+## Function `burn_all_to_issuer`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_all_to_issuer">burn_all_to_issuer</a>&lt;TokenType&gt;(sender: &signer, issuer_address: address, band_id: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_all_to_issuer">burn_all_to_issuer</a>&lt;TokenType&gt;(sender: &signer,
+issuer_address: address,
+band_id: u64,
+) <b>acquires</b> <a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a> {
+    <b>let</b> total_amount = <a href="#0x1_IssuerToken_issuer_token_balance">issuer_token_balance</a>&lt;TokenType&gt;(sender, issuer_address, band_id);
+    <b>assert</b>(total_amount &gt; 0, 9000);
+    <a href="#0x1_IssuerToken_burn_to_issuer">burn_to_issuer</a>&lt;TokenType&gt;(sender, issuer_address, band_id, total_amount);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_IssuerToken_burn_issuer_token"></a>
+
+## Function `burn_issuer_token`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_issuer_token">burn_issuer_token</a>&lt;TokenType&gt;(sender: &signer, to_burn: <a href="#0x1_IssuerToken_IssuerToken">IssuerToken::IssuerToken</a>&lt;TokenType&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_burn_issuer_token">burn_issuer_token</a>&lt;TokenType&gt;(sender: &signer,
+to_burn: <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;,
+) <b>acquires</b> <a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a> {
+
+    <b>let</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {issuer_address, band_id, amount} = to_burn;
+    <b>let</b> sender_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(sender);
+
+    // Make sure that the burn_events handle exist
+    <a href="#0x1_IssuerToken_publish_issuer_tokens">publish_issuer_tokens</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;(sender);
+    <b>let</b> sender_tokens =
+    borrow_global_mut&lt;<a href="#0x1_IssuerToken_IssuerTokens">IssuerTokens</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address);
+    <b>let</b> (found, target_index) =
+        <a href="#0x1_IssuerToken_find_issuer_token">find_issuer_token</a>&lt;TokenType&gt;(&sender_tokens.issuer_tokens,
+            issuer_address,
+            band_id);
+
+    <b>let</b> left_amount = 0;
+    <b>if</b> (found){
+        <b>let</b> issuer_token = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> sender_tokens.issuer_tokens, target_index);
+        <b>if</b> (issuer_token.amount == amount){
+            // Remove the entry from vector <b>if</b> deleted entierly
+            <b>let</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {issuer_address: _,
+                band_id: _,
+                amount: _ } = <a href="Vector.md#0x1_Vector_swap_remove">Vector::swap_remove</a>(&<b>mut</b> sender_tokens.issuer_tokens, target_index);
+        } <b>else</b>{
+            // Update the vector entry <b>if</b> only some of the amount is burnt - TODO: is it a possible scenario?
+            <b>let</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {issuer_address: _,
+                band_id: _,
+                amount: residue } = <a href="#0x1_IssuerToken_split_issuer_token">split_issuer_token</a>&lt;TokenType&gt;(issuer_token, amount);
+            left_amount= residue;
+        };
+    };
+
+    // emit burn events
+    <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>(
+        &<b>mut</b> sender_tokens.burn_events,
+        <a href="#0x1_IssuerToken_BurnEvent">BurnEvent</a> {
+            issuer_address: issuer_address,
+            band_id: band_id,
+            burnt_amount: amount,
+            left_amount: left_amount,
+        }
+    );
+
 }
 </code></pre>
 

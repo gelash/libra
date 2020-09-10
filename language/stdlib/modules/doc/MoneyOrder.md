@@ -163,8 +163,8 @@ user when preparing the money order.
  Type of asset with specific encoding, first 16 bits represent currency,
  (e.g. 0 = IssuerToken, 1 = Libra), and second 16 bits represent
  specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
- IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra). Note: It's
- u64 because u32 didn't exist.
+ IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra).
+ TODO: convert to u32 full stack.
 </dd>
 <dt>
 
