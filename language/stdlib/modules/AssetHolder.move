@@ -4,10 +4,8 @@ address 0x1 {
     module AssetHolder {
         use 0x1::IssuerToken::{Self,
                                IssuerToken,
-                               DefaultToken,
-                               MoneyOrderToken};
+                               DefaultToken};
         use 0x1::LibraTimestamp;
-        use 0x1::Signer;
 
         resource struct AssetHolder<AssetType> {
             asset: AssetType,
@@ -27,23 +25,13 @@ address 0x1 {
             }
         }
         
-        fun publish_issuer_token_holder<TokenType>(sender: &signer,) {
-            let sender_address = Signer::address_of(sender);
-            
-            if (!exists<AssetHolder<IssuerToken<TokenType>>>(
-                sender_address)) {
-                move_to(sender,
-                        create_default_issuer_token_holder(sender, 0));
-            };
-        }
-
         /// Can only be called during genesis with libra root account.
         public fun initialize(lr_account: &signer) {
             LibraTimestamp::assert_genesis();
 
             // Publish for relevant IssuerToken types.
-            publish_issuer_token_holder<DefaultToken>(lr_account);
-            publish_issuer_token_holder<MoneyOrderToken>(lr_account);
+            move_to(lr_account,
+                    create_default_issuer_token_holder(lr_account, 0));
         }
 
         /// Adds IssuerToken<DefaultToken> to the AssetHolder on issuer's
@@ -69,11 +57,11 @@ address 0x1 {
             holder: &mut AssetHolder<IssuerToken<DefaultToken>>,
             amount: u64,
         ) {
-            // TODO: check receiver != issuer.
             let issuer_tokens =
                 IssuerToken::split_issuer_token<DefaultToken>(&mut holder.asset,
                                                               amount);
 
+            // This call also asserts that receiver != issuer
             IssuerToken::deposit_issuer_token<DefaultToken>(receiver,
                                                             issuer_tokens);
         }

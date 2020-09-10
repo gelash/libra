@@ -51,8 +51,8 @@ address 0x1 {
             /// Type of asset with specific encoding, first 16 bits represent currency,
             /// (e.g. 0 = IssuerToken, 1 = Libra), and second 16 bits represent
             /// specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
-            /// IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra). Note: It's
-            /// u64 because u32 didn't exist.
+            /// IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra).
+            /// TODO: convert to u32 full stack.
             asset_type_id: u64,
 
             /// Address of the account that issued the given money order.
@@ -186,6 +186,7 @@ address 0x1 {
         public fun money_order_descriptor(
             _sender: &signer,
             amount: u64,
+            asset_type_id: u64,
             issuer_address: address,
             batch_index: u64,
             order_index: u64,
@@ -193,7 +194,7 @@ address 0x1 {
         ): MoneyOrderDescriptor {
             MoneyOrderDescriptor {
                 amount: amount,
-                asset_type_id: 1,
+                asset_type_id: asset_type_id,
                 issuer_address: issuer_address,
                 batch_index: batch_index,
                 order_index: order_index,

@@ -4,6 +4,7 @@ script {
     /// TODO Some docs
     fun deposit_money_order(receiver: &signer,
                             amount: u64,
+                            asset_type_id: u64,
                             issuer: address,
                             batch_index: u64,
                             order_index: u64,
@@ -15,6 +16,7 @@ script {
                                         MoneyOrder::money_order_descriptor(
                                             receiver,
                                             amount,
+                                            asset_type_id,
                                             issuer,
                                             batch_index,
                                             order_index,

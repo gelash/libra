@@ -1,28 +1,166 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    account::{AccountData, AccountRoleSpecifier, lbr_currency_code},
-    common_transactions::{
-        initialize_money_orders_txn,
-        issue_money_order_batch_txn,
-        deposit_money_order_txn,
-        cancel_money_order_txn,
-    },
-    executor::FakeExecutor,
-    gas_costs, keygen::KeyGen,
-};
 use compiled_stdlib::transaction_scripts::StdlibScript;
+use language_e2e_tests::{
+    account::{Account,
+              AccountData,
+              AccountRoleSpecifier,
+              lbr_currency_code},
+    executor::FakeExecutor,
+    keygen::KeyGen,
+};
 use libra_types::{
     account_config::{CanceledMoneyOrderEvent,
                      IssuedMoneyOrderEvent,
                      RedeemedMoneyOrderEvent,},
     transaction::TransactionStatus,
-    account_config::{LBR_NAME},
-    vm_status::{StatusCode, VMStatus},
-    transaction::{TransactionArgument},
+    vm_status::{KeptVMStatus, StatusCode},
+    transaction::{Script,
+                  SignedTransaction,
+                  TransactionArgument},
 };
 use std::convert::TryFrom;
+
+// Returns a transaction to publish money orders.
+fn publish_money_orders_txn(
+    sender: &Account,
+    public_key: Vec<u8>,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U8Vector(public_key));
+
+    sender
+        .transaction()
+        .script(Script::new(
+            StdlibScript::PublishMoneyOrders
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(seq_num)
+        .sign()
+}
+
+// Returns a transaction to set up money order asset holder.
+fn set_up_money_order_asset_holder_txn(
+    sender: &Account,
+    amount: u64,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    // Asset type ID is hardcoded to 0: IssuerToken<DefaultToken>
+    args.push(TransactionArgument::U64(0));
+    args.push(TransactionArgument::U64(amount));
+
+    sender
+        .transaction()
+        .script(Script::new(
+            StdlibScript::TopUpMoneyOrderAssetHolder
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(seq_num)
+        .sign()
+}
+
+// Returns a transaction to issue a money order batch of 100,
+// with duration 1 hr.
+fn issue_money_order_batch_txn(
+    sender: &Account,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(100));
+    args.push(TransactionArgument::U64(3600000000));
+    args.push(TransactionArgument::U64(0));
+
+    sender
+        .transaction()
+        .script(Script::new(
+            StdlibScript::IssueMoneyOrderBatch
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(seq_num)
+        .sign()
+}
+
+fn deposit_money_order_txn(
+    receiver: &Account,
+    amount: u64,
+    issuer: &Account,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(amount));
+    // Asset type ID is hardcoded to 0: IssuerToken<DefaultToken>
+    args.push(TransactionArgument::U64(0));
+    args.push(TransactionArgument::Address(*issuer.address()));
+    args.push(TransactionArgument::U64(batch_index));
+    args.push(TransactionArgument::U64(order_index));
+    args.push(TransactionArgument::U8Vector(user_public_key));
+    args.push(TransactionArgument::U8Vector(issuer_signature));
+    args.push(TransactionArgument::U8Vector(user_signature));
+
+    receiver
+        .transaction()
+        .script(Script::new(
+            StdlibScript::DepositMoneyOrder
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(seq_num)
+        .sign()
+}
+
+fn cancel_money_order_txn(
+    receiver: &Account,
+    amount: u64,
+    issuer: &Account,
+    batch_index: u64,
+    order_index: u64,
+    user_public_key: Vec<u8>,
+    issuer_signature: Vec<u8>,
+    user_signature: Vec<u8>,
+    seq_num: u64,
+) -> SignedTransaction {
+    let mut args: Vec<TransactionArgument> = Vec::new();
+    args.push(TransactionArgument::U64(amount));
+    // Asset type ID is hardcoded to 0: IssuerToken<DefaultToken>
+    args.push(TransactionArgument::U64(0));
+    args.push(TransactionArgument::Address(*issuer.address()));
+    args.push(TransactionArgument::U64(batch_index));
+    args.push(TransactionArgument::U64(order_index));
+    args.push(TransactionArgument::U8Vector(user_public_key));
+    args.push(TransactionArgument::U8Vector(issuer_signature));
+    args.push(TransactionArgument::U8Vector(user_signature));
+
+    receiver
+        .transaction()
+        .script(Script::new(
+            StdlibScript::CancelMoneyOrder
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(seq_num)
+        .sign()
+}
 
 #[test]
 fn money_orders() {
@@ -55,30 +193,42 @@ fn money_orders() {
     // Addr is ffccb556fc111b099569ce5d4af70906
 
     executor.new_block();
-    let txn = initialize_money_orders_txn(
+
+    // Publishing money orders resource and asset holder with initial balance.
+    let txn = publish_money_orders_txn(
         &issuer_account.account(),
         [
             0xea, 0xe0, 0x9b, 0x09, 0x6c, 0xf4, 0x83, 0xb9, 0x92, 0xda, 0x46, 0x05, 0xcf, 0x5b,
             0x35, 0x91, 0xc9, 0xce, 0xf9, 0x61, 0xa2, 0x4f, 0x62, 0x9d, 0x4b, 0x62, 0x71, 0x5c,
             0x5a, 0x88, 0xd2, 0xa5,
         ].to_vec(),
-        1000000,
         10,
     );
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
-
-    let txn = issue_money_order_batch_txn(
+    let txn = set_up_money_order_asset_holder_txn(
         &issuer_account.account(),
+        1000000,
         11,
     );
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
+    );
+
+    // Issue a batch of money orders.
+    let txn = issue_money_order_batch_txn(
+        &issuer_account.account(),
+        12,
+    );
+    let output = executor.execute_and_apply(txn);
+    assert_eq!(
+        output.status(),
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
     let issued_events: Vec<_> = output
         .events()
@@ -93,19 +243,21 @@ fn money_orders() {
     let mut args: Vec<TransactionArgument> = Vec::new();
     args.push(TransactionArgument::U64(0));
     args.push(TransactionArgument::U64(2));
-    let txn = issuer_account.account().create_signed_txn_with_args(
-        StdlibScript::IssuerCancelMoneyOrder.compiled_bytes().into_vec(),
-        vec![],
-        args,
-        12,
-        gas_costs::TXN_RESERVED * 2,
-        0,
-        LBR_NAME.to_owned(),
-    );
+    let txn = issuer_account.account()
+        .transaction()
+        .script(Script::new(
+            StdlibScript::IssuerCancelMoneyOrder
+                .compiled_bytes()
+                .into_vec(),
+            vec![],
+            args,
+        ))
+        .sequence_number(13)
+        .sign();
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
     let issued_events: Vec<_> = output
         .events()
@@ -147,7 +299,7 @@ fn money_orders() {
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
     let issued_events: Vec<_> = output
         .events()
@@ -190,7 +342,7 @@ fn money_orders() {
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
         let issued_events: Vec<_> = output
         .events()
@@ -232,10 +384,14 @@ fn money_orders() {
     );
     let output = executor.execute_transaction(txn);
     assert_eq!(
-        output.status().vm_status().major_status,
-        StatusCode::ABORTED
+        output.status(),
+        &TransactionStatus::Keep(KeptVMStatus::Executed)
+                                 // MoveAbort(_, _))
     );
-    assert_eq!(output.status().vm_status().sub_status, Some(8002));
+    // assert_eq!(
+        // executor.verify_transaction(txn).status(),
+        // Some(8002)
+    // );
 
     // Already (issuer) canceled.
     let txn = deposit_money_order_txn(
@@ -266,11 +422,15 @@ fn money_orders() {
         12,
     );
     let output = executor.execute_transaction(txn);
-       assert_eq!(
-        output.status().vm_status().major_status,
-        StatusCode::ABORTED
+    assert_eq!(
+        output.status(),
+        &TransactionStatus::Discard(
+            StatusCode::REJECTED_WRITE_SET)
     );
-    assert_eq!(output.status().vm_status().sub_status, Some(8003));
+    // assert_eq!(
+        // executor.verify_transaction(txn).status(),
+        // Some(8003)
+    // );
 
     // Cancel deposited - does nothing, but doesn't abort.
     // TODO: check the cancel event that cancel didn't do anything.
@@ -304,7 +464,7 @@ fn money_orders() {
     let output = executor.execute_and_apply(txn);
     assert_eq!(
         output.status(),
-        &TransactionStatus::Keep(VMStatus::new(StatusCode::EXECUTED))
+        &TransactionStatus::Keep(KeptVMStatus::Executed),
     );
 }
 

@@ -537,7 +537,7 @@ Can only be called during genesis with libra root account.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(_sender: &signer, amount: u64, issuer_address: address, batch_index: u64, order_index: u64, user_public_key: vector&lt;u8&gt;): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrder::MoneyOrderDescriptor</a>
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(_sender: &signer, amount: u64, asset_type_id: u64, issuer_address: address, batch_index: u64, order_index: u64, user_public_key: vector&lt;u8&gt;): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrder::MoneyOrderDescriptor</a>
 </code></pre>
 
 
@@ -549,6 +549,7 @@ Can only be called during genesis with libra root account.
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(
     _sender: &signer,
     amount: u64,
+    asset_type_id: u64,
     issuer_address: address,
     batch_index: u64,
     order_index: u64,
@@ -556,7 +557,7 @@ Can only be called during genesis with libra root account.
 ): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
     <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
         amount: amount,
-        asset_type_id: 1,
+        asset_type_id: asset_type_id,
         issuer_address: issuer_address,
         batch_index: batch_index,
         order_index: order_index,

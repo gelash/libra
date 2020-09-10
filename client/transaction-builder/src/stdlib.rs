@@ -93,6 +93,7 @@ pub enum ScriptCall {
     /// Another doc.
     CancelMoneyOrder {
         amount: u64,
+        asset_type_id: u64,
         issuer: AccountAddress,
         batch_index: u64,
         order_index: u64,
@@ -179,6 +180,7 @@ pub enum ScriptCall {
     /// TODO Some docs
     DepositMoneyOrder {
         amount: u64,
+        asset_type_id: u64,
         issuer: AccountAddress,
         batch_index: u64,
         order_index: u64,
@@ -476,6 +478,7 @@ impl ScriptCall {
             } => encode_cancel_burn_script(token, preburn_address),
             CancelMoneyOrder {
                 amount,
+                asset_type_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -484,6 +487,7 @@ impl ScriptCall {
                 user_signature,
             } => encode_cancel_money_order_script(
                 amount,
+                asset_type_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -559,6 +563,7 @@ impl ScriptCall {
             ),
             DepositMoneyOrder {
                 amount,
+                asset_type_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -567,6 +572,7 @@ impl ScriptCall {
                 user_signature,
             } => encode_deposit_money_order_script(
                 amount,
+                asset_type_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -837,6 +843,7 @@ pub fn encode_cancel_burn_script(token: TypeTag, preburn_address: AccountAddress
 /// Another doc.
 pub fn encode_cancel_money_order_script(
     amount: u64,
+    asset_type_id: u64,
     issuer: AccountAddress,
     batch_index: u64,
     order_index: u64,
@@ -849,6 +856,7 @@ pub fn encode_cancel_money_order_script(
         vec![],
         vec![
             TransactionArgument::U64(amount),
+            TransactionArgument::U64(asset_type_id),
             TransactionArgument::Address(issuer),
             TransactionArgument::U64(batch_index),
             TransactionArgument::U64(order_index),
@@ -996,6 +1004,7 @@ pub fn encode_create_validator_operator_account_script(
 /// TODO Some docs
 pub fn encode_deposit_money_order_script(
     amount: u64,
+    asset_type_id: u64,
     issuer: AccountAddress,
     batch_index: u64,
     order_index: u64,
@@ -1008,6 +1017,7 @@ pub fn encode_deposit_money_order_script(
         vec![],
         vec![
             TransactionArgument::U64(amount),
+            TransactionArgument::U64(asset_type_id),
             TransactionArgument::Address(issuer),
             TransactionArgument::U64(batch_index),
             TransactionArgument::U64(order_index),
@@ -1537,12 +1547,13 @@ fn decode_cancel_burn_script(script: &Script) -> Option<ScriptCall> {
 fn decode_cancel_money_order_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::CancelMoneyOrder {
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
-        issuer: decode_address_argument(script.args().get(1)?.clone())?,
-        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
-        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
-        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
-        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
-        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        asset_type_id: decode_u64_argument(script.args().get(1)?.clone())?,
+        issuer: decode_address_argument(script.args().get(2)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(3)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(4)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(5)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(7)?.clone())?,
     })
 }
 
@@ -1603,12 +1614,13 @@ fn decode_create_validator_operator_account_script(script: &Script) -> Option<Sc
 fn decode_deposit_money_order_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::DepositMoneyOrder {
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
-        issuer: decode_address_argument(script.args().get(1)?.clone())?,
-        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
-        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
-        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
-        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
-        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        asset_type_id: decode_u64_argument(script.args().get(1)?.clone())?,
+        issuer: decode_address_argument(script.args().get(2)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(3)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(4)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(5)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(7)?.clone())?,
     })
 }
 
@@ -2085,15 +2097,15 @@ const CANCEL_BURN_CODE: &[u8] = &[
 ];
 
 const CANCEL_MONEY_ORDER_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 37, 7, 53, 74, 8, 127, 16,
-    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 1, 1, 6, 6, 12,
-    3, 5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 0, 10, 77, 111, 110,
-    101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101,
-    115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110, 99, 101, 108, 95, 109, 111, 110, 101,
-    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
-    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 4, 5, 13, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 1,
-    2,
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 39, 7, 55, 74, 8, 129, 1,
+    16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 1, 1, 7, 6,
+    12, 3, 3, 5, 3, 3, 10, 2, 1, 8, 0, 9, 6, 12, 3, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 0, 10, 77,
+    111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114,
+    68, 101, 115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110, 99, 101, 108, 95, 109, 111,
+    110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100,
+    101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 4, 5, 14, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 10, 5, 11, 6, 17, 1, 11,
+    7, 11, 8, 17, 0, 1, 2,
 ];
 
 const CREATE_CHILD_VASP_ACCOUNT_CODE: &[u8] = &[
@@ -2167,14 +2179,15 @@ const CREATE_VALIDATOR_OPERATOR_ACCOUNT_CODE: &[u8] = &[
 ];
 
 const DEPOSIT_MONEY_ORDER_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 35, 7, 51, 75, 8, 126, 16,
-    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 6, 6, 12, 3,
-    5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10, 77, 111, 110, 101, 121,
-    79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101, 115, 99,
-    114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111, 115, 105, 116, 95, 109, 111, 110, 101,
-    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
-    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 4, 1, 12, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 2,
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 37, 7, 53, 75, 8, 128, 1,
+    16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 7, 6, 12,
+    3, 3, 5, 3, 3, 10, 2, 1, 8, 0, 9, 6, 12, 3, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10, 77, 111, 110,
+    101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101,
+    115, 99, 114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111, 115, 105, 116, 95, 109, 111,
+    110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100,
+    101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 4, 1, 13, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 10, 5, 11, 6, 17, 1, 11,
+    7, 11, 8, 17, 0, 2,
 ];
 
 const FREEZE_ACCOUNT_CODE: &[u8] = &[

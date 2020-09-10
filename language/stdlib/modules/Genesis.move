@@ -118,15 +118,15 @@ module Genesis {
         LibraAccount::rotate_authentication_key(&tc_rotate_key_cap, tc_auth_key);
         LibraAccount::restore_key_rotation_capability(tc_rotate_key_cap);
 
-        // Mark that genesis has finished. This must appear as the last call.
-        LibraTimestamp::set_time_has_started(lr_account);
-
         // Initialize issuer tokens and asset holder before money orders.
         IssuerToken::initialize(lr_account);
         AssetHolder::initialize(lr_account);
 
         // Initialize money orders.
         MoneyOrder::initialize(lr_account);
+        
+        // Mark that genesis has finished. This must appear as the last call.
+        LibraTimestamp::set_time_has_started(lr_account);
     }
 
 }
