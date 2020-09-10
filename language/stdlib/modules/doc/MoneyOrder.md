@@ -157,14 +157,19 @@ user when preparing the money order.
 </dd>
 <dt>
 
-<code>asset_type_id: u64</code>
+<code>asset_type_id: u8</code>
 </dt>
 <dd>
- Type of asset with specific encoding, first 16 bits represent currency,
- (e.g. 0 = IssuerToken, 1 = Libra), and second 16 bits represent
- specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
- IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra). Note: It's
- u64 because u32 didn't exist.
+ Type of asset with specific encoding, first 16 bits represent
+ currency, (e.g. 0 = IssuerToken, 1 = Libra).
+</dd>
+<dt>
+
+<code>asset_specialization_id: u8</code>
+</dt>
+<dd>
+ Specializations (e.g. 0 = DefaultToken, 1 = MoneyOrderToken for
+ IssuerToken and (0 = Coin1, 1 = Coin2, 2 = LBR for Libra).
 </dd>
 <dt>
 
@@ -345,7 +350,7 @@ user when preparing the money order.
 
 
 
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u64)
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u8, asset_specialization_id: u8)
 </code></pre>
 
 
@@ -355,9 +360,10 @@ user when preparing the money order.
 
 
 <pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer: &signer,
-                                        asset_type_id: u64,
+                                        asset_type_id: u8,
+                                        asset_specialization_id: u8,
 ) {
-    <b>if</b> (asset_type_id == 0) {
+    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
         move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt; {
             holder: <a href="AssetHolder.md#0x1_AssetHolder_create_default_issuer_token_holder">AssetHolder::create_default_issuer_token_holder</a>(
                 issuer,
@@ -377,16 +383,16 @@ user when preparing the money order.
 
 If it doesn't yet exist, initializes the asset holder for money orders -
 i.e. the structure where the receivers will redeem their money orders from.
-Then it adds top_up_amount of the specified asset (based on asset_type_id)
-to the money order asset holder. Money order asset holder is just a wrapper
-around AssetHolder that allows the MoneyOrder module to do access control
-on withdrawal, while AssetHolder has methods to deal with different assets.
-Asset_type_id is an integer that determines the type of asset stored
+Then it adds top_up_amount of the specified asset to the money order
+asset holder. Money order asset holder is just a wrapper around AssetHolder
+that allows the MoneyOrder module to do access control on withdrawal,
+while AssetHolder has methods to deal with different assets.
+Asset_type_id and asset_specialization_id determine the store asset
 (e.g. whether it's Libra<Coin1>, IssuerToken<DefaultToken>, or some other
 type or specialization).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_asset_holder">top_up_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u64, top_up_amount: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_asset_holder">top_up_money_order_asset_holder</a>(issuer: &signer, asset_type_id: u8, asset_specialization_id: u8, top_up_amount: u64)
 </code></pre>
 
 
@@ -396,7 +402,8 @@ type or specialization).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_asset_holder">top_up_money_order_asset_holder</a>(issuer: &signer,
-                                           asset_type_id: u64,
+                                           asset_type_id: u8,
+                                           asset_specialization_id: u8,
                                            top_up_amount: u64,
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
     <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
@@ -406,10 +413,12 @@ type or specialization).
     // provides access control. TODO: However, the mapping from type_id <b>to</b>
     // the function calls for creation, loading & depositing assets maybe
     // could be re-used <b>if</b> language allows.
-    <b>if</b> (asset_type_id == 0) {
+    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
         <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
             issuer_address)) {
-            <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer, asset_type_id);
+            <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer,
+                                                asset_type_id,
+                                                asset_specialization_id);
         };
 
         <b>let</b> mo_holder =
@@ -434,7 +443,7 @@ type or specialization).
 
 
 
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver: &signer, issuer_address: address, asset_type_id: u64, amount: u64)
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver: &signer, issuer_address: address, asset_type_id: u8, asset_specialization_id: u8, amount: u64)
 </code></pre>
 
 
@@ -445,10 +454,11 @@ type or specialization).
 
 <pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver: &signer,
                         issuer_address: address,
-                        asset_type_id: u64,
+                        asset_type_id: u8,
+                        asset_specialization_id: u8,
                         amount: u64
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
-    <b>if</b> (asset_type_id == 0) {
+    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
         <b>let</b> mo_holder =
             borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
                 issuer_address);
@@ -519,7 +529,7 @@ Can only be called during genesis with libra root account.
     <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_genesis">LibraTimestamp::assert_genesis</a>();
 
     // Initialize money order asset holder for all asset type ids.
-    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 0);
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 0, 0);
 
     // Publish <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> <b>resource</b> w. some fixed <b>public</b> key.
     <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(lr_account,
@@ -537,7 +547,7 @@ Can only be called during genesis with libra root account.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(_sender: &signer, amount: u64, issuer_address: address, batch_index: u64, order_index: u64, user_public_key: vector&lt;u8&gt;): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrder::MoneyOrderDescriptor</a>
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(_sender: &signer, amount: u64, asset_type_id: u8, asset_specialization_id: u8, issuer_address: address, batch_index: u64, order_index: u64, user_public_key: vector&lt;u8&gt;): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrder::MoneyOrderDescriptor</a>
 </code></pre>
 
 
@@ -549,6 +559,8 @@ Can only be called during genesis with libra root account.
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_money_order_descriptor">money_order_descriptor</a>(
     _sender: &signer,
     amount: u64,
+    asset_type_id: u8,
+    asset_specialization_id: u8,
     issuer_address: address,
     batch_index: u64,
     order_index: u64,
@@ -556,7 +568,8 @@ Can only be called during genesis with libra root account.
 ): <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
     <a href="#0x1_MoneyOrder_MoneyOrderDescriptor">MoneyOrderDescriptor</a> {
         amount: amount,
-        asset_type_id: 1,
+        asset_type_id: asset_type_id,
+        asset_specialization_id: asset_specialization_id,
         issuer_address: issuer_address,
         batch_index: batch_index,
         order_index: order_index,
@@ -951,6 +964,7 @@ Can only be called during genesis with libra root account.
     // <a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a> will be deposited <b>to</b> IssuerTokens).
     <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver,
                         issuer_address,
+                        0, // TODO: generalize
                         0, // TODO: generalize
                         money_order_descriptor.amount);
 

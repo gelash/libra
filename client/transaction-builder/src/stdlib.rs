@@ -89,10 +89,11 @@ pub enum ScriptCall {
         preburn_address: AccountAddress,
     },
 
-    /// A doc to make the test not fail TODO.
-    /// Another doc.
+    /// TODO: docs.
     CancelMoneyOrder {
         amount: u64,
+        asset_type_id: u8,
+        asset_specialization_id: u8,
         issuer: AccountAddress,
         batch_index: u64,
         order_index: u64,
@@ -179,6 +180,8 @@ pub enum ScriptCall {
     /// TODO Some docs
     DepositMoneyOrder {
         amount: u64,
+        asset_type_id: u8,
+        asset_specialization_id: u8,
         issuer: AccountAddress,
         batch_index: u64,
         order_index: u64,
@@ -392,11 +395,12 @@ pub enum ScriptCall {
         tier_index: u64,
     },
 
-    /// For now, we receive and forward asset_type_id (as u64), as it's
-    /// stored (compactly) in 4 bytes in every money order anyway
-    /// according to a fixed convention. Note: explore using TypeTags.
+    /// For now, we receive and forward asset_type_id and
+    /// asset_specialization_id. These are stored in every money order
+    /// Note: explore using TypeTags.
     TopUpMoneyOrderAssetHolder {
-        asset_type_id: u64,
+        asset_type_id: u8,
+        asset_specialization_id: u8,
         top_up_amount: u64,
     },
 
@@ -476,6 +480,8 @@ impl ScriptCall {
             } => encode_cancel_burn_script(token, preburn_address),
             CancelMoneyOrder {
                 amount,
+                asset_type_id,
+                asset_specialization_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -484,6 +490,8 @@ impl ScriptCall {
                 user_signature,
             } => encode_cancel_money_order_script(
                 amount,
+                asset_type_id,
+                asset_specialization_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -559,6 +567,8 @@ impl ScriptCall {
             ),
             DepositMoneyOrder {
                 amount,
+                asset_type_id,
+                asset_specialization_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -567,6 +577,8 @@ impl ScriptCall {
                 user_signature,
             } => encode_deposit_money_order_script(
                 amount,
+                asset_type_id,
+                asset_specialization_id,
                 issuer,
                 batch_index,
                 order_index,
@@ -697,8 +709,13 @@ impl ScriptCall {
             ),
             TopUpMoneyOrderAssetHolder {
                 asset_type_id,
+                asset_specialization_id,
                 top_up_amount,
-            } => encode_top_up_money_order_asset_holder_script(asset_type_id, top_up_amount),
+            } => encode_top_up_money_order_asset_holder_script(
+                asset_type_id,
+                asset_specialization_id,
+                top_up_amount,
+            ),
             UnfreezeAccount {
                 sliding_nonce,
                 to_unfreeze_account,
@@ -833,10 +850,11 @@ pub fn encode_cancel_burn_script(token: TypeTag, preburn_address: AccountAddress
     )
 }
 
-/// A doc to make the test not fail TODO.
-/// Another doc.
+/// TODO: docs.
 pub fn encode_cancel_money_order_script(
     amount: u64,
+    asset_type_id: u8,
+    asset_specialization_id: u8,
     issuer: AccountAddress,
     batch_index: u64,
     order_index: u64,
@@ -849,6 +867,8 @@ pub fn encode_cancel_money_order_script(
         vec![],
         vec![
             TransactionArgument::U64(amount),
+            TransactionArgument::U8(asset_type_id),
+            TransactionArgument::U8(asset_specialization_id),
             TransactionArgument::Address(issuer),
             TransactionArgument::U64(batch_index),
             TransactionArgument::U64(order_index),
@@ -996,6 +1016,8 @@ pub fn encode_create_validator_operator_account_script(
 /// TODO Some docs
 pub fn encode_deposit_money_order_script(
     amount: u64,
+    asset_type_id: u8,
+    asset_specialization_id: u8,
     issuer: AccountAddress,
     batch_index: u64,
     order_index: u64,
@@ -1008,6 +1030,8 @@ pub fn encode_deposit_money_order_script(
         vec![],
         vec![
             TransactionArgument::U64(amount),
+            TransactionArgument::U8(asset_type_id),
+            TransactionArgument::U8(asset_specialization_id),
             TransactionArgument::Address(issuer),
             TransactionArgument::U64(batch_index),
             TransactionArgument::U64(order_index),
@@ -1387,18 +1411,20 @@ pub fn encode_tiered_mint_script(
     )
 }
 
-/// For now, we receive and forward asset_type_id (as u64), as it's
-/// stored (compactly) in 4 bytes in every money order anyway
-/// according to a fixed convention. Note: explore using TypeTags.
+/// For now, we receive and forward asset_type_id and
+/// asset_specialization_id. These are stored in every money order
+/// Note: explore using TypeTags.
 pub fn encode_top_up_money_order_asset_holder_script(
-    asset_type_id: u64,
+    asset_type_id: u8,
+    asset_specialization_id: u8,
     top_up_amount: u64,
 ) -> Script {
     Script::new(
         TOP_UP_MONEY_ORDER_ASSET_HOLDER_CODE.to_vec(),
         vec![],
         vec![
-            TransactionArgument::U64(asset_type_id),
+            TransactionArgument::U8(asset_type_id),
+            TransactionArgument::U8(asset_specialization_id),
             TransactionArgument::U64(top_up_amount),
         ],
     )
@@ -1537,12 +1563,14 @@ fn decode_cancel_burn_script(script: &Script) -> Option<ScriptCall> {
 fn decode_cancel_money_order_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::CancelMoneyOrder {
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
-        issuer: decode_address_argument(script.args().get(1)?.clone())?,
-        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
-        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
-        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
-        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
-        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        asset_type_id: decode_u8_argument(script.args().get(1)?.clone())?,
+        asset_specialization_id: decode_u8_argument(script.args().get(2)?.clone())?,
+        issuer: decode_address_argument(script.args().get(3)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(4)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(5)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(7)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(8)?.clone())?,
     })
 }
 
@@ -1603,12 +1631,14 @@ fn decode_create_validator_operator_account_script(script: &Script) -> Option<Sc
 fn decode_deposit_money_order_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::DepositMoneyOrder {
         amount: decode_u64_argument(script.args().get(0)?.clone())?,
-        issuer: decode_address_argument(script.args().get(1)?.clone())?,
-        batch_index: decode_u64_argument(script.args().get(2)?.clone())?,
-        order_index: decode_u64_argument(script.args().get(3)?.clone())?,
-        user_public_key: decode_u8vector_argument(script.args().get(4)?.clone())?,
-        issuer_signature: decode_u8vector_argument(script.args().get(5)?.clone())?,
-        user_signature: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        asset_type_id: decode_u8_argument(script.args().get(1)?.clone())?,
+        asset_specialization_id: decode_u8_argument(script.args().get(2)?.clone())?,
+        issuer: decode_address_argument(script.args().get(3)?.clone())?,
+        batch_index: decode_u64_argument(script.args().get(4)?.clone())?,
+        order_index: decode_u64_argument(script.args().get(5)?.clone())?,
+        user_public_key: decode_u8vector_argument(script.args().get(6)?.clone())?,
+        issuer_signature: decode_u8vector_argument(script.args().get(7)?.clone())?,
+        user_signature: decode_u8vector_argument(script.args().get(8)?.clone())?,
     })
 }
 
@@ -1772,8 +1802,9 @@ fn decode_tiered_mint_script(script: &Script) -> Option<ScriptCall> {
 
 fn decode_top_up_money_order_asset_holder_script(script: &Script) -> Option<ScriptCall> {
     Some(ScriptCall::TopUpMoneyOrderAssetHolder {
-        asset_type_id: decode_u64_argument(script.args().get(0)?.clone())?,
-        top_up_amount: decode_u64_argument(script.args().get(1)?.clone())?,
+        asset_type_id: decode_u8_argument(script.args().get(0)?.clone())?,
+        asset_specialization_id: decode_u8_argument(script.args().get(1)?.clone())?,
+        top_up_amount: decode_u64_argument(script.args().get(2)?.clone())?,
     })
 }
 
@@ -1997,6 +2028,13 @@ fn decode_bool_argument(arg: TransactionArgument) -> Option<bool> {
     }
 }
 
+fn decode_u8_argument(arg: TransactionArgument) -> Option<u8> {
+    match arg {
+        TransactionArgument::U8(value) => Some(value),
+        _ => None,
+    }
+}
+
 fn decode_u64_argument(arg: TransactionArgument) -> Option<u64> {
     match arg {
         TransactionArgument::U64(value) => Some(value),
@@ -2085,15 +2123,15 @@ const CANCEL_BURN_CODE: &[u8] = &[
 ];
 
 const CANCEL_MONEY_ORDER_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 37, 7, 53, 74, 8, 127, 16,
-    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 1, 1, 6, 6, 12,
-    3, 5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 0, 10, 77, 111, 110,
-    101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101,
-    115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110, 99, 101, 108, 95, 109, 111, 110, 101,
-    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
-    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 4, 5, 13, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 1,
-    2,
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 41, 7, 57, 74, 8, 131, 1,
+    16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 1, 1, 8, 6,
+    12, 3, 2, 2, 5, 3, 3, 10, 2, 1, 8, 0, 10, 6, 12, 3, 2, 2, 5, 3, 3, 10, 2, 10, 2, 10, 2, 0, 10,
+    77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101,
+    114, 68, 101, 115, 99, 114, 105, 112, 116, 111, 114, 18, 99, 97, 110, 99, 101, 108, 95, 109,
+    111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114,
+    100, 101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 0, 4, 5, 15, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 10, 5, 10, 6, 11,
+    7, 17, 1, 11, 8, 11, 9, 17, 0, 1, 2,
 ];
 
 const CREATE_CHILD_VASP_ACCOUNT_CODE: &[u8] = &[
@@ -2167,14 +2205,15 @@ const CREATE_VALIDATOR_OPERATOR_ACCOUNT_CODE: &[u8] = &[
 ];
 
 const DEPOSIT_MONEY_ORDER_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 35, 7, 51, 75, 8, 126, 16,
-    0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 6, 6, 12, 3,
-    5, 3, 3, 10, 2, 1, 8, 0, 8, 6, 12, 3, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10, 77, 111, 110, 101, 121,
-    79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 68, 101, 115, 99,
-    114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111, 115, 105, 116, 95, 109, 111, 110, 101,
-    121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95,
-    100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 4, 1, 12, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 11, 5, 17, 1, 11, 6, 11, 7, 17, 0, 2,
+    161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 10, 5, 16, 39, 7, 55, 75, 8, 130, 1,
+    16, 0, 0, 0, 1, 2, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 0, 4, 6, 12, 8, 0, 10, 2, 10, 2, 0, 8, 6, 12,
+    3, 2, 2, 5, 3, 3, 10, 2, 1, 8, 0, 10, 6, 12, 3, 2, 2, 5, 3, 3, 10, 2, 10, 2, 10, 2, 10, 77,
+    111, 110, 101, 121, 79, 114, 100, 101, 114, 20, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114,
+    68, 101, 115, 99, 114, 105, 112, 116, 111, 114, 19, 100, 101, 112, 111, 115, 105, 116, 95, 109,
+    111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 22, 109, 111, 110, 101, 121, 95, 111, 114,
+    100, 101, 114, 95, 100, 101, 115, 99, 114, 105, 112, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 0, 4, 1, 14, 10, 0, 11, 0, 10, 1, 10, 2, 10, 3, 10, 4, 10, 5, 10, 6, 11,
+    7, 17, 1, 11, 8, 11, 9, 17, 0, 2,
 ];
 
 const FREEZE_ACCOUNT_CODE: &[u8] = &[
@@ -2400,11 +2439,11 @@ const TIERED_MINT_CODE: &[u8] = &[
 ];
 
 const TOP_UP_MONEY_ORDER_ASSET_HOLDER_CODE: &[u8] = &[
-    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 43, 8, 56, 16, 0, 0, 0, 1,
-    0, 1, 0, 3, 6, 12, 3, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 31, 116, 111,
-    112, 95, 117, 112, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 97, 115, 115,
-    101, 116, 95, 104, 111, 108, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-    0, 1, 5, 11, 0, 10, 1, 10, 2, 17, 0, 2,
+    161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 7, 7, 14, 43, 8, 57, 16, 0, 0, 0, 1,
+    0, 1, 0, 4, 6, 12, 2, 2, 3, 0, 10, 77, 111, 110, 101, 121, 79, 114, 100, 101, 114, 31, 116,
+    111, 112, 95, 117, 112, 95, 109, 111, 110, 101, 121, 95, 111, 114, 100, 101, 114, 95, 97, 115,
+    115, 101, 116, 95, 104, 111, 108, 100, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 1, 6, 11, 0, 10, 1, 10, 2, 10, 3, 17, 0, 2,
 ];
 
 const UNFREEZE_ACCOUNT_CODE: &[u8] = &[

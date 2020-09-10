@@ -124,7 +124,6 @@ address 0x1 {
             *token_amount = *token_amount + amount;
         }
 
-        // TODO: caller should make sure to destroy 0?
         public fun split_issuer_token<TokenType>(
             issuer_token: &mut IssuerToken<TokenType>,
             amount: u64,

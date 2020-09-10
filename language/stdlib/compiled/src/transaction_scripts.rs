@@ -221,7 +221,6 @@ impl fmt::Display for StdlibScript {
                 CreateValidatorOperatorAccount => "create_validator_operator_account",
                 DepositMoneyOrder => "deposit_money_order",
                 FreezeAccount => "freeze_account",
-                InitializeMoneyOrders => "initialize_money_orders",
                 IssueMoneyOrder => "issue_money_order",
                 IssueMoneyOrderBatch => "issue_money_order_batch",
                 IssuerCancelMoneyOrder => "issuer_cancel_money_order", 

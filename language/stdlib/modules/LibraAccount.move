@@ -396,7 +396,7 @@ module LibraAccount {
     }
 
     /// Helper to withdraw `amount` from the given account balance and return the withdrawn Libra<Token>
-    fun withdraw_from_balance<Token>(
+    public fun withdraw_from_balance<Token>(
         payer: address,
         payee: address,
         balance: &mut Balance<Token>,
