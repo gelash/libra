@@ -765,7 +765,7 @@ Can only be called during genesis with libra root account.
     <b>assert</b>(<a href="Signature.md#0x1_Signature_ed25519_verify">Signature::ed25519_verify</a>(issuer_signature,
                                      *&orders.public_key,
                                      issuer_message),
-           8002);
+           8010);
 }
 </code></pre>
 
@@ -940,11 +940,11 @@ Can only be called during genesis with libra root account.
                                issuer_signature: vector&lt;u8&gt;,
                                user_signature: vector&lt;u8&gt;,
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
     <a href="#0x1_MoneyOrder_verify_user_signature">verify_user_signature</a>(receiver,
                           *&money_order_descriptor,
                           user_signature,
                           b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
-    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
 
     <b>let</b> issuer_address = money_order_descriptor.issuer_address;
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);

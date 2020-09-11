@@ -1,6 +1,6 @@
 // TODO: port to using move Errors
 // 8001: money order expired
-// 8002: signature did not verify
+// 8002: signature did not verify (8010: issuer)
 // 8003: money order already deposited or canceled
 address 0x1 {
 
@@ -285,7 +285,7 @@ address 0x1 {
             assert(Signature::ed25519_verify(issuer_signature,
                                              *&orders.public_key,
                                              issuer_message),
-                   8002);
+                   8010);
         }
 
         // Verifies the receiver/user signature for a money order descriptor.

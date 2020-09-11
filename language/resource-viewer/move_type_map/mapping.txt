@@ -18,6 +18,24 @@
     }
   ],
   [
+    "01123f3746147847a98608e80d193d84d01fe6dd9a41d3dec1ac45ae5d62b8f074",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "LibraConfig",
+      "name": "ModifyConfigCapability",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "LibraTransactionPublishingOption",
+            "name": "LibraTransactionPublishingOption",
+            "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
     "011a3c18d19411e76ac7acc442296296225ae5b5644bef0ab21f7efa2986fd9017",
     {
       "address": "00000000000000000000000000000001",
@@ -135,6 +153,33 @@
     }
   ],
   [
+    "014292279139d42f5f08f7627814938ce102d6cecfb0b17896b0632f30f9b3be68",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "IssuerToken",
+                  "name": "DefaultToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "014326deb3fb20f8254346fbf222b3319927889eb26b2a42e48810563361fa8cb4",
     {
       "address": "00000000000000000000000000000001",
@@ -198,6 +243,33 @@
     }
   ],
   [
+    "0155c1dd8bd6452eda305f504115ec8d6d804a52655988b61e3c6dcf307bd60b22",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "IssuerToken",
+                  "name": "DefaultToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "01687bf580492aa6c5257639c5209bd1d9f6faa38cefcec7b14e88a92967e036a9",
     {
       "address": "00000000000000000000000000000001",
@@ -210,6 +282,33 @@
             "module": "Coin2",
             "name": "Coin2",
             "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "017055ab294dc839bbd0654edc9ec6fc6d923a78f871e8fdffeb4f4ca938e497c3",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "IssuerTokenContainer",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "IssuerToken",
+                  "name": "DefaultToken",
+                  "type_params": []
+                }
+              }
+            ]
           }
         }
       ]
@@ -459,6 +558,33 @@
     }
   ],
   [
+    "01aba14615a39f646ed4b937933194f6fec080d243fdc881705ca4c026697b2707",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "IssuerTokenContainer",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "IssuerToken",
+                  "name": "MoneyOrderToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "01bd2815ee2bf508840a11724140ed989e38a7cfcc4fd4acbb07c12a378adff8f5",
     {
       "address": "00000000000000000000000000000001",
@@ -479,6 +605,24 @@
             "address": "00000000000000000000000000000001",
             "module": "Coin2",
             "name": "Coin2",
+            "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "01c57e4b1f2f0b310e31551b209d95863037d5d549f41f62d324aeabb6f44e0baf",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "LibraConfig",
+      "name": "LibraConfig",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "LibraTransactionPublishingOption",
+            "name": "LibraTransactionPublishingOption",
             "type_params": []
           }
         }
@@ -527,15 +671,6 @@
       "address": "00000000000000000000000000000001",
       "module": "LibraBlock",
       "name": "BlockMetadata",
-      "type_params": []
-    }
-  ],
-  [
-    "01cab09a6d4937fa7ff6c0c543cb0cbf033a1063d5b76ce1cab71a04c9964856a1",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "LibraTransactionTimeout",
-      "name": "TTL",
       "type_params": []
     }
   ],
@@ -636,6 +771,24 @@
           }
         }
       ]
+    }
+  ],
+  [
+    "01f3f731b194298f1e3247472eb1f71f6eafc6b198004f03887f5a84292cedf406",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "ValidatorOperatorConfig",
+      "name": "ValidatorOperatorConfig",
+      "type_params": []
+    }
+  ],
+  [
+    "01f473da8b92d598017f14946ca49a1ce0a3edd413c6bbdbd1c1dbffc4778708eb",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrders",
+      "type_params": []
     }
   ],
   [

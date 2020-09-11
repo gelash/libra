@@ -471,6 +471,11 @@ Sender can mint arbitrary amounts of its own IssuerToken (with own address).
 
 ## Function `issuer_token_balance`
 
+Returns the balance of a particular IssuerToken type (determined by the
+TokenType specialization, issuer_address and band_id) on senders account
+(in its IssuerTokenContainer to be precise). If the container doesn't exist
+or contain the type of IssuerToken, value 0 is returned.
+Note: One of the primary uses of this function is for the unit tests.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_issuer_token_balance">issuer_token_balance</a>&lt;TokenType&gt;(sender: &signer, issuer_address: address, band_id: u64): u64

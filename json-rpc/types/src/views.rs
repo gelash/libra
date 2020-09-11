@@ -177,6 +177,7 @@ pub enum EventDataView {
         amount: u64,
         batch_index: u64,
         order_index: u64,
+    },
     #[serde(rename = "receivedmint")]
     ReceivedMint {
         amount: AmountView,
@@ -332,7 +333,6 @@ impl From<(u64, ContractEvent)> for EventView {
             }
         }
         else if event.type_tag() == &TypeTag::Struct(RedeemedMoneyOrderEvent::struct_tag()) {
-
             if let Ok(redeem_event) = RedeemedMoneyOrderEvent::try_from_bytes(&event.event_data()) {
                 Ok(EventDataView::RedeemedMoneyOrderEvent {
                     amount: redeem_event.amount(),
@@ -341,6 +341,7 @@ impl From<(u64, ContractEvent)> for EventView {
                 })
             } else {
                 Err(format_err!("Unable to parse RedeemedMoneyOrderEvent"))
+            }
         } else if event.type_tag() == &TypeTag::Struct(ComplianceKeyRotationEvent::struct_tag()) {
             if let Ok(rotation_event) = ComplianceKeyRotationEvent::try_from(&event) {
                 Ok(EventDataView::ComplianceKeyRotation {
