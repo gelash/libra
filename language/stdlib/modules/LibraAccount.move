@@ -395,8 +395,41 @@ module LibraAccount {
         deposit(preburn_address, preburn_address, coin, x"", x"")
     }
 
+    /// TODO: added for MoneyOrders demo, inspect.
+    /// Withdraw `amount` from the given account balance and return the withdrawn Libra<Token>
+    public fun withdraw_libra<Token>(
+        sender: &signer,
+        amount: u64
+    ): Libra<Token> acquires Balance {
+        LibraTimestamp::assert_operating();
+        
+        let sender_address = Signer::address_of(sender);
+        AccountFreezing::assert_not_frozen(sender_address);
+
+        let balance = borrow_global_mut<Balance<Token>>(sender_address);
+        
+        let coin = &mut balance.coin;
+        // Abort if this withdrawal would make the `payer`'s balance go negative
+        assert(Libra::value(coin) >= amount, Errors::limit_exceeded(EINSUFFICIENT_BALANCE));
+        Libra::withdraw(coin, amount)
+    }
+
+    /// TODO: added for MoneyOrders demo, inspect.
+    public fun deposit_libra<Token>(receiver: &signer,
+                                    issuer_address: address,
+                                    to_deposit: Libra<Token>,
+    ) acquires LibraAccount, Balance, AccountOperationsCapability {
+        deposit<Token>(
+            Signer::address_of(receiver),
+            issuer_address,
+            to_deposit,
+            x"",
+            x"",
+        );
+    }
+    
     /// Helper to withdraw `amount` from the given account balance and return the withdrawn Libra<Token>
-    public fun withdraw_from_balance<Token>(
+    fun withdraw_from_balance<Token>(
         payer: address,
         payee: address,
         balance: &mut Balance<Token>,

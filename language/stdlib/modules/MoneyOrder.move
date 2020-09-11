@@ -6,8 +6,12 @@ address 0x1 {
 
     module MoneyOrder {
         use 0x1::AssetHolder::{Self, AssetHolder};
+        use 0x1::Coin1::Coin1;
+        use 0x1::Coin2::Coin2;
         use 0x1::Event::{Self, EventHandle};
         use 0x1::IssuerToken::{IssuerToken, DefaultToken};
+        use 0x1::LBR::LBR;
+        use 0x1::Libra::Libra;
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
         use 0x1::Signature;
@@ -89,19 +93,55 @@ address 0x1 {
             holder: AssetHolder<AssetType>,
         }
 
+        fun initialize_money_order_libra_holder<CoinType>(issuer: &signer,) {
+            let issuer_address = Signer::address_of(issuer);
+            if (!exists<MoneyOrderAssetHolder<Libra<CoinType>>>(
+                issuer_address)) {
+                move_to(issuer, MoneyOrderAssetHolder<Libra<CoinType>> {
+                    holder: AssetHolder::create_libra_holder<CoinType>(issuer),
+                });
+            };
+        }
+        
         fun initialize_money_order_asset_holder(issuer: &signer,
                                                 asset_type_id: u8,
                                                 asset_specialization_id: u8,
         ) {
-            if (asset_type_id == 0 && asset_specialization_id == 0) {
-                move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
-                    holder: AssetHolder::create_default_issuer_token_holder(
-                        issuer,
-                        0),
-                });
+            let issuer_address = Signer::address_of(issuer);
+            if (asset_type_id == 0) {
+                if (!exists<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                    issuer_address)) {
+                    if (asset_specialization_id == 0) {
+                        move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
+                            holder: AssetHolder::create_default_issuer_token_holder(issuer),
+                        });
+                    };
+                };
+            } else if (asset_type_id == 1) {
+                if (asset_specialization_id == 0) {
+                    initialize_money_order_libra_holder<Coin1>(issuer);
+                } else if (asset_specialization_id == 1) {
+                    initialize_money_order_libra_holder<Coin2>(issuer);
+                } else if (asset_specialization_id == 2) {
+                    initialize_money_order_libra_holder<LBR>(issuer);
+                };
             };
         }
-                                                
+
+        fun top_up_money_order_libra<CoinType>(issuer: &signer,
+                                               top_up_amount: u64
+        ) acquires MoneyOrderAssetHolder {
+            let issuer_address = Signer::address_of(issuer);
+            let mo_holder =
+                borrow_global_mut<MoneyOrderAssetHolder<Libra<CoinType>>>(
+                    issuer_address);
+            
+            AssetHolder::top_up_libra_holder<CoinType>(
+                issuer,
+                &mut mo_holder.holder,
+                top_up_amount);
+        }
+        
         /// If it doesn't yet exist, initializes the asset holder for money orders -
         /// i.e. the structure where the receivers will redeem their money orders from.
         /// Then it adds top_up_amount of the specified asset to the money order
@@ -117,31 +157,52 @@ address 0x1 {
                                                    top_up_amount: u64,
         ) acquires MoneyOrderAssetHolder {
             let issuer_address = Signer::address_of(issuer);
-
+            
+            initialize_money_order_asset_holder(issuer,
+                                                asset_type_id,
+                                                asset_specialization_id);
+            
             // TODO: This dispatching itself can't be moved to AssetHolder because
             // the fact that AssetHolder APIs are called from MoneyOrders module
             // provides access control. TODO: However, the mapping from type_id to
             // the function calls for creation, loading & depositing assets maybe
             // could be re-used if language allows.
-            if (asset_type_id == 0 && asset_specialization_id == 0) {
-                if (!exists<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
-                    issuer_address)) {
-                    initialize_money_order_asset_holder(issuer,
-                                                        asset_type_id,
-                                                        asset_specialization_id);
+            if (asset_type_id == 0) {
+                if (asset_specialization_id == 0) {
+                    let mo_holder =
+                        borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                            issuer_address);
+                
+                    AssetHolder::top_up_default_issuer_token_holder(
+                        issuer,
+                        &mut mo_holder.holder,
+                        top_up_amount);
                 };
-                
-                let mo_holder =
-                    borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
-                        issuer_address);
-                
-                AssetHolder::top_up_default_issuer_token_holder(
-                    issuer,
-                    &mut mo_holder.holder,
-                    top_up_amount);
+            } else if (asset_type_id == 1) {
+                if (asset_specialization_id == 0) {
+                    top_up_money_order_libra<Coin1>(issuer, top_up_amount);
+                } else if (asset_specialization_id == 1) {
+                    top_up_money_order_libra<Coin1>(issuer, top_up_amount);
+                } else if (asset_specialization_id == 2) {
+                    top_up_money_order_libra<LBR>(issuer, top_up_amount);
+                };
             };
         }
 
+        fun deposit_money_order_libra<CoinType>(receiver: &signer,
+                                                issuer_address: address,
+                                                amount: u64
+        ) acquires MoneyOrderAssetHolder {
+            let mo_holder =
+                borrow_global_mut<MoneyOrderAssetHolder<Libra<CoinType>>>(
+                    issuer_address);
+
+            AssetHolder::deposit_libra<CoinType>(
+                receiver,
+                &mut mo_holder.holder,
+                amount);
+        }
+                
         // This function must be private, so the caller does access control.
         fun deposit_from_issuer(receiver: &signer,
                                 issuer_address: address,
@@ -149,14 +210,24 @@ address 0x1 {
                                 asset_specialization_id: u8,
                                 amount: u64
         ) acquires MoneyOrderAssetHolder {
-            if (asset_type_id == 0 && asset_specialization_id == 0) {
-                let mo_holder =
-                    borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
-                        issuer_address);
+            if (asset_type_id == 0) {
+                if (asset_specialization_id == 0) {
+                    let mo_holder =
+                        borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
+                            issuer_address);
 
-                AssetHolder::deposit_default_issuer_token(receiver,
-                                                          &mut mo_holder.holder,
-                                                          amount);
+                    AssetHolder::deposit_default_issuer_token(receiver,
+                                                              &mut mo_holder.holder,
+                                                              amount);
+                };
+            } else if (asset_type_id == 1) {
+                if (asset_specialization_id == 0) {
+                    deposit_money_order_libra<Coin1>(receiver, issuer_address, amount);
+                } else if (asset_specialization_id == 1) {
+                    deposit_money_order_libra<Coin1>(receiver, issuer_address, amount);
+                } else if (asset_specialization_id == 2) {
+                    deposit_money_order_libra<LBR>(receiver, issuer_address, amount);
+                };
             };
         }
 

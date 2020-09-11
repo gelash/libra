@@ -52,6 +52,8 @@
 -  [Function `deposit`](#0x1_LibraAccount_deposit)
 -  [Function `tiered_mint`](#0x1_LibraAccount_tiered_mint)
 -  [Function `cancel_burn`](#0x1_LibraAccount_cancel_burn)
+-  [Function `withdraw_libra`](#0x1_LibraAccount_withdraw_libra)
+-  [Function `deposit_libra`](#0x1_LibraAccount_deposit_libra)
 -  [Function `withdraw_from_balance`](#0x1_LibraAccount_withdraw_from_balance)
 -  [Function `withdraw_from`](#0x1_LibraAccount_withdraw_from)
 -  [Function `preburn`](#0x1_LibraAccount_preburn)
@@ -1130,15 +1132,16 @@ Sender should be treasury compliance account and receiver authorized DD.
 
 </details>
 
-<a name="0x1_LibraAccount_withdraw_from_balance"></a>
+<a name="0x1_LibraAccount_withdraw_libra"></a>
 
-## Function `withdraw_from_balance`
+## Function `withdraw_libra`
 
-Helper to withdraw
+TODO: added for MoneyOrders demo, inspect.
+Withdraw
 <code>amount</code> from the given account balance and return the withdrawn Libra<Token>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(payer: address, payee: address, balance: &<b>mut</b> <a href="#0x1_LibraAccount_Balance">LibraAccount::Balance</a>&lt;Token&gt;, amount: u64): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_withdraw_libra">withdraw_libra</a>&lt;Token&gt;(sender: &signer, amount: u64): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;
 </code></pre>
 
 
@@ -1147,7 +1150,80 @@ Helper to withdraw
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_withdraw_libra">withdraw_libra</a>&lt;Token&gt;(
+    sender: &signer,
+    amount: u64
+): <a href="Libra.md#0x1_Libra">Libra</a>&lt;Token&gt; <b>acquires</b> <a href="#0x1_LibraAccount_Balance">Balance</a> {
+    <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_operating">LibraTimestamp::assert_operating</a>();
+
+    <b>let</b> sender_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(sender);
+    <a href="AccountFreezing.md#0x1_AccountFreezing_assert_not_frozen">AccountFreezing::assert_not_frozen</a>(sender_address);
+
+    <b>let</b> balance = borrow_global_mut&lt;<a href="#0x1_LibraAccount_Balance">Balance</a>&lt;Token&gt;&gt;(sender_address);
+
+    <b>let</b> coin = &<b>mut</b> balance.coin;
+    // Abort <b>if</b> this withdrawal would make the `payer`'s balance go negative
+    <b>assert</b>(<a href="Libra.md#0x1_Libra_value">Libra::value</a>(coin) &gt;= amount, <a href="Errors.md#0x1_Errors_limit_exceeded">Errors::limit_exceeded</a>(EINSUFFICIENT_BALANCE));
+    <a href="Libra.md#0x1_Libra_withdraw">Libra::withdraw</a>(coin, amount)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_LibraAccount_deposit_libra"></a>
+
+## Function `deposit_libra`
+
+TODO: added for MoneyOrders demo, inspect.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_deposit_libra">deposit_libra</a>&lt;Token&gt;(receiver: &signer, issuer_address: address, to_deposit: <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_deposit_libra">deposit_libra</a>&lt;Token&gt;(receiver: &signer,
+                                issuer_address: address,
+                                to_deposit: <a href="Libra.md#0x1_Libra">Libra</a>&lt;Token&gt;,
+) <b>acquires</b> <a href="#0x1_LibraAccount">LibraAccount</a>, <a href="#0x1_LibraAccount_Balance">Balance</a>, <a href="#0x1_LibraAccount_AccountOperationsCapability">AccountOperationsCapability</a> {
+    <a href="#0x1_LibraAccount_deposit">deposit</a>&lt;Token&gt;(
+        <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver),
+        issuer_address,
+        to_deposit,
+        x"",
+        x"",
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_LibraAccount_withdraw_from_balance"></a>
+
+## Function `withdraw_from_balance`
+
+Helper to withdraw
+<code>amount</code> from the given account balance and return the withdrawn Libra<Token>
+
+
+<pre><code><b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(payer: address, payee: address, balance: &<b>mut</b> <a href="#0x1_LibraAccount_Balance">LibraAccount::Balance</a>&lt;Token&gt;, amount: u64): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(
     payer: address,
     payee: address,
     balance: &<b>mut</b> <a href="#0x1_LibraAccount_Balance">Balance</a>&lt;Token&gt;,
@@ -2687,7 +2763,7 @@ After genesis, the
 ### Function `withdraw_from_balance`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(payer: address, payee: address, balance: &<b>mut</b> <a href="#0x1_LibraAccount_Balance">LibraAccount::Balance</a>&lt;Token&gt;, amount: u64): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;
+<pre><code><b>fun</b> <a href="#0x1_LibraAccount_withdraw_from_balance">withdraw_from_balance</a>&lt;Token&gt;(payer: address, payee: address, balance: &<b>mut</b> <a href="#0x1_LibraAccount_Balance">LibraAccount::Balance</a>&lt;Token&gt;, amount: u64): <a href="Libra.md#0x1_Libra_Libra">Libra::Libra</a>&lt;Token&gt;
 </code></pre>
 
 
@@ -2822,7 +2898,7 @@ Can only rotate the authentication_key of cap.account_address [B26].
 
 
 
-<a name="0x1_LibraAccount_account_addr$57"></a>
+<a name="0x1_LibraAccount_account_addr$59"></a>
 
 
 <pre><code><b>let</b> account_addr = <a href="Signer.md#0x1_Signer_spec_address_of">Signer::spec_address_of</a>(account);

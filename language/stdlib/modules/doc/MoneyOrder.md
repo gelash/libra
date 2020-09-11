@@ -12,8 +12,11 @@
 -  [Struct `CanceledMoneyOrderEvent`](#0x1_MoneyOrder_CanceledMoneyOrderEvent)
 -  [Struct `RedeemedMoneyOrderEvent`](#0x1_MoneyOrder_RedeemedMoneyOrderEvent)
 -  [Resource `MoneyOrderAssetHolder`](#0x1_MoneyOrder_MoneyOrderAssetHolder)
+-  [Function `initialize_money_order_libra_holder`](#0x1_MoneyOrder_initialize_money_order_libra_holder)
 -  [Function `initialize_money_order_asset_holder`](#0x1_MoneyOrder_initialize_money_order_asset_holder)
+-  [Function `top_up_money_order_libra`](#0x1_MoneyOrder_top_up_money_order_libra)
 -  [Function `top_up_money_order_asset_holder`](#0x1_MoneyOrder_top_up_money_order_asset_holder)
+-  [Function `deposit_money_order_libra`](#0x1_MoneyOrder_deposit_money_order_libra)
 -  [Function `deposit_from_issuer`](#0x1_MoneyOrder_deposit_from_issuer)
 -  [Function `publish_money_orders`](#0x1_MoneyOrder_publish_money_orders)
 -  [Function `initialize`](#0x1_MoneyOrder_initialize)
@@ -344,6 +347,36 @@ user when preparing the money order.
 
 </details>
 
+<a name="0x1_MoneyOrder_initialize_money_order_libra_holder"></a>
+
+## Function `initialize_money_order_libra_holder`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;CoinType&gt;(issuer: &signer)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;CoinType&gt;(issuer: &signer,) {
+    <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
+    <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="Libra.md#0x1_Libra">Libra</a>&lt;CoinType&gt;&gt;&gt;(
+        issuer_address)) {
+        move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="Libra.md#0x1_Libra">Libra</a>&lt;CoinType&gt;&gt; {
+            holder: <a href="AssetHolder.md#0x1_AssetHolder_create_libra_holder">AssetHolder::create_libra_holder</a>&lt;CoinType&gt;(issuer),
+        });
+    };
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x1_MoneyOrder_initialize_money_order_asset_holder"></a>
 
 ## Function `initialize_money_order_asset_holder`
@@ -363,13 +396,59 @@ user when preparing the money order.
                                         asset_type_id: u8,
                                         asset_specialization_id: u8,
 ) {
-    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
-        move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt; {
-            holder: <a href="AssetHolder.md#0x1_AssetHolder_create_default_issuer_token_holder">AssetHolder::create_default_issuer_token_holder</a>(
-                issuer,
-                0),
-        });
+    <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
+    <b>if</b> (asset_type_id == 0) {
+        <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+            issuer_address)) {
+            <b>if</b> (asset_specialization_id == 0) {
+                move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt; {
+                    holder: <a href="AssetHolder.md#0x1_AssetHolder_create_default_issuer_token_holder">AssetHolder::create_default_issuer_token_holder</a>(issuer),
+                });
+            };
+        };
+    } <b>else</b> <b>if</b> (asset_type_id == 1) {
+        <b>if</b> (asset_specialization_id == 0) {
+            <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;(issuer);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 1) {
+            <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;<a href="Coin2.md#0x1_Coin2">Coin2</a>&gt;(issuer);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 2) {
+            <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;<a href="LBR.md#0x1_LBR">LBR</a>&gt;(issuer);
+        };
     };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_top_up_money_order_libra"></a>
+
+## Function `top_up_money_order_libra`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_libra">top_up_money_order_libra</a>&lt;CoinType&gt;(issuer: &signer, top_up_amount: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_top_up_money_order_libra">top_up_money_order_libra</a>&lt;CoinType&gt;(issuer: &signer,
+                                       top_up_amount: u64
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
+    <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
+    <b>let</b> mo_holder =
+        borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="Libra.md#0x1_Libra">Libra</a>&lt;CoinType&gt;&gt;&gt;(
+            issuer_address);
+
+    <a href="AssetHolder.md#0x1_AssetHolder_top_up_libra_holder">AssetHolder::top_up_libra_holder</a>&lt;CoinType&gt;(
+        issuer,
+        &<b>mut</b> mo_holder.holder,
+        top_up_amount);
 }
 </code></pre>
 
@@ -408,28 +487,69 @@ type or specialization).
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
     <b>let</b> issuer_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer);
 
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer,
+                                        asset_type_id,
+                                        asset_specialization_id);
+
     // TODO: This dispatching itself can't be moved <b>to</b> <a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a> because
     // the fact that <a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a> APIs are called from <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> <b>module</b>
     // provides access control. TODO: However, the mapping from type_id <b>to</b>
     // the function calls for creation, loading & depositing assets maybe
     // could be re-used <b>if</b> language allows.
-    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
-        <b>if</b> (!exists&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
-            issuer_address)) {
-            <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(issuer,
-                                                asset_type_id,
-                                                asset_specialization_id);
+    <b>if</b> (asset_type_id == 0) {
+        <b>if</b> (asset_specialization_id == 0) {
+            <b>let</b> mo_holder =
+                borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+                    issuer_address);
+
+            <a href="AssetHolder.md#0x1_AssetHolder_top_up_default_issuer_token_holder">AssetHolder::top_up_default_issuer_token_holder</a>(
+                issuer,
+                &<b>mut</b> mo_holder.holder,
+                top_up_amount);
         };
-
-        <b>let</b> mo_holder =
-            borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
-                issuer_address);
-
-        <a href="AssetHolder.md#0x1_AssetHolder_top_up_default_issuer_token_holder">AssetHolder::top_up_default_issuer_token_holder</a>(
-            issuer,
-            &<b>mut</b> mo_holder.holder,
-            top_up_amount);
+    } <b>else</b> <b>if</b> (asset_type_id == 1) {
+        <b>if</b> (asset_specialization_id == 0) {
+            <a href="#0x1_MoneyOrder_top_up_money_order_libra">top_up_money_order_libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;(issuer, top_up_amount);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 1) {
+            <a href="#0x1_MoneyOrder_top_up_money_order_libra">top_up_money_order_libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;(issuer, top_up_amount);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 2) {
+            <a href="#0x1_MoneyOrder_top_up_money_order_libra">top_up_money_order_libra</a>&lt;<a href="LBR.md#0x1_LBR">LBR</a>&gt;(issuer, top_up_amount);
+        };
     };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_MoneyOrder_deposit_money_order_libra"></a>
+
+## Function `deposit_money_order_libra`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_money_order_libra">deposit_money_order_libra</a>&lt;CoinType&gt;(receiver: &signer, issuer_address: address, amount: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_deposit_money_order_libra">deposit_money_order_libra</a>&lt;CoinType&gt;(receiver: &signer,
+                                        issuer_address: address,
+                                        amount: u64
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
+    <b>let</b> mo_holder =
+        borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="Libra.md#0x1_Libra">Libra</a>&lt;CoinType&gt;&gt;&gt;(
+            issuer_address);
+
+    <a href="AssetHolder.md#0x1_AssetHolder_deposit_libra">AssetHolder::deposit_libra</a>&lt;CoinType&gt;(
+        receiver,
+        &<b>mut</b> mo_holder.holder,
+        amount);
 }
 </code></pre>
 
@@ -458,14 +578,24 @@ type or specialization).
                         asset_specialization_id: u8,
                         amount: u64
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a> {
-    <b>if</b> (asset_type_id == 0 && asset_specialization_id == 0) {
-        <b>let</b> mo_holder =
-            borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
-                issuer_address);
+    <b>if</b> (asset_type_id == 0) {
+        <b>if</b> (asset_specialization_id == 0) {
+            <b>let</b> mo_holder =
+                borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>&lt;<a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a>&lt;DefaultToken&gt;&gt;&gt;(
+                    issuer_address);
 
-        <a href="AssetHolder.md#0x1_AssetHolder_deposit_default_issuer_token">AssetHolder::deposit_default_issuer_token</a>(receiver,
-                                                  &<b>mut</b> mo_holder.holder,
-                                                  amount);
+            <a href="AssetHolder.md#0x1_AssetHolder_deposit_default_issuer_token">AssetHolder::deposit_default_issuer_token</a>(receiver,
+                                                      &<b>mut</b> mo_holder.holder,
+                                                      amount);
+        };
+    } <b>else</b> <b>if</b> (asset_type_id == 1) {
+        <b>if</b> (asset_specialization_id == 0) {
+            <a href="#0x1_MoneyOrder_deposit_money_order_libra">deposit_money_order_libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;(receiver, issuer_address, amount);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 1) {
+            <a href="#0x1_MoneyOrder_deposit_money_order_libra">deposit_money_order_libra</a>&lt;<a href="Coin1.md#0x1_Coin1">Coin1</a>&gt;(receiver, issuer_address, amount);
+        } <b>else</b> <b>if</b> (asset_specialization_id == 2) {
+            <a href="#0x1_MoneyOrder_deposit_money_order_libra">deposit_money_order_libra</a>&lt;<a href="LBR.md#0x1_LBR">LBR</a>&gt;(receiver, issuer_address, amount);
+        };
     };
 }
 </code></pre>
