@@ -282,6 +282,7 @@ address 0x1 {
             let issuer_message = Vector::empty();
             Vector::append(&mut issuer_message, b"@@$$LIBRA_MONEY_ORDER_ISSUE$$@@");
             Vector::append(&mut issuer_message, LCS::to_bytes(&money_order_descriptor));
+
             assert(Signature::ed25519_verify(issuer_signature,
                                              *&orders.public_key,
                                              issuer_message),
@@ -298,6 +299,7 @@ address 0x1 {
             Vector::append(&mut message, domain_authenticator);
             Vector::append(&mut message, LCS::to_bytes(&Signer::address_of(receiver)));
             Vector::append(&mut message, LCS::to_bytes(&money_order_descriptor));
+
             assert(Signature::ed25519_verify(user_signature,
                                              *&money_order_descriptor.user_public_key,
                                              *&message),

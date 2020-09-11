@@ -762,6 +762,7 @@ Can only be called during genesis with libra root account.
     <b>let</b> issuer_message = <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>();
     <a href="Vector.md#0x1_Vector_append">Vector::append</a>(&<b>mut</b> issuer_message, b"@@$$LIBRA_MONEY_ORDER_ISSUE$$@@");
     <a href="Vector.md#0x1_Vector_append">Vector::append</a>(&<b>mut</b> issuer_message, <a href="LCS.md#0x1_LCS_to_bytes">LCS::to_bytes</a>(&money_order_descriptor));
+
     <b>assert</b>(<a href="Signature.md#0x1_Signature_ed25519_verify">Signature::ed25519_verify</a>(issuer_signature,
                                      *&orders.public_key,
                                      issuer_message),
@@ -797,6 +798,7 @@ Can only be called during genesis with libra root account.
     <a href="Vector.md#0x1_Vector_append">Vector::append</a>(&<b>mut</b> message, domain_authenticator);
     <a href="Vector.md#0x1_Vector_append">Vector::append</a>(&<b>mut</b> message, <a href="LCS.md#0x1_LCS_to_bytes">LCS::to_bytes</a>(&<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver)));
     <a href="Vector.md#0x1_Vector_append">Vector::append</a>(&<b>mut</b> message, <a href="LCS.md#0x1_LCS_to_bytes">LCS::to_bytes</a>(&money_order_descriptor));
+
     <b>assert</b>(<a href="Signature.md#0x1_Signature_ed25519_verify">Signature::ed25519_verify</a>(user_signature,
                                      *&money_order_descriptor.user_public_key,
                                      *&message),
@@ -940,11 +942,11 @@ Can only be called during genesis with libra root account.
                                issuer_signature: vector&lt;u8&gt;,
                                user_signature: vector&lt;u8&gt;,
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrderAssetHolder">MoneyOrderAssetHolder</a>, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
     <a href="#0x1_MoneyOrder_verify_user_signature">verify_user_signature</a>(receiver,
                           *&money_order_descriptor,
                           user_signature,
                           b"@@$$LIBRA_MONEY_ORDER_REDEEM$$@@");
+    <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
 
     <b>let</b> issuer_address = money_order_descriptor.issuer_address;
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
