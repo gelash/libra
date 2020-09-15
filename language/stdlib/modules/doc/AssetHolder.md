@@ -6,6 +6,9 @@
 ### Table of Contents
 
 -  [Resource `AssetHolder`](#0x1_AssetHolder_AssetHolder)
+-  [Const `ECANNOT_ADD_TO_OTHERS`](#0x1_AssetHolder_ECANNOT_ADD_TO_OTHERS)
+-  [Const `EADD_NON_POS`](#0x1_AssetHolder_EADD_NON_POS)
+-  [Const `EDEPOSIT_NON_POS`](#0x1_AssetHolder_EDEPOSIT_NON_POS)
 -  [Function `create_default_issuer_token_holder`](#0x1_AssetHolder_create_default_issuer_token_holder)
 -  [Function `create_libra_holder`](#0x1_AssetHolder_create_libra_holder)
 -  [Function `initialize`](#0x1_AssetHolder_initialize)
@@ -50,6 +53,42 @@
 
 
 </details>
+
+<a name="0x1_AssetHolder_ECANNOT_ADD_TO_OTHERS"></a>
+
+## Const `ECANNOT_ADD_TO_OTHERS`
+
+Trying to add IssuerToken to non-issuer's AssetHolder
+
+
+<pre><code><b>const</b> ECANNOT_ADD_TO_OTHERS: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x1_AssetHolder_EADD_NON_POS"></a>
+
+## Const `EADD_NON_POS`
+
+Adding IssuerToken with non-positive amount
+
+
+<pre><code><b>const</b> EADD_NON_POS: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x1_AssetHolder_EDEPOSIT_NON_POS"></a>
+
+## Const `EDEPOSIT_NON_POS`
+
+Depositing IssuerToken with non-positive amount
+
+
+<pre><code><b>const</b> EDEPOSIT_NON_POS: u64 = 2;
+</code></pre>
+
+
 
 <a name="0x1_AssetHolder_create_default_issuer_token_holder"></a>
 
@@ -171,9 +210,9 @@ account. Note: For now, band for DefaultToken is always 0.
     amount: u64,
 ) {
     // Issuer should be the holder's owner.
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, 9000);
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
     // Top up amount should be positive.
-    <b>assert</b>(amount &gt; 0, 9000);
+    <b>assert</b>(amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EADD_NON_POS));
 
     <a href="IssuerToken.md#0x1_IssuerToken_merge_issuer_token">IssuerToken::merge_issuer_token</a>&lt;DefaultToken&gt;(
         &<b>mut</b> holder.asset,
@@ -210,9 +249,9 @@ AssetHolder on issuer's account.
     amount: u64,
 ) {
     // Issuer should be the holder's owner.
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, 9000);
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
     // Top up amount should be positive.
-    <b>assert</b>(amount &gt; 0, 9000);
+    <b>assert</b>(amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EADD_NON_POS));
 
     <a href="Libra.md#0x1_Libra_deposit">Libra::deposit</a>&lt;CoinType&gt;(
         &<b>mut</b> holder.asset,
@@ -248,7 +287,7 @@ Note: For now, band for DefaultToken is always 0.
     amount: u64,
 ) {
     // Deposit amount should be positive.
-    <b>assert</b>(amount &gt; 0, 9000);
+    <b>assert</b>(amount &gt; 0,  <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EDEPOSIT_NON_POS));
 
     <b>let</b> issuer_tokens =
         <a href="IssuerToken.md#0x1_IssuerToken_split_issuer_token">IssuerToken::split_issuer_token</a>&lt;DefaultToken&gt;(&<b>mut</b> holder.asset,
@@ -287,7 +326,7 @@ receivers account balance.
     amount: u64,
 ) {
     // Deposit amount should be positive.
-    <b>assert</b>(amount &gt; 0, 9000);
+    <b>assert</b>(amount &gt; 0,  <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EDEPOSIT_NON_POS));
 
     <b>let</b> taken_libra = <a href="Libra.md#0x1_Libra_withdraw">Libra::withdraw</a>&lt;CoinType&gt;(&<b>mut</b> holder.asset,
                                                 amount);

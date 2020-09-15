@@ -10,6 +10,13 @@
 -  [Struct `BurnIssuerTokenEvent`](#0x1_IssuerToken_BurnIssuerTokenEvent)
 -  [Resource `IssuerToken`](#0x1_IssuerToken_IssuerToken)
 -  [Resource `IssuerTokenContainer`](#0x1_IssuerToken_IssuerTokenContainer)
+-  [Const `EDEPOSIT_EXCEEDS_LIMITS`](#0x1_IssuerToken_EDEPOSIT_EXCEEDS_LIMITS)
+-  [Const `ESELF_DEPOSIT`](#0x1_IssuerToken_ESELF_DEPOSIT)
+-  [Const `EILLEGAL_MERGE`](#0x1_IssuerToken_EILLEGAL_MERGE)
+-  [Const `EBURN_NON_POS`](#0x1_IssuerToken_EBURN_NON_POS)
+-  [Const `EMISSING_CONTAINER`](#0x1_IssuerToken_EMISSING_CONTAINER)
+-  [Const `EISSUER_TOKEN_NOT_FOUND`](#0x1_IssuerToken_EISSUER_TOKEN_NOT_FOUND)
+-  [Const `EBURN_EXCEEDS_LIMITS`](#0x1_IssuerToken_EBURN_EXCEEDS_LIMITS)
 -  [Function `publish_issuer_tokens`](#0x1_IssuerToken_publish_issuer_tokens)
 -  [Function `initialize`](#0x1_IssuerToken_initialize)
 -  [Function `find_issuer_token`](#0x1_IssuerToken_find_issuer_token)
@@ -235,6 +242,90 @@ on accounts other than the issuer).
 
 </details>
 
+<a name="0x1_IssuerToken_EDEPOSIT_EXCEEDS_LIMITS"></a>
+
+## Const `EDEPOSIT_EXCEEDS_LIMITS`
+
+Trying to deposit funds that would have surpassed the account's limits
+
+
+<pre><code><b>const</b> EDEPOSIT_EXCEEDS_LIMITS: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_ESELF_DEPOSIT"></a>
+
+## Const `ESELF_DEPOSIT`
+
+Issuer depositing own coins on its account (in IssuerTokenContainer structure).
+
+
+<pre><code><b>const</b> ESELF_DEPOSIT: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_EILLEGAL_MERGE"></a>
+
+## Const `EILLEGAL_MERGE`
+
+Trying to merge different issuer tokens.
+
+
+<pre><code><b>const</b> EILLEGAL_MERGE: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_EBURN_NON_POS"></a>
+
+## Const `EBURN_NON_POS`
+
+A burn was attempted with non-positive amount
+
+
+<pre><code><b>const</b> EBURN_NON_POS: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_EMISSING_CONTAINER"></a>
+
+## Const `EMISSING_CONTAINER`
+
+A burn of IssuerToken<TokenType>> was attempted from non-existing matching IssuerTokenContainer
+
+
+<pre><code><b>const</b> EMISSING_CONTAINER: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_EISSUER_TOKEN_NOT_FOUND"></a>
+
+## Const `EISSUER_TOKEN_NOT_FOUND`
+
+Could not find issuer token based on address
+
+
+<pre><code><b>const</b> EISSUER_TOKEN_NOT_FOUND: u64 = 5;
+</code></pre>
+
+
+
+<a name="0x1_IssuerToken_EBURN_EXCEEDS_LIMITS"></a>
+
+## Const `EBURN_EXCEEDS_LIMITS`
+
+Trying to burn funds that would have surpassed the account's limits
+
+
+<pre><code><b>const</b> EBURN_EXCEEDS_LIMITS: u64 = 6;
+</code></pre>
+
+
+
 <a name="0x1_IssuerToken_publish_issuer_tokens"></a>
 
 ## Function `publish_issuer_tokens`
@@ -419,8 +510,8 @@ Sender can mint arbitrary amounts of its own IssuerToken (with own address).
                                  band_id,
                                  amount } = issuer_token_b;
 
-    <b>assert</b>(issuer_token_a.issuer_address == issuer_address, 8006);
-    <b>assert</b>(issuer_token_a.band_id == band_id, 8006);
+    <b>assert</b>(issuer_token_a.issuer_address == issuer_address, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EILLEGAL_MERGE));
+    <b>assert</b>(issuer_token_a.band_id == band_id, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EILLEGAL_MERGE));
 
     <b>let</b> token_amount = &<b>mut</b> issuer_token_a.amount;
     *token_amount = *token_amount + amount;
@@ -450,8 +541,7 @@ Sender can mint arbitrary amounts of its own IssuerToken (with own address).
     issuer_token: &<b>mut</b> <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;,
     amount: u64,
 ): <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt; {
-    <b>assert</b>(issuer_token.amount &gt;= amount, 8004);
-
+    <b>assert</b>(issuer_token.amount &gt;= amount, <a href="Errors.md#0x1_Errors_limit_exceeded">Errors::limit_exceeded</a>(EDEPOSIT_EXCEEDS_LIMITS));
     <b>let</b> token_amount = &<b>mut</b> issuer_token.amount;
     *token_amount = *token_amount - amount;
 
@@ -535,7 +625,7 @@ if not already published on the receiver's account.
                                            issuer_token: <a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;,
 ) <b>acquires</b> <a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a> {
     <b>let</b> receiver_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver);
-    <b>assert</b>(issuer_token.issuer_address != receiver_address, 8005);
+    <b>assert</b>(issuer_token.issuer_address != receiver_address, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ESELF_DEPOSIT));
 
     <b>if</b> (!exists&lt;<a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(receiver_address)) {
         <a href="#0x1_IssuerToken_publish_issuer_tokens">publish_issuer_tokens</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;(receiver);
@@ -594,7 +684,7 @@ if not already published on the receiver's account.
                                 amount,} = to_burn_token;
     // Can't burn non-positive amounts. Negative amounts don't make sense, and <b>while</b>
     // it's okay <b>to</b> destroy <a href="#0x1_IssuerToken">IssuerToken</a> with 0 amount, it doesn't need burn events.
-    <b>assert</b>(amount &gt; 0, 9000);
+    <b>assert</b>(amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EBURN_NON_POS));
 
     // Emit the corresponding burn event.
     <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>(
@@ -634,10 +724,10 @@ if not already published on the receiver's account.
                               band_id: u64,
                               to_burn_amount: u64,
 ) <b>acquires</b> <a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a> {
-    <b>assert</b>(to_burn_amount &gt; 0, 9000);
+    <b>assert</b>(to_burn_amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EBURN_NON_POS));
 
     <b>let</b> sender_address = <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(sender);
-    <b>assert</b>(exists&lt;<a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address), 9000);
+    <b>assert</b>(exists&lt;<a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address), <a href="Errors.md#0x1_Errors_invalid_state">Errors::invalid_state</a>(EMISSING_CONTAINER));
     <b>let</b> sender_tokens =
         borrow_global_mut&lt;<a href="#0x1_IssuerToken_IssuerTokenContainer">IssuerTokenContainer</a>&lt;<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;&gt;&gt;(sender_address);
 
@@ -645,9 +735,9 @@ if not already published on the receiver's account.
         <a href="#0x1_IssuerToken_find_issuer_token">find_issuer_token</a>&lt;TokenType&gt;(&sender_tokens.issuer_tokens,
                                      issuer_address,
                                      band_id);
-    <b>assert</b>(found, 9000);
+    <b>assert</b>(found, <a href="Errors.md#0x1_Errors_invalid_state">Errors::invalid_state</a>(EISSUER_TOKEN_NOT_FOUND));
     <b>let</b> issuer_token = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> sender_tokens.issuer_tokens, target_index);
-    <b>assert</b>(issuer_token.amount &gt;= to_burn_amount, 9000);
+    <b>assert</b>(issuer_token.amount &gt;= to_burn_amount, <a href="Errors.md#0x1_Errors_limit_exceeded">Errors::limit_exceeded</a>(EBURN_EXCEEDS_LIMITS));
 
     // Split the issuer_token, burn the specified amount and emit corresponding event.
     <a href="#0x1_IssuerToken_burn_issuer_token">burn_issuer_token</a>&lt;TokenType&gt;(<a href="#0x1_IssuerToken_split_issuer_token">split_issuer_token</a>&lt;TokenType&gt;(issuer_token,

@@ -1,7 +1,3 @@
-// 8004: insufficient balance on issuer's account
-// 8005: Issuer depositing own coins on its account (in IssuerTokenContainer structure).
-// 8006: Trying to merge different issuer tokens.
-// 9000: general error until we move to use Errors module
 address 0x1 {
 
     module IssuerToken {
@@ -9,6 +5,7 @@ address 0x1 {
         use 0x1::LibraTimestamp;
         use 0x1::Vector;
         use 0x1::Event::{Self, EventHandle};
+        use 0x1::Errors;
 
         /// Default empty info struct for templating IssuerToken on, i.e. having
         /// different specializations of the same issuer token functionality.
@@ -72,6 +69,23 @@ address 0x1 {
             /// are emitted).
             burn_events: EventHandle<BurnIssuerTokenEvent>,
         }
+
+
+        /// Trying to deposit funds that would have surpassed the account's limits
+        const EDEPOSIT_EXCEEDS_LIMITS: u64 = 0;
+        /// Issuer depositing own coins on its account (in IssuerTokenContainer structure).
+        const ESELF_DEPOSIT: u64 = 1;
+        /// Trying to merge different issuer tokens.
+        const EILLEGAL_MERGE: u64 = 2;
+        /// A burn was attempted with non-positive amount
+        const EBURN_NON_POS: u64 = 3;
+        /// A burn of IssuerToken<TokenType>> was attempted from non-existing matching IssuerTokenContainer
+        const EMISSING_CONTAINER: u64 = 4;
+        /// Could not find issuer token based on address
+        const EISSUER_TOKEN_NOT_FOUND: u64 = 5;
+        /// Trying to burn funds that would have surpassed the account's limits
+        const EBURN_EXCEEDS_LIMITS: u64 = 6;
+        
 
         /// Publishes the IssuerTokenContainer struct on sender's account, allowing it
         /// to hold tokens of IssuerTokenType issued by other accounts.
@@ -143,8 +157,8 @@ address 0x1 {
                                          band_id,
                                          amount } = issuer_token_b;
             
-            assert(issuer_token_a.issuer_address == issuer_address, 8006);
-            assert(issuer_token_a.band_id == band_id, 8006);
+            assert(issuer_token_a.issuer_address == issuer_address, Errors::invalid_argument(EILLEGAL_MERGE));
+            assert(issuer_token_a.band_id == band_id, Errors::invalid_argument(EILLEGAL_MERGE));
 
             let token_amount = &mut issuer_token_a.amount;
             *token_amount = *token_amount + amount;
@@ -154,8 +168,7 @@ address 0x1 {
             issuer_token: &mut IssuerToken<TokenType>,
             amount: u64,
         ): IssuerToken<TokenType> {
-            assert(issuer_token.amount >= amount, 8004);
-
+            assert(issuer_token.amount >= amount, Errors::limit_exceeded(EDEPOSIT_EXCEEDS_LIMITS));            
             let token_amount = &mut issuer_token.amount;
             *token_amount = *token_amount - amount;
 
@@ -199,7 +212,7 @@ address 0x1 {
                                                    issuer_token: IssuerToken<TokenType>,
         ) acquires IssuerTokenContainer {
             let receiver_address = Signer::address_of(receiver);
-            assert(issuer_token.issuer_address != receiver_address, 8005);
+            assert(issuer_token.issuer_address != receiver_address, Errors::invalid_argument(ESELF_DEPOSIT));
             
             if (!exists<IssuerTokenContainer<IssuerToken<TokenType>>>(receiver_address)) {
                 publish_issuer_tokens<IssuerToken<TokenType>>(receiver);
@@ -244,8 +257,8 @@ address 0x1 {
                                         amount,} = to_burn_token;
             // Can't burn non-positive amounts. Negative amounts don't make sense, and while
             // it's okay to destroy IssuerToken with 0 amount, it doesn't need burn events.
-            assert(amount > 0, 9000);
-            
+            assert(amount > 0, Errors::invalid_argument(EBURN_NON_POS));
+
             // Emit the corresponding burn event.
             Event::emit_event(
                 event_handle,
@@ -264,10 +277,10 @@ address 0x1 {
                                       band_id: u64,
                                       to_burn_amount: u64,
         ) acquires IssuerTokenContainer {
-            assert(to_burn_amount > 0, 9000);
+            assert(to_burn_amount > 0, Errors::invalid_argument(EBURN_NON_POS));
             
             let sender_address = Signer::address_of(sender);
-            assert(exists<IssuerTokenContainer<IssuerToken<TokenType>>>(sender_address), 9000);
+            assert(exists<IssuerTokenContainer<IssuerToken<TokenType>>>(sender_address), Errors::invalid_state(EMISSING_CONTAINER));
             let sender_tokens =
                 borrow_global_mut<IssuerTokenContainer<IssuerToken<TokenType>>>(sender_address);
 
@@ -275,9 +288,9 @@ address 0x1 {
                 find_issuer_token<TokenType>(&sender_tokens.issuer_tokens,
                                              issuer_address,
                                              band_id);
-            assert(found, 9000);
+            assert(found, Errors::invalid_state(EISSUER_TOKEN_NOT_FOUND));
             let issuer_token = Vector::borrow_mut(&mut sender_tokens.issuer_tokens, target_index);
-            assert(issuer_token.amount >= to_burn_amount, 9000);
+            assert(issuer_token.amount >= to_burn_amount, Errors::limit_exceeded(EBURN_EXCEEDS_LIMITS));
 
             // Split the issuer_token, burn the specified amount and emit corresponding event.
             burn_issuer_token<TokenType>(split_issuer_token<TokenType>(issuer_token,

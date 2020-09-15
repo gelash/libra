@@ -12,6 +12,7 @@ address 0x1 {
                                DefaultToken};
         use 0x1::LibraTimestamp;
         use 0x1::Signer;
+        use 0x1::Errors;
 
         resource struct AssetHolder<AssetType> {
             owner: address,
@@ -19,6 +20,13 @@ address 0x1 {
             asset: AssetType,
         }
 
+        /// Trying to add IssuerToken to non-issuer's AssetHolder
+        const ECANNOT_ADD_TO_OTHERS: u64 = 0;
+        /// Adding IssuerToken with non-positive amount
+        const EADD_NON_POS: u64 = 1;
+        /// Depositing IssuerToken with non-positive amount
+        const EDEPOSIT_NON_POS: u64 = 2;
+        
         /// Returns an AssetHolder holding IssuerToken<DefaultToken> with 0
         /// amount. Note: Band for DefaultToken is always 0.
         public fun create_default_issuer_token_holder(issuer: &signer
@@ -64,9 +72,9 @@ address 0x1 {
             amount: u64,
         ) {
             // Issuer should be the holder's owner.
-            assert(Signer::address_of(issuer) == holder.owner, 9000);
+            assert(Signer::address_of(issuer) == holder.owner, Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
             // Top up amount should be positive.
-            assert(amount > 0, 9000);
+            assert(amount > 0, Errors::invalid_argument(EADD_NON_POS)); 
             
             IssuerToken::merge_issuer_token<DefaultToken>(
                 &mut holder.asset,
@@ -83,9 +91,9 @@ address 0x1 {
             amount: u64,
         ) {
             // Issuer should be the holder's owner.
-            assert(Signer::address_of(issuer) == holder.owner, 9000);
+            assert(Signer::address_of(issuer) == holder.owner, Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
             // Top up amount should be positive.
-            assert(amount > 0, 9000);
+            assert(amount > 0, Errors::invalid_argument(EADD_NON_POS));
             
             Libra::deposit<CoinType>(
                 &mut holder.asset,
@@ -101,7 +109,7 @@ address 0x1 {
             amount: u64,
         ) {
             // Deposit amount should be positive.
-            assert(amount > 0, 9000);
+            assert(amount > 0,  Errors::invalid_argument(EDEPOSIT_NON_POS));
             
             let issuer_tokens =
                 IssuerToken::split_issuer_token<DefaultToken>(&mut holder.asset,
@@ -120,7 +128,7 @@ address 0x1 {
             amount: u64,
         ) {
             // Deposit amount should be positive.
-            assert(amount > 0, 9000);
+            assert(amount > 0,  Errors::invalid_argument(EDEPOSIT_NON_POS));
             
             let taken_libra = Libra::withdraw<CoinType>(&mut holder.asset,
                                                         amount);
