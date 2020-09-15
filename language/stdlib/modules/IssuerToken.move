@@ -85,7 +85,7 @@ address 0x1 {
         const EISSUER_TOKEN_NOT_FOUND: u64 = 5;
         /// Trying to burn funds that would have surpassed the account's limits
         const EBURN_EXCEEDS_LIMITS: u64 = 6;
-        
+
 
         /// Publishes the IssuerTokenContainer struct on sender's account, allowing it
         /// to hold tokens of IssuerTokenType issued by other accounts.
@@ -177,6 +177,11 @@ address 0x1 {
                 band_id: issuer_token.band_id,
                 amount: amount,
             }
+        }
+
+        /// Returns the `amount` of the passed in `issuer_token`.
+        public fun value<TokenType>(issuer_token: &IssuerToken<TokenType>): u64 {
+            issuer_token.amount
         }
 
         /// Returns the balance of a particular IssuerToken type (determined by the

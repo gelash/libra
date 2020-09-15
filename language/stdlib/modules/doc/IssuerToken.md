@@ -24,6 +24,7 @@
 -  [Function `mint_issuer_token`](#0x1_IssuerToken_mint_issuer_token)
 -  [Function `merge_issuer_token`](#0x1_IssuerToken_merge_issuer_token)
 -  [Function `split_issuer_token`](#0x1_IssuerToken_split_issuer_token)
+-  [Function `value`](#0x1_IssuerToken_value)
 -  [Function `issuer_token_balance`](#0x1_IssuerToken_issuer_token_balance)
 -  [Function `deposit_issuer_token`](#0x1_IssuerToken_deposit_issuer_token)
 -  [Function `burn_issuer_token`](#0x1_IssuerToken_burn_issuer_token)
@@ -550,6 +551,33 @@ Sender can mint arbitrary amounts of its own IssuerToken (with own address).
         band_id: issuer_token.band_id,
         amount: amount,
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_IssuerToken_value"></a>
+
+## Function `value`
+
+Returns the
+<code>amount</code> of the passed in
+<code>issuer_token</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_value">value</a>&lt;TokenType&gt;(issuer_token: &<a href="#0x1_IssuerToken_IssuerToken">IssuerToken::IssuerToken</a>&lt;TokenType&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_IssuerToken_value">value</a>&lt;TokenType&gt;(issuer_token: &<a href="#0x1_IssuerToken">IssuerToken</a>&lt;TokenType&gt;): u64 {
+    issuer_token.amount
 }
 </code></pre>
 
