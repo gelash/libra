@@ -250,8 +250,12 @@ address 0x1 {
         ) {
             LibraTimestamp::assert_genesis();
 
-            // Initialize money order asset holder for all asset type ids.
+            // Initialize money order asset holder for all asset types.
             initialize_money_order_asset_holder(lr_account, 0, 0);
+            initialize_money_order_asset_holder(lr_account, 0, 1);
+            initialize_money_order_asset_holder(lr_account, 1, 0);
+            initialize_money_order_asset_holder(lr_account, 1, 1);
+            initialize_money_order_asset_holder(lr_account, 1, 2);
             
             // Publish MoneyOrders resource w. some fixed public key.
             publish_money_orders(lr_account,
@@ -489,8 +493,8 @@ address 0x1 {
             // IssuerToken will be deposited to IssuerTokens).
             deposit_from_issuer(receiver,
                                 issuer_address,
-                                0, // TODO: generalize
-                                0, // TODO: generalize
+                                money_order_descriptor.asset_type_id,
+                                money_order_descriptor.asset_specialization_id,
                                 money_order_descriptor.amount);
             
              // Log a redeemed event.

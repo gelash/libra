@@ -420,8 +420,8 @@ module LibraAccount {
                                     to_deposit: Libra<Token>,
     ) acquires LibraAccount, Balance, AccountOperationsCapability {
         deposit<Token>(
-            Signer::address_of(receiver),
             issuer_address,
+            Signer::address_of(receiver),
             to_deposit,
             x"",
             x"",

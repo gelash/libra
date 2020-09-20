@@ -658,8 +658,12 @@ Can only be called during genesis with libra root account.
 ) {
     <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_genesis">LibraTimestamp::assert_genesis</a>();
 
-    // Initialize money order asset holder for all asset type ids.
+    // Initialize money order asset holder for all asset types.
     <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 0, 0);
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 0, 1);
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 1, 0);
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 1, 1);
+    <a href="#0x1_MoneyOrder_initialize_money_order_asset_holder">initialize_money_order_asset_holder</a>(lr_account, 1, 2);
 
     // Publish <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> <b>resource</b> w. some fixed <b>public</b> key.
     <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(lr_account,
@@ -1096,8 +1100,8 @@ Can only be called during genesis with libra root account.
     // <a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a> will be deposited <b>to</b> IssuerTokens).
     <a href="#0x1_MoneyOrder_deposit_from_issuer">deposit_from_issuer</a>(receiver,
                         issuer_address,
-                        0, // TODO: generalize
-                        0, // TODO: generalize
+                        money_order_descriptor.asset_type_id,
+                        money_order_descriptor.asset_specialization_id,
                         money_order_descriptor.amount);
 
      // Log a redeemed event.

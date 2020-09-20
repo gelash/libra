@@ -1193,8 +1193,8 @@ TODO: added for MoneyOrders demo, inspect.
                                 to_deposit: <a href="Libra.md#0x1_Libra">Libra</a>&lt;Token&gt;,
 ) <b>acquires</b> <a href="#0x1_LibraAccount">LibraAccount</a>, <a href="#0x1_LibraAccount_Balance">Balance</a>, <a href="#0x1_LibraAccount_AccountOperationsCapability">AccountOperationsCapability</a> {
     <a href="#0x1_LibraAccount_deposit">deposit</a>&lt;Token&gt;(
-        <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver),
         issuer_address,
+        <a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(receiver),
         to_deposit,
         x"",
         x"",

@@ -1,5 +1,32 @@
 [
   [
+    "0100fadd204c47f6cbb4afdf364e1c8864c86bf072aaf719a6c684906fc9f05ddd",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "LBR",
+                  "name": "LBR",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "0110d33fe260cbf75c282946f4ce8c4da2e0c6ac72e14811372bfc57d9281fbf9b",
     {
       "address": "00000000000000000000000000000001",
@@ -105,6 +132,33 @@
       "module": "LibraTimestamp",
       "name": "TimeHasStarted",
       "type_params": []
+    }
+  ],
+  [
+    "0129ff79329be24ff1b2232054f6afe258248f3d766059c2a499de783745ed3f05",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "Coin1",
+                  "name": "Coin1",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
   [
@@ -228,6 +282,33 @@
             "module": "Coin2",
             "name": "Coin2",
             "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "014e670cedd47335769ce46c00f13592884386db16319a2181329e2f622f584ba1",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "Coin2",
+                  "name": "Coin2",
+                  "type_params": []
+                }
+              }
+            ]
           }
         }
       ]
@@ -381,6 +462,33 @@
             "module": "Coin1",
             "name": "Coin1",
             "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "0176d9418f0b318370e6c5bdda1a368679ebee800c6c76747f35817bd74388462c",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "LBR",
+                  "name": "LBR",
+                  "type_params": []
+                }
+              }
+            ]
           }
         }
       ]
@@ -585,6 +693,33 @@
     }
   ],
   [
+    "01ae5e525f2e2552be07ac52766f626327ec6782db1862749682a5c062ee47eb80",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "Coin1",
+                  "name": "Coin1",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "01bd2815ee2bf508840a11724140ed989e38a7cfcc4fd4acbb07c12a378adff8f5",
     {
       "address": "00000000000000000000000000000001",
@@ -660,6 +795,33 @@
             "module": "Coin1",
             "name": "Coin1",
             "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "01c7fdf2d11d41089aa38c2b79d5dbcd5d0725ceaa8ecd8f9998e66eb7d161e932",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "Libra",
+            "name": "Libra",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "Coin2",
+                  "name": "Coin2",
+                  "type_params": []
+                }
+              }
+            ]
           }
         }
       ]

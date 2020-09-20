@@ -210,7 +210,8 @@ account. Note: For now, band for DefaultToken is always 0.
     amount: u64,
 ) {
     // Issuer should be the holder's owner.
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner,
+           <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
     // Top up amount should be positive.
     <b>assert</b>(amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EADD_NON_POS));
 
@@ -249,7 +250,8 @@ AssetHolder on issuer's account.
     amount: u64,
 ) {
     // Issuer should be the holder's owner.
-    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
+    <b>assert</b>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer) == holder.owner,
+           <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ECANNOT_ADD_TO_OTHERS));
     // Top up amount should be positive.
     <b>assert</b>(amount &gt; 0, <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EADD_NON_POS));
 

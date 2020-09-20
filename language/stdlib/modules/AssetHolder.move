@@ -72,7 +72,8 @@ address 0x1 {
             amount: u64,
         ) {
             // Issuer should be the holder's owner.
-            assert(Signer::address_of(issuer) == holder.owner, Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
+            assert(Signer::address_of(issuer) == holder.owner,
+                   Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
             // Top up amount should be positive.
             assert(amount > 0, Errors::invalid_argument(EADD_NON_POS)); 
             
@@ -91,7 +92,8 @@ address 0x1 {
             amount: u64,
         ) {
             // Issuer should be the holder's owner.
-            assert(Signer::address_of(issuer) == holder.owner, Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
+            assert(Signer::address_of(issuer) == holder.owner,
+                   Errors::invalid_argument(ECANNOT_ADD_TO_OTHERS));
             // Top up amount should be positive.
             assert(amount > 0, Errors::invalid_argument(EADD_NON_POS));
             
