@@ -1,19 +1,18 @@
-// TODO: port to using move Errors
-// 8001: money order expired
-// 8002: signature did not verify (8010: issuer)
-// 8003: money order already deposited or canceled
 address 0x1 {
 
     module MoneyOrder {
         use 0x1::AssetHolder::{Self, AssetHolder};
         use 0x1::Coin1::Coin1;
         use 0x1::Coin2::Coin2;
+        use 0x1::DefaultToken::{Self, DefaultToken};
         use 0x1::Event::{Self, EventHandle};
-        use 0x1::IssuerToken::{IssuerToken, DefaultToken};
+        use 0x1::Errors;
+        use 0x1::IssuerToken::{Self, IssuerToken};
         use 0x1::LBR::LBR;
         use 0x1::Libra::Libra;
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
+        use 0x1::MoneyOrderToken::{Self, MoneyOrderToken};
         use 0x1::Signature;
         use 0x1::Signer;
         use 0x1::Vector;
@@ -93,29 +92,77 @@ address 0x1 {
             holder: AssetHolder<AssetType>,
         }
 
+        /// Undefined type id for asset.
+        const EUNDEFINED_ASSET_TYPE_ID: u64 = 0;
+        /// Undefined specialization id for the asset type.
+        const EUNDEFINED_SPECIALIZATION_ID: u64 = 1;
+        /// Trying to top up AssetWallet<IssuerToken<MoneyOrderToken>>>, undefined
+        const EMONEY_ORDER_TOKEN_TOP_UP: u64 = 2;
+        /// Invalid issuer signature provided.
+        const EINVALID_ISSUER_SIGNATURE: u64 = 3;
+        /// Invalid user signature provided.
+        const EINVALID_USER_SIGNATURE: u64 = 4;
+        /// Depisiting an expired money order.
+        const EMONEY_ORDER_EXPIRED: u64 = 5;
+        /// Depositing a canceled or already deposited money order.
+        const ECANT_DEPOSIT_MONEY_ORDER: u64 = 6;
+
+        // Initializing money order asset holder for Libra<CoinType>.
         fun initialize_money_order_libra_holder<CoinType>(issuer: &signer,) {
             let issuer_address = Signer::address_of(issuer);
             if (!exists<MoneyOrderAssetHolder<Libra<CoinType>>>(
                 issuer_address)) {
                 move_to(issuer, MoneyOrderAssetHolder<Libra<CoinType>> {
-                    holder: AssetHolder::create_libra_holder<CoinType>(issuer),
+                    holder: AssetHolder::zero_libra_holder<CoinType>(issuer),
                 });
             };
         }
-        
+
+        // Initializing money order asset holder for IssuerToken<TokenType>.
+        fun initialize_money_order_issuer_token_holder<TokenType>(
+            issuer: &signer,
+            issue_capability: bool,
+        ) {
+            let issuer_address = Signer::address_of(issuer);
+            if (!exists<MoneyOrderAssetHolder<IssuerToken<TokenType>>>(
+                issuer_address)) {
+                move_to(issuer, MoneyOrderAssetHolder<IssuerToken<TokenType>> {
+                    holder: AssetHolder::zero_issuer_token_holder<TokenType>(
+                        issuer,
+                        issue_capability,
+                    ),
+                });
+            };
+        }
+
+        // Initialize money order asset holder. This has to happen on issuer's account
+        // for any asset type, which issuer intends to issue money orders in. This
+        // function is usually called by top_up_money_order_asset_holder, except
+        // for IssuerToken<MoneyOrderToken>, for which its called from Money Order
+        // initialization and will work without a call to top_up (topping up
+        // IssuerToken<MoneyOrderToken> is not necessary and also not well-defined,
+        // as it's assumed to be minted and available in infinite amount).
         fun initialize_money_order_asset_holder(issuer: &signer,
                                                 asset_type_id: u8,
                                                 asset_specialization_id: u8,
         ) {
-            let issuer_address = Signer::address_of(issuer);
+            assert_type_and_specialization_ids(asset_type_id,
+                                               asset_specialization_id);
+            
+            // TODO: here and below, consider passing type parameters and implying
+            // the specialization ID's (for branching logic) by storing the mapping
+            // on the issuer's account.
             if (asset_type_id == 0) {
-                if (!exists<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
-                    issuer_address)) {
-                    if (asset_specialization_id == 0) {
-                        move_to(issuer, MoneyOrderAssetHolder<IssuerToken<DefaultToken>> {
-                            holder: AssetHolder::create_default_issuer_token_holder(issuer),
-                        });
-                    };
+                if (asset_specialization_id == 0) {
+                    initialize_money_order_issuer_token_holder<DefaultToken>(
+                        issuer,
+                        false, // No capability to issue granted.
+                    );
+                } else if (asset_specialization_id == 1) {
+                    initialize_money_order_issuer_token_holder<MoneyOrderToken>(
+                        issuer,
+                        true, // Capability to issue MoneyOrderTokens
+                    );
                 };
             } else if (asset_type_id == 1) {
                 if (asset_specialization_id == 0) {
@@ -128,6 +175,28 @@ address 0x1 {
             };
         }
 
+        // Helper to assert that the asset type and specialization ids follow the
+        // convention defined by the MoneyOrder module.
+        fun assert_type_and_specialization_ids(type_id: u8,
+                                               specialization_id: u8,
+        ) {
+            // TODO: make & test specific errors.
+            assert(type_id >= 0 && type_id < 2,
+                   Errors::invalid_argument(EUNDEFINED_ASSET_TYPE_ID));
+            if (type_id == 0)
+            {
+                assert(specialization_id >= 0 && specialization_id < 2,
+                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
+
+            } else if (type_id == 1)
+            {
+                assert(specialization_id >= 0 && specialization_id < 3,
+                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
+            };
+        }
+
+        // Helper for topping up Libra<CoinType> balance of the issuer that can be
+        // received by depositing a valid money order of the issuer.
         fun top_up_money_order_libra<CoinType>(issuer: &signer,
                                                top_up_amount: u64
         ) acquires MoneyOrderAssetHolder {
@@ -143,41 +212,44 @@ address 0x1 {
         }
         
         /// If it doesn't yet exist, initializes the asset holder for money orders -
-        /// i.e. the structure where the receivers will redeem their money orders from.
+        /// i.e. the structure where the receivers will deposit their money orders from.
         /// Then it adds top_up_amount of the specified asset to the money order
         /// asset holder. Money order asset holder is just a wrapper around AssetHolder
         /// that allows the MoneyOrder module to do access control on withdrawal,
-        /// while AssetHolder has methods to deal with different assets.
-        /// Asset_type_id and asset_specialization_id determine the store asset
-        /// (e.g. whether it's Libra<Coin1>, IssuerToken<DefaultToken>, or some other
-        /// type or specialization). 
+        /// while AssetHolder & IssuerToken specializations have methods for dealing
+        /// with different types of assets.
+        /// 
+        /// Note: mustn't be called for IssuerToken<MoneyOrderToken> (type_id 0,
+        /// specialization_id 1), as that asset/specialization doesn't need topping up.
         public fun top_up_money_order_asset_holder(issuer: &signer,
                                                    asset_type_id: u8,
                                                    asset_specialization_id: u8,
                                                    top_up_amount: u64,
         ) acquires MoneyOrderAssetHolder {
+            assert_type_and_specialization_ids(asset_type_id,
+                                               asset_specialization_id);
+            
             let issuer_address = Signer::address_of(issuer);
             
             initialize_money_order_asset_holder(issuer,
                                                 asset_type_id,
                                                 asset_specialization_id);
-            
-            // TODO: This dispatching itself can't be moved to AssetHolder because
-            // the fact that AssetHolder APIs are called from MoneyOrders module
-            // provides access control. TODO: However, the mapping from type_id to
-            // the function calls for creation, loading & depositing assets maybe
-            // could be re-used if language allows.
             if (asset_type_id == 0) {
                 if (asset_specialization_id == 0) {
                     let mo_holder =
                         borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
                             issuer_address);
                 
-                    AssetHolder::top_up_default_issuer_token_holder(
+                    DefaultToken::asset_holder_top_up(
                         issuer,
                         &mut mo_holder.holder,
                         top_up_amount);
                 };
+                // No need to mint & top up MoneyOrderToken holder. This token type
+                // assumes that infinite amount of each band has been minted and is
+                // available - only controlled with the withdrawal access control.
+                assert(asset_specialization_id != 1,
+                       Errors::invalid_argument(EMONEY_ORDER_TOKEN_TOP_UP));
             } else if (asset_type_id == 1) {
                 if (asset_specialization_id == 0) {
                     top_up_money_order_libra<Coin1>(issuer, top_up_amount);
@@ -189,7 +261,8 @@ address 0x1 {
             };
         }
 
-        fun deposit_money_order_libra<CoinType>(receiver: &signer,
+        // Helper for receiving libra specializations from MoneyOrderAssetHolder.
+        fun receive_money_order_libra<CoinType>(receiver: &signer,
                                                 issuer_address: address,
                                                 amount: u64
         ) acquires MoneyOrderAssetHolder {
@@ -197,36 +270,51 @@ address 0x1 {
                 borrow_global_mut<MoneyOrderAssetHolder<Libra<CoinType>>>(
                     issuer_address);
 
-            AssetHolder::deposit_libra<CoinType>(
+            AssetHolder::receive_libra<CoinType>(
                 receiver,
                 &mut mo_holder.holder,
                 amount);
         }
-                
-        // This function must be private, so the caller does access control.
-        fun deposit_from_issuer(receiver: &signer,
+
+        // Receive the specified asset type from MoneyOrderAssetHolder of the
+        // money order issuer. Note: This function must be private, so the caller
+        // does access control before calling.
+        fun receive_from_issuer(receiver: &signer,
                                 issuer_address: address,
                                 asset_type_id: u8,
                                 asset_specialization_id: u8,
+                                batch_index: u64,
                                 amount: u64
         ) acquires MoneyOrderAssetHolder {
+            assert_type_and_specialization_ids(asset_type_id,
+                                               asset_specialization_id);
+            
             if (asset_type_id == 0) {
                 if (asset_specialization_id == 0) {
                     let mo_holder =
                         borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<DefaultToken>>>(
                             issuer_address);
 
-                    AssetHolder::deposit_default_issuer_token(receiver,
-                                                              &mut mo_holder.holder,
-                                                              amount);
-                };
+                    DefaultToken::asset_holder_withdraw(receiver,
+                                                        &mut mo_holder.holder,
+                                                        amount);
+                } else if (asset_specialization_id == 1) {
+                    let mo_holder =
+                        borrow_global_mut<MoneyOrderAssetHolder<IssuerToken<MoneyOrderToken>>>(
+                            issuer_address);
+                    
+                    MoneyOrderToken::asset_holder_withdraw(receiver,
+                                                           &mut mo_holder.holder,
+                                                           batch_index,
+                                                           amount);
+                }
             } else if (asset_type_id == 1) {
                 if (asset_specialization_id == 0) {
-                    deposit_money_order_libra<Coin1>(receiver, issuer_address, amount);
+                    receive_money_order_libra<Coin1>(receiver, issuer_address, amount);
                 } else if (asset_specialization_id == 1) {
-                    deposit_money_order_libra<Coin1>(receiver, issuer_address, amount);
+                    receive_money_order_libra<Coin1>(receiver, issuer_address, amount);
                 } else if (asset_specialization_id == 2) {
-                    deposit_money_order_libra<LBR>(receiver, issuer_address, amount);
+                    receive_money_order_libra<LBR>(receiver, issuer_address, amount);
                 };
             };
         }
@@ -243,13 +331,28 @@ address 0x1 {
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
                 redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
             });
+
+            // Register IssuerToken specializations according to the convention that
+            // the MoneyOrder module uses (consistent w. specialization ID's registered
+            // on Libra_root account).
+            IssuerToken::register_token_specialization<DefaultToken>(issuer, 0);
+            IssuerToken::register_token_specialization<MoneyOrderToken>(issuer, 1);
+
+            // Publish money order asset holder for IssuerToken<MoneyOrderToken>, only
+            // for this specialization since it's designed for Money Orders and doesn't
+            // need top-up (assumed that infinite amount is minted & available), hence
+            // no need to call top-up for being able to use MoneyOrderTokens.
+            initialize_money_order_asset_holder(issuer,
+                                                0, // IssuerToken
+                                                1, // MoneyOrderToken
+            );
         }
 
         /// Can only be called during genesis with libra root account.
         public fun initialize(lr_account: &signer
         ) {
             LibraTimestamp::assert_genesis();
-
+            
             // Initialize money order asset holder for all asset types.
             initialize_money_order_asset_holder(lr_account, 0, 0);
             initialize_money_order_asset_holder(lr_account, 0, 1);
@@ -361,7 +464,7 @@ address 0x1 {
             assert(Signature::ed25519_verify(issuer_signature,
                                              *&orders.public_key,
                                              issuer_message),
-                   8010);
+                   Errors::invalid_argument(EINVALID_ISSUER_SIGNATURE));
         }
 
         // Verifies the receiver/user signature for a money order descriptor.
@@ -378,7 +481,7 @@ address 0x1 {
             assert(Signature::ed25519_verify(user_signature,
                                              *&money_order_descriptor.user_public_key,
                                              *&message),
-                   8002);
+                   Errors::invalid_argument(EINVALID_USER_SIGNATURE));
         }
 
         // Set the bit corresponding to an order status to 1 (deposited/canceled).
@@ -481,20 +584,23 @@ address 0x1 {
                                                  money_order_descriptor.batch_index);
 
             // Verify that money order is not expired.
-            assert(!time_expired(order_batch.expiration_time), 8001);
+            assert(!time_expired(order_batch.expiration_time),
+                   Errors::invalid_state(EMONEY_ORDER_EXPIRED));
 
             // Update the status bit, verify that it was 0.
             assert(!test_and_set_order_status(&mut order_batch.order_status,
-                                             money_order_descriptor.order_index), 8003);
+                                              money_order_descriptor.order_index),
+                   Errors::invalid_state(ECANT_DEPOSIT_MONEY_ORDER));
 
             // Actually withdraw the asset from issuer's account (AssetHolder) and
             // deposit to receiver's account (as determined by the convention
             // of the asset type, e.g. Libra will be deposited to Balance and
             // IssuerToken will be deposited to IssuerTokens).
-            deposit_from_issuer(receiver,
+            receive_from_issuer(receiver,
                                 issuer_address,
                                 money_order_descriptor.asset_type_id,
                                 money_order_descriptor.asset_specialization_id,
+                                money_order_descriptor.batch_index,
                                 money_order_descriptor.amount);
             
              // Log a redeemed event.

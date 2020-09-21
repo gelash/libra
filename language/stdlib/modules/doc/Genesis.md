@@ -114,7 +114,8 @@
     <a href="LibraAccount.md#0x1_LibraAccount_restore_key_rotation_capability">LibraAccount::restore_key_rotation_capability</a>(tc_rotate_key_cap);
 
     // Initialize issuer tokens and asset holder before money orders.
-    <a href="IssuerToken.md#0x1_IssuerToken_initialize">IssuerToken::initialize</a>(lr_account);
+    <a href="DefaultToken.md#0x1_DefaultToken_initialize">DefaultToken::initialize</a>(lr_account);
+    <a href="MoneyOrderToken.md#0x1_MoneyOrderToken_initialize">MoneyOrderToken::initialize</a>(lr_account);
     <a href="AssetHolder.md#0x1_AssetHolder_initialize">AssetHolder::initialize</a>(lr_account);
 
     // Initialize money orders.

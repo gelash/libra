@@ -10,9 +10,9 @@ module Genesis {
     use 0x1::ChainId;
     use 0x1::Coin1;
     use 0x1::Coin2;
+    use 0x1::DefaultToken;
     use 0x1::DualAttestation;
     use 0x1::Event;
-    use 0x1::IssuerToken;
     use 0x1::LBR;
     use 0x1::Libra;
     use 0x1::LibraAccount;
@@ -24,6 +24,7 @@ module Genesis {
     use 0x1::LibraVersion;
     use 0x1::LibraWriteSetManager;
     use 0x1::MoneyOrder;
+    use 0x1::MoneyOrderToken;
     use 0x1::Signer;
     use 0x1::TransactionFee;
     use 0x1::Roles;
@@ -119,7 +120,8 @@ module Genesis {
         LibraAccount::restore_key_rotation_capability(tc_rotate_key_cap);
 
         // Initialize issuer tokens and asset holder before money orders.
-        IssuerToken::initialize(lr_account);
+        DefaultToken::initialize(lr_account);
+        MoneyOrderToken::initialize(lr_account);
         AssetHolder::initialize(lr_account);
 
         // Initialize money orders.
