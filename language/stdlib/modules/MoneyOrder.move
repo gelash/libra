@@ -135,6 +135,26 @@ address 0x1 {
             };
         }
 
+        // Helper to assert that the asset type and specialization ids follow the
+        // convention defined by the MoneyOrder module.
+        fun assert_type_and_specialization_ids(type_id: u8,
+                                               specialization_id: u8,
+        ) {
+            // TODO: make & test specific errors.
+            assert(type_id >= 0 && type_id < 2,
+                   Errors::invalid_argument(EUNDEFINED_ASSET_TYPE_ID));
+            if (type_id == 0)
+            {
+                assert(specialization_id >= 0 && specialization_id < 2,
+                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
+
+            } else if (type_id == 1)
+            {
+                assert(specialization_id >= 0 && specialization_id < 3,
+                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
+            };
+        }
+        
         // Initialize money order asset holder. This has to happen on issuer's account
         // for any asset type, which issuer intends to issue money orders in. This
         // function is usually called by top_up_money_order_asset_holder, except
@@ -172,26 +192,6 @@ address 0x1 {
                 } else if (asset_specialization_id == 2) {
                     initialize_money_order_libra_holder<LBR>(issuer);
                 };
-            };
-        }
-
-        // Helper to assert that the asset type and specialization ids follow the
-        // convention defined by the MoneyOrder module.
-        fun assert_type_and_specialization_ids(type_id: u8,
-                                               specialization_id: u8,
-        ) {
-            // TODO: make & test specific errors.
-            assert(type_id >= 0 && type_id < 2,
-                   Errors::invalid_argument(EUNDEFINED_ASSET_TYPE_ID));
-            if (type_id == 0)
-            {
-                assert(specialization_id >= 0 && specialization_id < 2,
-                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
-
-            } else if (type_id == 1)
-            {
-                assert(specialization_id >= 0 && specialization_id < 3,
-                       Errors::invalid_argument(EUNDEFINED_SPECIALIZATION_ID));
             };
         }
 

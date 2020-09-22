@@ -477,10 +477,6 @@ have specialization id 0 when being registered by any account).
         });
     };
 
-    <b>let</b> ids = borrow_global_mut&lt;<a href="#0x1_IssuerToken_IssuerTokenSpecializationIds">IssuerTokenSpecializationIds</a>&gt;(issuer_address);
-    // Ensure specialization_id is unique.
-    <b>assert</b>(<a href="Vector.md#0x1_Vector_contains">Vector::contains</a>(&ids.all_ids, &specialization_id),
-           <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ESPECIALIZATION_ID_NON_UNIQUE));
     // Ensure specialization id not previously set <b>to</b> something <b>else</b>
     // on issuer's or Libra_root's account.
     <a href="#0x1_IssuerToken_assert_unique_specialization_id">assert_unique_specialization_id</a>&lt;TokenType&gt;(issuer_address,
@@ -488,11 +484,18 @@ have specialization id 0 when being registered by any account).
     <a href="#0x1_IssuerToken_assert_unique_specialization_id">assert_unique_specialization_id</a>&lt;TokenType&gt;(<a href="CoreAddresses.md#0x1_CoreAddresses_LIBRA_ROOT_ADDRESS">CoreAddresses::LIBRA_ROOT_ADDRESS</a>(),
                                                specialization_id);
 
-    // Set specialization id and record in all ids.
-    move_to(issuer, <a href="#0x1_IssuerToken_WormSpecializationId">WormSpecializationId</a>&lt;TokenType&gt; {
-        specialization_id: specialization_id,
-    });
-    <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> ids.all_ids, specialization_id);
+    <b>if</b> (!exists&lt;<a href="#0x1_IssuerToken_WormSpecializationId">WormSpecializationId</a>&lt;TokenType&gt;&gt;(issuer_address)) {
+        <b>let</b> ids = borrow_global_mut&lt;<a href="#0x1_IssuerToken_IssuerTokenSpecializationIds">IssuerTokenSpecializationIds</a>&gt;(issuer_address);
+        // Ensure specialization_id is unique.
+        <b>assert</b>(!<a href="Vector.md#0x1_Vector_contains">Vector::contains</a>(&ids.all_ids, &specialization_id),
+               <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(ESPECIALIZATION_ID_NON_UNIQUE));
+
+        // Set specialization id and record in all ids.
+        move_to(issuer, <a href="#0x1_IssuerToken_WormSpecializationId">WormSpecializationId</a>&lt;TokenType&gt; {
+            specialization_id: specialization_id,
+        });
+        <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> ids.all_ids, specialization_id);
+    }
 }
 </code></pre>
 

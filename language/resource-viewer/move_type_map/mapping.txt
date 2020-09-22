@@ -27,6 +27,33 @@
     }
   ],
   [
+    "010afc6590e0c6ac37e2f8d4f92f8d520e1dcd6e76f4e424c15b74f65526d8e019",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "DefaultToken",
+                  "name": "DefaultToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "0110d33fe260cbf75c282946f4ce8c4da2e0c6ac72e14811372bfc57d9281fbf9b",
     {
       "address": "00000000000000000000000000000001",
@@ -135,6 +162,33 @@
     }
   ],
   [
+    "0129cea690fa4d6c12400dce2bcf8be3c12c3f573e5b9c73a3793164a5bb5c460f",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "IssuerTokenContainer",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "DefaultToken",
+                  "name": "DefaultToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "0129ff79329be24ff1b2232054f6afe258248f3d766059c2a499de783745ed3f05",
     {
       "address": "00000000000000000000000000000001",
@@ -201,33 +255,6 @@
             "module": "Coin1",
             "name": "Coin1",
             "type_params": []
-          }
-        }
-      ]
-    }
-  ],
-  [
-    "014292279139d42f5f08f7627814938ce102d6cecfb0b17896b0632f30f9b3be68",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "AssetHolder",
-      "name": "AssetHolder",
-      "type_params": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "IssuerToken",
-            "name": "IssuerToken",
-            "type_params": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "IssuerToken",
-                  "name": "DefaultToken",
-                  "type_params": []
-                }
-              }
-            ]
           }
         }
       ]
@@ -315,20 +342,11 @@
     }
   ],
   [
-    "01551080891c02034478a6da89eefbdff38f1578ff7e46efccd518d06401fbee92",
+    "0151d44ab4a8059d7e1b9ede61187f613cd961e5b2964d916362ffcbb08243170f",
     {
       "address": "00000000000000000000000000000001",
-      "module": "DualAttestation",
-      "name": "Credential",
-      "type_params": []
-    }
-  ],
-  [
-    "0155c1dd8bd6452eda305f504115ec8d6d804a52655988b61e3c6dcf307bd60b22",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "MoneyOrder",
-      "name": "MoneyOrderAssetHolder",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
       "type_params": [
         {
           "Struct": {
@@ -339,7 +357,43 @@
               {
                 "Struct": {
                   "address": "00000000000000000000000000000001",
-                  "module": "IssuerToken",
+                  "module": "MoneyOrderToken",
+                  "name": "MoneyOrderToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "01551080891c02034478a6da89eefbdff38f1578ff7e46efccd518d06401fbee92",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "DualAttestation",
+      "name": "Credential",
+      "type_params": []
+    }
+  ],
+  [
+    "016294819b51f8dfda3369b00309a337d57770b94e557127aebb71fe064333b16b",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "AssetHolder",
+      "name": "AssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "DefaultToken",
                   "name": "DefaultToken",
                   "type_params": []
                 }
@@ -363,33 +417,6 @@
             "module": "Coin2",
             "name": "Coin2",
             "type_params": []
-          }
-        }
-      ]
-    }
-  ],
-  [
-    "017055ab294dc839bbd0654edc9ec6fc6d923a78f871e8fdffeb4f4ca938e497c3",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "IssuerToken",
-      "name": "IssuerTokenContainer",
-      "type_params": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "IssuerToken",
-            "name": "IssuerToken",
-            "type_params": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "IssuerToken",
-                  "name": "DefaultToken",
-                  "type_params": []
-                }
-              }
-            ]
           }
         }
       ]
@@ -447,6 +474,15 @@
           }
         }
       ]
+    }
+  ],
+  [
+    "0174218af6ce31a1e139e04027392a9826833784d369e31cf5f8a0eb3c7325dec4",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "IssuerTokenSpecializationIds",
+      "type_params": []
     }
   ],
   [
@@ -531,12 +567,66 @@
     }
   ],
   [
+    "018439d83947da019975cbabcb0461d94e2371fd8b7014c85bf594c1ca61a904ca",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "MoneyOrder",
+      "name": "MoneyOrderAssetHolder",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "MoneyOrderToken",
+                  "name": "MoneyOrderToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  [
     "0185aa1f79e25ca70b8f54f8a0b673259fc19b1af35acb98885d99e160600387c9",
     {
       "address": "00000000000000000000000000000001",
       "module": "LibraAccount",
       "name": "LibraAccount",
       "type_params": []
+    }
+  ],
+  [
+    "018827ebf8a01ce7ea219b7725d5c3d5212c6316945f6bb31864319315518d5c7e",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "IssuerTokenContainer",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "IssuerToken",
+            "name": "IssuerToken",
+            "type_params": [
+              {
+                "Struct": {
+                  "address": "00000000000000000000000000000001",
+                  "module": "MoneyOrderToken",
+                  "name": "MoneyOrderToken",
+                  "type_params": []
+                }
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
   [
@@ -603,6 +693,24 @@
     }
   ],
   [
+    "0199c0632936776581913a30fdb0cca5d0487275e086e416d4e2ceba8e613589fe",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "WormSpecializationId",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "MoneyOrderToken",
+            "name": "MoneyOrderToken",
+            "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
     "019ee9121a481430c723f6f34ebe7a47a3407e55037e177411480853d3c50b2f50",
     {
       "address": "00000000000000000000000000000001",
@@ -660,33 +768,6 @@
             "module": "Coin2",
             "name": "Coin2",
             "type_params": []
-          }
-        }
-      ]
-    }
-  ],
-  [
-    "01aba14615a39f646ed4b937933194f6fec080d243fdc881705ca4c026697b2707",
-    {
-      "address": "00000000000000000000000000000001",
-      "module": "IssuerToken",
-      "name": "IssuerTokenContainer",
-      "type_params": [
-        {
-          "Struct": {
-            "address": "00000000000000000000000000000001",
-            "module": "IssuerToken",
-            "name": "IssuerToken",
-            "type_params": [
-              {
-                "Struct": {
-                  "address": "00000000000000000000000000000001",
-                  "module": "IssuerToken",
-                  "name": "MoneyOrderToken",
-                  "type_params": []
-                }
-              }
-            ]
           }
         }
       ]
@@ -911,6 +992,24 @@
             "address": "00000000000000000000000000000001",
             "module": "Coin1",
             "name": "Coin1",
+            "type_params": []
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "01eb74aaaac1bf6d03d6a651df1f5277dea94e7906502447c98618043e273e8960",
+    {
+      "address": "00000000000000000000000000000001",
+      "module": "IssuerToken",
+      "name": "WormSpecializationId",
+      "type_params": [
+        {
+          "Struct": {
+            "address": "00000000000000000000000000000001",
+            "module": "DefaultToken",
+            "name": "DefaultToken",
             "type_params": []
           }
         }

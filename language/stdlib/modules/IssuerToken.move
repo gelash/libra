@@ -143,10 +143,6 @@ address 0x1 {
                 });
             };
 
-            let ids = borrow_global_mut<IssuerTokenSpecializationIds>(issuer_address);
-            // Ensure specialization_id is unique.
-            assert(Vector::contains(&ids.all_ids, &specialization_id),
-                   Errors::invalid_argument(ESPECIALIZATION_ID_NON_UNIQUE));
             // Ensure specialization id not previously set to something else
             // on issuer's or Libra_root's account.
             assert_unique_specialization_id<TokenType>(issuer_address,
@@ -154,11 +150,18 @@ address 0x1 {
             assert_unique_specialization_id<TokenType>(CoreAddresses::LIBRA_ROOT_ADDRESS(),
                                                        specialization_id);
 
-            // Set specialization id and record in all ids.
-            move_to(issuer, WormSpecializationId<TokenType> {
-                specialization_id: specialization_id, 
-            });
-            Vector::push_back(&mut ids.all_ids, specialization_id);
+            if (!exists<WormSpecializationId<TokenType>>(issuer_address)) {
+                let ids = borrow_global_mut<IssuerTokenSpecializationIds>(issuer_address);
+                // Ensure specialization_id is unique.
+                assert(!Vector::contains(&ids.all_ids, &specialization_id),
+                       Errors::invalid_argument(ESPECIALIZATION_ID_NON_UNIQUE));
+
+                // Set specialization id and record in all ids.
+                move_to(issuer, WormSpecializationId<TokenType> {
+                    specialization_id: specialization_id, 
+                });
+                Vector::push_back(&mut ids.all_ids, specialization_id);
+            }
         }
         
         /// Publishes the IssuerTokenContainer struct on sender's account, allowing it

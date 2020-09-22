@@ -21,8 +21,8 @@
 -  [Const `ECANT_DEPOSIT_MONEY_ORDER`](#0x1_MoneyOrder_ECANT_DEPOSIT_MONEY_ORDER)
 -  [Function `initialize_money_order_libra_holder`](#0x1_MoneyOrder_initialize_money_order_libra_holder)
 -  [Function `initialize_money_order_issuer_token_holder`](#0x1_MoneyOrder_initialize_money_order_issuer_token_holder)
--  [Function `initialize_money_order_asset_holder`](#0x1_MoneyOrder_initialize_money_order_asset_holder)
 -  [Function `assert_type_and_specialization_ids`](#0x1_MoneyOrder_assert_type_and_specialization_ids)
+-  [Function `initialize_money_order_asset_holder`](#0x1_MoneyOrder_initialize_money_order_asset_holder)
 -  [Function `top_up_money_order_libra`](#0x1_MoneyOrder_top_up_money_order_libra)
 -  [Function `top_up_money_order_asset_holder`](#0x1_MoneyOrder_top_up_money_order_asset_holder)
 -  [Function `receive_money_order_libra`](#0x1_MoneyOrder_receive_money_order_libra)
@@ -506,6 +506,44 @@ Depositing a canceled or already deposited money order.
 
 </details>
 
+<a name="0x1_MoneyOrder_assert_type_and_specialization_ids"></a>
+
+## Function `assert_type_and_specialization_ids`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_assert_type_and_specialization_ids">assert_type_and_specialization_ids</a>(type_id: u8, specialization_id: u8)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_assert_type_and_specialization_ids">assert_type_and_specialization_ids</a>(type_id: u8,
+                                       specialization_id: u8,
+) {
+    // TODO: make & test specific errors.
+    <b>assert</b>(type_id &gt;= 0 && type_id &lt; 2,
+           <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_ASSET_TYPE_ID));
+    <b>if</b> (type_id == 0)
+    {
+        <b>assert</b>(specialization_id &gt;= 0 && specialization_id &lt; 2,
+               <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_SPECIALIZATION_ID));
+
+    } <b>else</b> <b>if</b> (type_id == 1)
+    {
+        <b>assert</b>(specialization_id &gt;= 0 && specialization_id &lt; 3,
+               <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_SPECIALIZATION_ID));
+    };
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x1_MoneyOrder_initialize_money_order_asset_holder"></a>
 
 ## Function `initialize_money_order_asset_holder`
@@ -551,44 +589,6 @@ Depositing a canceled or already deposited money order.
         } <b>else</b> <b>if</b> (asset_specialization_id == 2) {
             <a href="#0x1_MoneyOrder_initialize_money_order_libra_holder">initialize_money_order_libra_holder</a>&lt;<a href="LBR.md#0x1_LBR">LBR</a>&gt;(issuer);
         };
-    };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_assert_type_and_specialization_ids"></a>
-
-## Function `assert_type_and_specialization_ids`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_assert_type_and_specialization_ids">assert_type_and_specialization_ids</a>(type_id: u8, specialization_id: u8)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_assert_type_and_specialization_ids">assert_type_and_specialization_ids</a>(type_id: u8,
-                                       specialization_id: u8,
-) {
-    // TODO: make & test specific errors.
-    <b>assert</b>(type_id &gt;= 0 && type_id &lt; 2,
-           <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_ASSET_TYPE_ID));
-    <b>if</b> (type_id == 0)
-    {
-        <b>assert</b>(specialization_id &gt;= 0 && specialization_id &lt; 2,
-               <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_SPECIALIZATION_ID));
-
-    } <b>else</b> <b>if</b> (type_id == 1)
-    {
-        <b>assert</b>(specialization_id &gt;= 0 && specialization_id &lt; 3,
-               <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EUNDEFINED_SPECIALIZATION_ID));
     };
 }
 </code></pre>
@@ -681,7 +681,7 @@ specialization_id 1), as that asset/specialization doesn't need topping up.
                 top_up_amount);
         };
         // No need <b>to</b> mint & top up <a href="MoneyOrderToken.md#0x1_MoneyOrderToken">MoneyOrderToken</a> holder. This token type
-        // assumes that infinite amount of each brand has been minted and is
+        // assumes that infinite amount of each band has been minted and is
         // available - only controlled with the withdrawal access control.
         <b>assert</b>(asset_specialization_id != 1,
                <a href="Errors.md#0x1_Errors_invalid_argument">Errors::invalid_argument</a>(EMONEY_ORDER_TOKEN_TOP_UP));
