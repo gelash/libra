@@ -118,6 +118,7 @@
     <a href="MoneyOrderToken.md#0x1_MoneyOrderToken_initialize">MoneyOrderToken::initialize</a>(lr_account);
     <a href="AssetHolder.md#0x1_AssetHolder_initialize">AssetHolder::initialize</a>(lr_account);
 
+    <a href="ShardedBitVector.md#0x1_ShardedBitVector_initialize">ShardedBitVector::initialize</a>(lr_account);
     // Initialize money orders.
     <a href="MoneyOrder.md#0x1_MoneyOrder_initialize">MoneyOrder::initialize</a>(lr_account);
 

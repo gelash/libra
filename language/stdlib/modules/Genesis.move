@@ -26,6 +26,7 @@ module Genesis {
     use 0x1::MoneyOrder;
     use 0x1::MoneyOrderToken;
     use 0x1::Signer;
+    use 0x1::ShardedBitVector;
     use 0x1::TransactionFee;
     use 0x1::Roles;
     use 0x1::LibraVMConfig;
@@ -124,6 +125,7 @@ module Genesis {
         MoneyOrderToken::initialize(lr_account);
         AssetHolder::initialize(lr_account);
 
+        ShardedBitVector::initialize(lr_account);
         // Initialize money orders.
         MoneyOrder::initialize(lr_account);
         

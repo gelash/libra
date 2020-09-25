@@ -5,7 +5,6 @@
 
 ### Table of Contents
 
--  [Resource `MoneyOrderBatch`](#0x1_MoneyOrder_MoneyOrderBatch)
 -  [Resource `MoneyOrders`](#0x1_MoneyOrder_MoneyOrders)
 -  [Struct `MoneyOrderDescriptor`](#0x1_MoneyOrder_MoneyOrderDescriptor)
 -  [Struct `IssuedMoneyOrderEvent`](#0x1_MoneyOrder_IssuedMoneyOrderEvent)
@@ -30,59 +29,16 @@
 -  [Function `publish_money_orders`](#0x1_MoneyOrder_publish_money_orders)
 -  [Function `initialize`](#0x1_MoneyOrder_initialize)
 -  [Function `money_order_descriptor`](#0x1_MoneyOrder_money_order_descriptor)
--  [Function `time_expired`](#0x1_MoneyOrder_time_expired)
--  [Function `div_ceil`](#0x1_MoneyOrder_div_ceil)
--  [Function `vector_with_copies`](#0x1_MoneyOrder_vector_with_copies)
 -  [Function `issue_money_order_batch`](#0x1_MoneyOrder_issue_money_order_batch)
 -  [Function `issue_money_order`](#0x1_MoneyOrder_issue_money_order)
 -  [Function `verify_issuer_signature`](#0x1_MoneyOrder_verify_issuer_signature)
 -  [Function `verify_user_signature`](#0x1_MoneyOrder_verify_user_signature)
--  [Function `test_and_set_order_status`](#0x1_MoneyOrder_test_and_set_order_status)
--  [Function `cancel_order_impl`](#0x1_MoneyOrder_cancel_order_impl)
+-  [Function `cancel_order`](#0x1_MoneyOrder_cancel_order)
 -  [Function `issuer_cancel_money_order`](#0x1_MoneyOrder_issuer_cancel_money_order)
 -  [Function `deposit_money_order`](#0x1_MoneyOrder_deposit_money_order)
 -  [Function `cancel_money_order`](#0x1_MoneyOrder_cancel_money_order)
--  [Function `clear_vector`](#0x1_MoneyOrder_clear_vector)
--  [Function `clear_statuses_if_expired`](#0x1_MoneyOrder_clear_statuses_if_expired)
--  [Function `compress_expired_batch`](#0x1_MoneyOrder_compress_expired_batch)
--  [Function `compress_expired_batches`](#0x1_MoneyOrder_compress_expired_batches)
 
 
-
-<a name="0x1_MoneyOrder_MoneyOrderBatch"></a>
-
-## Resource `MoneyOrderBatch`
-
-
-
-<pre><code><b>resource</b> <b>struct</b> <a href="#0x1_MoneyOrder_MoneyOrderBatch">MoneyOrderBatch</a>
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-
-<code>order_status: vector&lt;u8&gt;</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-
-<code>expiration_time: u64</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
 
 <a name="0x1_MoneyOrder_MoneyOrders"></a>
 
@@ -102,7 +58,7 @@
 <dl>
 <dt>
 
-<code>batches: vector&lt;<a href="#0x1_MoneyOrder_MoneyOrderBatch">MoneyOrder::MoneyOrderBatch</a>&gt;</code>
+<code>shard_info: <a href="ShardedBitVector.md#0x1_ShardedBitVector_BitVectorInfo">ShardedBitVector::BitVectorInfo</a></code>
 </dt>
 <dd>
 
@@ -816,7 +772,7 @@ resource. MoneyOrderHolder
                                 public_key: vector&lt;u8&gt;,
 ) {
     move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-        batches: <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>(),
+        shard_info: <a href="ShardedBitVector.md#0x1_ShardedBitVector_empty_info">ShardedBitVector::empty_info</a>(issuer),
         public_key: public_key,
         issued_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(issuer),
         canceled_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_CanceledMoneyOrderEvent">CanceledMoneyOrderEvent</a>&gt;(issuer),
@@ -922,87 +878,6 @@ Can only be called during genesis with libra root account.
 
 </details>
 
-<a name="0x1_MoneyOrder_time_expired"></a>
-
-## Function `time_expired`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_time_expired">time_expired</a>(expiration_time: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_time_expired">time_expired</a>(expiration_time: u64): bool {
-    <a href="LibraTimestamp.md#0x1_LibraTimestamp_now_microseconds">LibraTimestamp::now_microseconds</a>() &gt;= expiration_time
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_div_ceil"></a>
-
-## Function `div_ceil`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_div_ceil">div_ceil</a>(a: u64, b: u64): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_div_ceil">div_ceil</a>(a: u64, b: u64,
-): u64 {
-    (a + b - 1) / b
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_vector_with_copies"></a>
-
-## Function `vector_with_copies`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_vector_with_copies">vector_with_copies</a>(num_copies: u64, element: u8): vector&lt;u8&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_vector_with_copies">vector_with_copies</a>(num_copies: u64, element: u8,
-): vector&lt;u8&gt; {
-    <b>let</b> ret = <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>();
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; num_copies) {
-        <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> ret, element);
-        i = i + 1;
-    };
-
-    ret
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_MoneyOrder_issue_money_order_batch"></a>
 
 ## Function `issue_money_order_batch`
@@ -1023,16 +898,13 @@ Can only be called during genesis with libra root account.
                                    validity_microseconds: u64,
                                    grace_period_microseconds: u64,
 ) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <b>let</b> status = <a href="#0x1_MoneyOrder_vector_with_copies">vector_with_copies</a>(<a href="#0x1_MoneyOrder_div_ceil">div_ceil</a>(batch_size, 8), 0);
-
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
     <b>let</b> duration_microseconds = validity_microseconds + grace_period_microseconds;
 
-    <b>let</b> batch_id = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&orders.batches);
-    <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> orders.batches, <a href="#0x1_MoneyOrder_MoneyOrderBatch">MoneyOrderBatch</a> {
-        order_status: status,
-        expiration_time: <a href="LibraTimestamp.md#0x1_LibraTimestamp_now_microseconds">LibraTimestamp::now_microseconds</a>() + duration_microseconds,
-    });
+    <b>let</b> batch_id = <a href="ShardedBitVector.md#0x1_ShardedBitVector_issue_batch">ShardedBitVector::issue_batch</a>(issuer,
+                                                 &<b>mut</b> orders.shard_info,
+                                                 batch_size,
+                                                 duration_microseconds);
 
     <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(
         &<b>mut</b> orders.issued_events,
@@ -1150,13 +1022,13 @@ Can only be called during genesis with libra root account.
 
 </details>
 
-<a name="0x1_MoneyOrder_test_and_set_order_status"></a>
+<a name="0x1_MoneyOrder_cancel_order"></a>
 
-## Function `test_and_set_order_status`
+## Function `cancel_order`
 
 
 
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(status_array: &<b>mut</b> vector&lt;u8&gt;, order_index: u64): bool
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_cancel_order">cancel_order</a>(issuer_address: address, batch_index: u64, order_index: u64): bool
 </code></pre>
 
 
@@ -1165,54 +1037,19 @@ Can only be called during genesis with libra root account.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(status_array: &<b>mut</b> vector&lt;u8&gt;,
-                              order_index: u64,
-): bool {
-    <b>let</b> byte_index = order_index / 8;
-    <b>let</b> bit_index = order_index % 8;
-    <b>let</b> bitmask = (1 &lt;&lt; (bit_index <b>as</b> u8));
-    <b>let</b> target_byte = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(status_array, byte_index);
-
-    <b>let</b> test_status: bool = (*target_byte & bitmask) == bitmask;
-    *target_byte = *target_byte | bitmask;
-    test_status
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_cancel_order_impl"></a>
-
-## Function `cancel_order_impl`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_cancel_order_impl">cancel_order_impl</a>(issuer_address: address, batch_index: u64, order_index: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_cancel_order_impl">cancel_order_impl</a>(issuer_address: address,
-                      batch_index: u64,
-                      order_index: u64,
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_cancel_order">cancel_order</a>(issuer_address: address,
+                 batch_index: u64,
+                 order_index: u64,
 ): bool <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
-    <b>let</b> order_batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches, batch_index);
-
-    <b>let</b> was_expired = <a href="#0x1_MoneyOrder_time_expired">time_expired</a>(order_batch.expiration_time);
 
     // The money order was canceled now <b>if</b> it wasn't expired, and <b>if</b> the
     // status bit wasn't 1 (e.g. already canceled or redeemed). Note: If
     // expired, don't set the bit since the order_status array may be cleared.
-    <b>let</b> canceled_now = !(was_expired ||
-                         <a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(&<b>mut</b> order_batch.order_status,
-                                                   order_index));
+    <b>let</b> canceled_now = <a href="ShardedBitVector.md#0x1_ShardedBitVector_test_and_set_bit">ShardedBitVector::test_and_set_bit</a>(&orders.shard_info,
+                                                          batch_index,
+                                                          order_index,
+                                                          <b>false</b>);
 
     <b>if</b> (canceled_now) {
         // Log a canceled event.
@@ -1252,9 +1089,9 @@ Can only be called during genesis with libra root account.
                                      batch_index: u64,
                                      order_index: u64,
 ): bool <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <a href="#0x1_MoneyOrder_cancel_order_impl">cancel_order_impl</a>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer),
-                      batch_index,
-                      order_index)
+    <a href="#0x1_MoneyOrder_cancel_order">cancel_order</a>(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer),
+                 batch_index,
+                 order_index)
 }
 </code></pre>
 
@@ -1290,16 +1127,12 @@ Can only be called during genesis with libra root account.
 
     <b>let</b> issuer_address = money_order_descriptor.issuer_address;
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
-    <b>let</b> order_batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches,
-                                         money_order_descriptor.batch_index);
-
-    // Verify that money order is not expired.
-    <b>assert</b>(!<a href="#0x1_MoneyOrder_time_expired">time_expired</a>(order_batch.expiration_time),
-           <a href="Errors.md#0x1_Errors_invalid_state">Errors::invalid_state</a>(EMONEY_ORDER_EXPIRED));
 
     // Update the status bit, verify that it was 0.
-    <b>assert</b>(!<a href="#0x1_MoneyOrder_test_and_set_order_status">test_and_set_order_status</a>(&<b>mut</b> order_batch.order_status,
-                                      money_order_descriptor.order_index),
+    <b>assert</b>(!<a href="ShardedBitVector.md#0x1_ShardedBitVector_test_and_set_bit">ShardedBitVector::test_and_set_bit</a>(&<b>mut</b> orders.shard_info,
+                                               money_order_descriptor.batch_index,
+                                               money_order_descriptor.order_index,
+                                               <b>true</b>),
            <a href="Errors.md#0x1_Errors_invalid_state">Errors::invalid_state</a>(ECANT_DEPOSIT_MONEY_ORDER));
 
     // Actually withdraw the asset from issuer's account (<a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a>) and
@@ -1355,135 +1188,9 @@ Can only be called during genesis with libra root account.
                           b"@@$$LIBRA_MONEY_ORDER_CANCEL$$@@");
     <a href="#0x1_MoneyOrder_verify_issuer_signature">verify_issuer_signature</a>(*&money_order_descriptor, issuer_signature);
 
-    <a href="#0x1_MoneyOrder_cancel_order_impl">cancel_order_impl</a>(money_order_descriptor.issuer_address,
-                      money_order_descriptor.batch_index,
-                      money_order_descriptor.order_index)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_clear_vector"></a>
-
-## Function `clear_vector`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_clear_vector">clear_vector</a>(v: &<b>mut</b> vector&lt;u8&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_clear_vector">clear_vector</a>(v: &<b>mut</b> vector&lt;u8&gt;,) {
-    <b>let</b> length = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(v);
-
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; length) {
-        <a href="Vector.md#0x1_Vector_pop_back">Vector::pop_back</a>(v);
-        i = i + 1;
-    };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_clear_statuses_if_expired"></a>
-
-## Function `clear_statuses_if_expired`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_clear_statuses_if_expired">clear_statuses_if_expired</a>(status_array: &<b>mut</b> vector&lt;u8&gt;, expiration_time: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_clear_statuses_if_expired">clear_statuses_if_expired</a>(status_array: &<b>mut</b> vector&lt;u8&gt;,
-                              expiration_time: u64,
-): bool {
-    <b>let</b> expired = <a href="#0x1_MoneyOrder_time_expired">time_expired</a>(expiration_time);
-
-    <b>let</b> was_empty = <a href="Vector.md#0x1_Vector_is_empty">Vector::is_empty</a>(status_array);
-    <b>if</b> (expired) {
-        <a href="#0x1_MoneyOrder_clear_vector">clear_vector</a>(status_array);
-    };
-
-    expired && !was_empty
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_compress_expired_batch"></a>
-
-## Function `compress_expired_batch`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_compress_expired_batch">compress_expired_batch</a>(issuer: &signer, batch_index: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_compress_expired_batch">compress_expired_batch</a>(issuer: &signer,
-                                  batch_index: u64,
-): bool <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
-    <b>let</b> batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches, batch_index);
-
-    <a href="#0x1_MoneyOrder_clear_statuses_if_expired">clear_statuses_if_expired</a>(&<b>mut</b> batch.order_status,
-                              batch.expiration_time)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_MoneyOrder_compress_expired_batches"></a>
-
-## Function `compress_expired_batches`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_compress_expired_batches">compress_expired_batches</a>(issuer: &signer)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_compress_expired_batches">compress_expired_batches</a>(issuer: &signer
-) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-    <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
-
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&orders.batches)) {
-        <b>let</b> batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> orders.batches, i);
-        <a href="#0x1_MoneyOrder_clear_statuses_if_expired">clear_statuses_if_expired</a>(&<b>mut</b> batch.order_status,
-                                  batch.expiration_time);
-        i = i + 1;
-    };
+    <a href="#0x1_MoneyOrder_cancel_order">cancel_order</a>(money_order_descriptor.issuer_address,
+                 money_order_descriptor.batch_index,
+                 money_order_descriptor.order_index)
 }
 </code></pre>
 

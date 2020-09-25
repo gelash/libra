@@ -13,22 +13,15 @@ address 0x1 {
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
         use 0x1::MoneyOrderToken::{Self, MoneyOrderToken};
+        use 0x1::ShardedBitVector::{Self, BitVectorInfo};
         use 0x1::Signature;
         use 0x1::Signer;
         use 0x1::Vector;
 
-        resource struct MoneyOrderBatch {
-            // bit-packed, 0: redeemable, 1: deposited/canceled.
-            order_status: vector<u8>,
-
-            // Expiration time of these money orders.
-            expiration_time: u64,
-        }
-
         resource struct MoneyOrders {
-            // Each batch has an expiry time and contains money order status bits.
-            batches: vector<MoneyOrderBatch>,
-
+            // Sharded storage of bit vectors.
+            shard_info: BitVectorInfo,
+            
             // Public key associated with the money orders, the issuing VASP holds
             // the corresponding private key.
             public_key: vector<u8>,
@@ -325,7 +318,7 @@ address 0x1 {
                                         public_key: vector<u8>,
         ) {
             move_to(issuer, MoneyOrders {
-                batches: Vector::empty(),
+                shard_info: ShardedBitVector::empty_info(issuer),
                 public_key: public_key,
                 issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
@@ -387,48 +380,19 @@ address 0x1 {
             }
         }
 
-
-        // Checks whether a particular expiration time has passed.
-        fun time_expired(expiration_time: u64): bool {
-            LibraTimestamp::now_microseconds() >= expiration_time
-        }
-
-        // TODO: get rid when standard supports.
-        fun div_ceil(a: u64, b: u64,
-        ): u64 {
-            (a + b - 1) / b
-        }
-
-        // TODO: get rid if and when vector supports initializers for copyable
-        // elements (templated on the type?).
-        fun vector_with_copies(num_copies: u64, element: u8,
-        ): vector<u8> {
-            let ret = Vector::empty();
-            let i = 0;
-            while (i < num_copies) {
-                Vector::push_back(&mut ret, element);
-                i = i + 1;
-            };
-
-            ret
-        }
-
         // Issue a batch of money orders, return batch index.
         public fun issue_money_order_batch(issuer: &signer,
                                            batch_size: u64,
                                            validity_microseconds: u64,
                                            grace_period_microseconds: u64,
         ) acquires MoneyOrders {
-            let status = vector_with_copies(div_ceil(batch_size, 8), 0);
-
             let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
             let duration_microseconds = validity_microseconds + grace_period_microseconds;
-
-            let batch_id = Vector::length(&orders.batches);
-            Vector::push_back(&mut orders.batches, MoneyOrderBatch {
-                order_status: status,
-                expiration_time: LibraTimestamp::now_microseconds() + duration_microseconds,
-            });
+            
+            let batch_id = ShardedBitVector::issue_batch(issuer,
+                                                         &mut orders.shard_info,
+                                                         batch_size,
+                                                         duration_microseconds);
 
             Event::emit_event<IssuedMoneyOrderEvent>(
                 &mut orders.issued_events,
@@ -484,40 +448,24 @@ address 0x1 {
                    Errors::invalid_argument(EINVALID_USER_SIGNATURE));
         }
 
-        // Set the bit corresponding to an order status to 1 (deposited/canceled).
-        // Return the previous value of the bit (test-and-set semantics).
-        fun test_and_set_order_status(status_array: &mut vector<u8>,
-                                      order_index: u64,
-        ): bool {
-            let byte_index = order_index / 8;
-            let bit_index = order_index % 8;
-            let bitmask = (1 << (bit_index as u8));
-            let target_byte = Vector::borrow_mut(status_array, byte_index);
-
-            let test_status: bool = (*target_byte & bitmask) == bitmask;
-            *target_byte = *target_byte | bitmask;
-            test_status
-        }
 
         // If the expiration time hasn't passed and the order bit was previously 0,
         // sets the order bit to 1 and returns true (i.e. cancelation changed state
         // and the observable redemption behavior), otherwise returns false.
-        fun cancel_order_impl(issuer_address: address,
-                              batch_index: u64,
-                              order_index: u64,
+        fun cancel_order(issuer_address: address,
+                         batch_index: u64,
+                         order_index: u64,
         ): bool acquires MoneyOrders {
             let orders = borrow_global_mut<MoneyOrders>(issuer_address);
-            let order_batch = Vector::borrow_mut(&mut orders.batches, batch_index);
-
-            let was_expired = time_expired(order_batch.expiration_time);
 
             // The money order was canceled now if it wasn't expired, and if the
             // status bit wasn't 1 (e.g. already canceled or redeemed). Note: If
             // expired, don't set the bit since the order_status array may be cleared.
-            let canceled_now = !(was_expired ||
-                                 test_and_set_order_status(&mut order_batch.order_status,
-                                                           order_index));
-
+            let canceled_now = ShardedBitVector::test_and_set_bit(&orders.shard_info,
+                                                                  batch_index,
+                                                                  order_index,
+                                                                  false);
+            
             if (canceled_now) {
                 // Log a canceled event.
                 Event::emit_event<CanceledMoneyOrderEvent>(
@@ -548,9 +496,9 @@ address 0x1 {
                                              batch_index: u64,
                                              order_index: u64,
         ): bool acquires MoneyOrders {
-            cancel_order_impl(Signer::address_of(issuer),
-                              batch_index,
-                              order_index)
+            cancel_order(Signer::address_of(issuer),
+                         batch_index,
+                         order_index)
         }
 
         // Deposit a money order from a user, prepared by sender
@@ -580,16 +528,12 @@ address 0x1 {
 
             let issuer_address = money_order_descriptor.issuer_address;
             let orders = borrow_global_mut<MoneyOrders>(issuer_address);
-            let order_batch = Vector::borrow_mut(&mut orders.batches,
-                                                 money_order_descriptor.batch_index);
-
-            // Verify that money order is not expired.
-            assert(!time_expired(order_batch.expiration_time),
-                   Errors::invalid_state(EMONEY_ORDER_EXPIRED));
 
             // Update the status bit, verify that it was 0.
-            assert(!test_and_set_order_status(&mut order_batch.order_status,
-                                              money_order_descriptor.order_index),
+            assert(!ShardedBitVector::test_and_set_bit(&mut orders.shard_info,
+                                                       money_order_descriptor.batch_index,
+                                                       money_order_descriptor.order_index,
+                                                       true),
                    Errors::invalid_state(ECANT_DEPOSIT_MONEY_ORDER));
 
             // Actually withdraw the asset from issuer's account (AssetHolder) and
@@ -628,66 +572,11 @@ address 0x1 {
                                   b"@@$$LIBRA_MONEY_ORDER_CANCEL$$@@");
             verify_issuer_signature(*&money_order_descriptor, issuer_signature);
 
-            cancel_order_impl(money_order_descriptor.issuer_address,
-                              money_order_descriptor.batch_index,
-                              money_order_descriptor.order_index)
+            cancel_order(money_order_descriptor.issuer_address,
+                         money_order_descriptor.batch_index,
+                         money_order_descriptor.order_index)
         }
 
-        // TODO: get rid of when vector with copyable elements (non-resource types)
-        // supports clearing.
-        fun clear_vector(v: &mut vector<u8>,) {
-            let length = Vector::length(v);
-
-            let i = 0;
-            while (i < length) {
-                Vector::pop_back(v);
-                i = i + 1;
-            };
-        }
-
-        // Clear the status_array vector if the expiration time has passed and
-        // return true if at least one status was cleared, otherwise return false.
-        fun clear_statuses_if_expired(status_array: &mut vector<u8>,
-                                      expiration_time: u64,
-        ): bool {
-            let expired = time_expired(expiration_time);
-
-            let was_empty = Vector::is_empty(status_array);
-            if (expired) {
-                clear_vector(status_array);
-            };
-
-            expired && !was_empty
-        }
-
-        // If a batch has expired, clear its order statuses to save memory.
-        // Return true if at least one status was cleared, otherwise return false.
-        public fun compress_expired_batch(issuer: &signer,
-                                          batch_index: u64,
-        ): bool acquires MoneyOrders {
-            let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
-            let batch = Vector::borrow_mut(&mut orders.batches, batch_index);
-
-            clear_statuses_if_expired(&mut batch.order_status,
-                                      batch.expiration_time)
-        }
-
-        // Iterates over all money order batches, and clears the status vector for
-        // ones that have expired. Lightweight way to control/reduce the memory
-        // footprint used by the MoneyOrders resource, if the issuer chooses to
-        // batches the money orders with the same expiry time.
-        public fun compress_expired_batches(issuer: &signer
-        ) acquires MoneyOrders {
-            let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
-
-            let i = 0;
-            while (i < Vector::length(&orders.batches)) {
-                let batch = Vector::borrow_mut(&mut orders.batches, i);
-                clear_statuses_if_expired(&mut batch.order_status,
-                                          batch.expiration_time);
-                i = i + 1;
-            };
-        }
     }
 
 }
