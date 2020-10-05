@@ -13,14 +13,15 @@ address 0x1 {
         use 0x1::LCS;
         use 0x1::LibraTimestamp;
         use 0x1::MoneyOrderToken::{Self, MoneyOrderToken};
-        use 0x1::ShardedBitVector::{Self, BitVectorInfo};
+        use 0x1::ShardedBitVectorBatches::{Self, BitVectorBatchesInfo};
         use 0x1::Signature;
         use 0x1::Signer;
         use 0x1::Vector;
 
         resource struct MoneyOrders {
             // Sharded storage of bit vectors.
-            shard_info: BitVectorInfo,
+            // 0: redeemable, 1: deposited/canceled.
+            bit_vector_batches_info: BitVectorBatchesInfo,
             
             // Public key associated with the money orders, the issuing VASP holds
             // the corresponding private key.
@@ -312,18 +313,42 @@ address 0x1 {
             };
         }
 
+        // Default behavior when the account acts as a single shard for its own
+        // storage of status bits.
+        fun register_as_own_shard(issuer: &signer) acquires MoneyOrders {
+            let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
+
+            ShardedBitVectorBatches::register_as_shard(
+                issuer,
+                &mut orders.bit_vector_batches_info
+            );
+            ShardedBitVectorBatches::finish_shard_registration(
+                issuer,
+                &mut orders.bit_vector_batches_info
+            );
+        }
+        
         /// Initialize the capability to issue money orders by publishing a MoneyOrders
         /// resource. MoneyOrderHolder
         public fun publish_money_orders(issuer: &signer,
                                         public_key: vector<u8>,
-        ) {
+        ) acquires MoneyOrders {
             move_to(issuer, MoneyOrders {
-                shard_info: ShardedBitVector::empty_info(issuer),
+                bit_vector_batches_info: ShardedBitVectorBatches::empty_info(
+                    issuer,
+                    50000, // Number of bits per shard, TODO: parametrize.
+                ),
                 public_key: public_key,
                 issued_events: Event::new_event_handle<IssuedMoneyOrderEvent>(issuer),
                 canceled_events: Event::new_event_handle<CanceledMoneyOrderEvent>(issuer),
                 redeemed_events: Event::new_event_handle<RedeemedMoneyOrderEvent>(issuer),
             });
+
+            // Register itself as a shard and conclude shard registration.
+            // TODO: Pass a bool param for default (own shard) behavior. If false,
+            // expose and use APIs for accounts to register as shards for money order
+            // status storage. Adjust tests & benchmarks.
+            register_as_own_shard(issuer);
 
             // Register IssuerToken specializations according to the convention that
             // the MoneyOrder module uses (consistent w. specialization ID's registered
@@ -343,7 +368,7 @@ address 0x1 {
 
         /// Can only be called during genesis with libra root account.
         public fun initialize(lr_account: &signer
-        ) {
+        ) acquires MoneyOrders {
             LibraTimestamp::assert_genesis();
             
             // Initialize money order asset holder for all asset types.
@@ -389,10 +414,12 @@ address 0x1 {
             let orders = borrow_global_mut<MoneyOrders>(Signer::address_of(issuer));
             let duration_microseconds = validity_microseconds + grace_period_microseconds;
             
-            let batch_id = ShardedBitVector::issue_batch(issuer,
-                                                         &mut orders.shard_info,
-                                                         batch_size,
-                                                         duration_microseconds);
+            let batch_id = ShardedBitVectorBatches::issue_batch(
+                issuer,
+                &mut orders.bit_vector_batches_info,
+                batch_size,
+                duration_microseconds
+            );
 
             Event::emit_event<IssuedMoneyOrderEvent>(
                 &mut orders.issued_events,
@@ -459,12 +486,15 @@ address 0x1 {
             let orders = borrow_global_mut<MoneyOrders>(issuer_address);
 
             // The money order was canceled now if it wasn't expired, and if the
-            // status bit wasn't 1 (e.g. already canceled or redeemed). Note: If
-            // expired, don't set the bit since the order_status array may be cleared.
-            let canceled_now = ShardedBitVector::test_and_set_bit(&orders.shard_info,
-                                                                  batch_index,
-                                                                  order_index,
-                                                                  false);
+            // status bit wasn't 1 (e.g. already canceled or redeemed). We pass
+            // assert_expiry = false, so the call returns 1 if expired or if the
+            // bit was 1.
+            let canceled_now = !ShardedBitVectorBatches::test_and_set_bit(
+                &orders.bit_vector_batches_info,
+                batch_index,
+                order_index,
+                false
+            );
             
             if (canceled_now) {
                 // Log a canceled event.
@@ -530,10 +560,13 @@ address 0x1 {
             let orders = borrow_global_mut<MoneyOrders>(issuer_address);
 
             // Update the status bit, verify that it was 0.
-            assert(!ShardedBitVector::test_and_set_bit(&mut orders.shard_info,
-                                                       money_order_descriptor.batch_index,
-                                                       money_order_descriptor.order_index,
-                                                       true),
+            let bit_was_set = ShardedBitVectorBatches::test_and_set_bit(
+                &mut orders.bit_vector_batches_info,
+                money_order_descriptor.batch_index,
+                money_order_descriptor.order_index,
+                true
+            );
+            assert(!bit_was_set,
                    Errors::invalid_state(ECANT_DEPOSIT_MONEY_ORDER));
 
             // Actually withdraw the asset from issuer's account (AssetHolder) and

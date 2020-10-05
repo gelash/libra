@@ -26,6 +26,7 @@
 -  [Function `top_up_money_order_asset_holder`](#0x1_MoneyOrder_top_up_money_order_asset_holder)
 -  [Function `receive_money_order_libra`](#0x1_MoneyOrder_receive_money_order_libra)
 -  [Function `receive_from_issuer`](#0x1_MoneyOrder_receive_from_issuer)
+-  [Function `register_as_own_shard`](#0x1_MoneyOrder_register_as_own_shard)
 -  [Function `publish_money_orders`](#0x1_MoneyOrder_publish_money_orders)
 -  [Function `initialize`](#0x1_MoneyOrder_initialize)
 -  [Function `money_order_descriptor`](#0x1_MoneyOrder_money_order_descriptor)
@@ -58,7 +59,7 @@
 <dl>
 <dt>
 
-<code>shard_info: <a href="ShardedBitVector.md#0x1_ShardedBitVector_BitVectorInfo">ShardedBitVector::BitVectorInfo</a></code>
+<code>bit_vector_batches_info: <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_BitVectorBatchesInfo">ShardedBitVectorBatches::BitVectorBatchesInfo</a></code>
 </dt>
 <dd>
 
@@ -751,6 +752,39 @@ specialization_id 1), as that asset/specialization doesn't need topping up.
 
 </details>
 
+<a name="0x1_MoneyOrder_register_as_own_shard"></a>
+
+## Function `register_as_own_shard`
+
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_register_as_own_shard">register_as_own_shard</a>(issuer: &signer)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="#0x1_MoneyOrder_register_as_own_shard">register_as_own_shard</a>(issuer: &signer) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
+    <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
+
+    <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_register_as_shard">ShardedBitVectorBatches::register_as_shard</a>(
+        issuer,
+        &<b>mut</b> orders.bit_vector_batches_info
+    );
+    <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_finish_shard_registration">ShardedBitVectorBatches::finish_shard_registration</a>(
+        issuer,
+        &<b>mut</b> orders.bit_vector_batches_info
+    );
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x1_MoneyOrder_publish_money_orders"></a>
 
 ## Function `publish_money_orders`
@@ -770,14 +804,23 @@ resource. MoneyOrderHolder
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_publish_money_orders">publish_money_orders</a>(issuer: &signer,
                                 public_key: vector&lt;u8&gt;,
-) {
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
     move_to(issuer, <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
-        shard_info: <a href="ShardedBitVector.md#0x1_ShardedBitVector_empty_info">ShardedBitVector::empty_info</a>(issuer),
+        bit_vector_batches_info: <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_empty_info">ShardedBitVectorBatches::empty_info</a>(
+            issuer,
+            50000, // Number of bits per shard, TODO: parametrize.
+        ),
         public_key: public_key,
         issued_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(issuer),
         canceled_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_CanceledMoneyOrderEvent">CanceledMoneyOrderEvent</a>&gt;(issuer),
         redeemed_events: <a href="Event.md#0x1_Event_new_event_handle">Event::new_event_handle</a>&lt;<a href="#0x1_MoneyOrder_RedeemedMoneyOrderEvent">RedeemedMoneyOrderEvent</a>&gt;(issuer),
     });
+
+    // Register itself <b>as</b> a shard and conclude shard registration.
+    // TODO: Pass a bool param for default (own shard) behavior. If <b>false</b>,
+    // expose and <b>use</b> APIs for accounts <b>to</b> register <b>as</b> shards for money order
+    // status storage. Adjust tests & benchmarks.
+    <a href="#0x1_MoneyOrder_register_as_own_shard">register_as_own_shard</a>(issuer);
 
     // Register <a href="IssuerToken.md#0x1_IssuerToken">IssuerToken</a> specializations according <b>to</b> the convention that
     // the <a href="#0x1_MoneyOrder">MoneyOrder</a> <b>module</b> uses (consistent w. specialization ID's registered
@@ -817,7 +860,7 @@ Can only be called during genesis with libra root account.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_MoneyOrder_initialize">initialize</a>(lr_account: &signer
-) {
+) <b>acquires</b> <a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a> {
     <a href="LibraTimestamp.md#0x1_LibraTimestamp_assert_genesis">LibraTimestamp::assert_genesis</a>();
 
     // Initialize money order asset holder for all asset types.
@@ -901,10 +944,12 @@ Can only be called during genesis with libra root account.
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(<a href="Signer.md#0x1_Signer_address_of">Signer::address_of</a>(issuer));
     <b>let</b> duration_microseconds = validity_microseconds + grace_period_microseconds;
 
-    <b>let</b> batch_id = <a href="ShardedBitVector.md#0x1_ShardedBitVector_issue_batch">ShardedBitVector::issue_batch</a>(issuer,
-                                                 &<b>mut</b> orders.shard_info,
-                                                 batch_size,
-                                                 duration_microseconds);
+    <b>let</b> batch_id = <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_issue_batch">ShardedBitVectorBatches::issue_batch</a>(
+        issuer,
+        &<b>mut</b> orders.bit_vector_batches_info,
+        batch_size,
+        duration_microseconds
+    );
 
     <a href="Event.md#0x1_Event_emit_event">Event::emit_event</a>&lt;<a href="#0x1_MoneyOrder_IssuedMoneyOrderEvent">IssuedMoneyOrderEvent</a>&gt;(
         &<b>mut</b> orders.issued_events,
@@ -1044,12 +1089,15 @@ Can only be called during genesis with libra root account.
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
 
     // The money order was canceled now <b>if</b> it wasn't expired, and <b>if</b> the
-    // status bit wasn't 1 (e.g. already canceled or redeemed). Note: If
-    // expired, don't set the bit since the order_status array may be cleared.
-    <b>let</b> canceled_now = <a href="ShardedBitVector.md#0x1_ShardedBitVector_test_and_set_bit">ShardedBitVector::test_and_set_bit</a>(&orders.shard_info,
-                                                          batch_index,
-                                                          order_index,
-                                                          <b>false</b>);
+    // status bit wasn't 1 (e.g. already canceled or redeemed). We pass
+    // assert_expiry = <b>false</b>, so the call returns 1 <b>if</b> expired or <b>if</b> the
+    // bit was 1.
+    <b>let</b> canceled_now = !<a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_test_and_set_bit">ShardedBitVectorBatches::test_and_set_bit</a>(
+        &orders.bit_vector_batches_info,
+        batch_index,
+        order_index,
+        <b>false</b>
+    );
 
     <b>if</b> (canceled_now) {
         // Log a canceled event.
@@ -1129,10 +1177,13 @@ Can only be called during genesis with libra root account.
     <b>let</b> orders = borrow_global_mut&lt;<a href="#0x1_MoneyOrder_MoneyOrders">MoneyOrders</a>&gt;(issuer_address);
 
     // Update the status bit, verify that it was 0.
-    <b>assert</b>(!<a href="ShardedBitVector.md#0x1_ShardedBitVector_test_and_set_bit">ShardedBitVector::test_and_set_bit</a>(&<b>mut</b> orders.shard_info,
-                                               money_order_descriptor.batch_index,
-                                               money_order_descriptor.order_index,
-                                               <b>true</b>),
+    <b>let</b> bit_was_set = <a href="ShardedBitVector.md#0x1_ShardedBitVectorBatches_test_and_set_bit">ShardedBitVectorBatches::test_and_set_bit</a>(
+        &<b>mut</b> orders.bit_vector_batches_info,
+        money_order_descriptor.batch_index,
+        money_order_descriptor.order_index,
+        <b>true</b>
+    );
+    <b>assert</b>(!bit_was_set,
            <a href="Errors.md#0x1_Errors_invalid_state">Errors::invalid_state</a>(ECANT_DEPOSIT_MONEY_ORDER));
 
     // Actually withdraw the asset from issuer's account (<a href="AssetHolder.md#0x1_AssetHolder">AssetHolder</a>) and

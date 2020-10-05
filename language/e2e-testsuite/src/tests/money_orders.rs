@@ -170,10 +170,11 @@ fn cancel_money_order_txn(
 }
 
 fn assert_aborted_with(output: TransactionOutput, error_code: u64) {
-    assert!(matches!(
-        output.status().status(),
-        Ok(KeptVMStatus::MoveAbort(_, code)) if code == error_code
-    ));
+    if let Ok(KeptVMStatus::MoveAbort(_, code)) = output.status().status() {
+        assert_eq!(code, error_code); 
+    } else {
+        panic!("expected MoveAbort")
+    }
 }
 
 #[test]
@@ -397,7 +398,7 @@ fn money_orders() {
         12,
     );
     let output = executor.execute_transaction(txn);
-    assert_aborted_with(output, 8002);
+    assert_aborted_with(output, 1031);
 
     // Already (issuer) canceled.
     let txn = deposit_money_order_txn(
@@ -428,7 +429,7 @@ fn money_orders() {
         12,
     );
     let output = executor.execute_transaction(txn);
-    assert_aborted_with(output, 8003);
+    assert_aborted_with(output, 1537);
 
     // Cancel deposited - does nothing, but doesn't abort.
     // TODO: check the cancel event that cancel didn't do anything.
