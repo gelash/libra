@@ -1960,6 +1960,31 @@ impl VectorRef {
         Ok(NativeResult::ok(cost, vec![res]))
     }
 
+    pub fn clear(
+        &self,
+        cost: GasUnits<GasCarrier>,
+        type_param: &Type,
+        context: &impl NativeContext,
+    ) -> PartialVMResult<NativeResult> {
+        let c = self.0.container();
+        check_elem_layout(context, type_param, c)?;
+
+        match c {
+            Container::VecU8(r) => r.borrow_mut().clear(),
+            Container::VecU64(r) => r.borrow_mut().clear(),
+            Container::VecU128(r) => r.borrow_mut().clear(),
+            Container::VecBool(r) => r.borrow_mut().clear(),
+            Container::VecAddress(r) => r.borrow_mut().clear(),
+
+            Container::VecC(_) | Container::VecR(_) | Container::Locals(_)
+                | Container::StructC(_) | Container::StructR(_) => unreachable!(),
+        };
+
+        self.0.mark_dirty();
+
+        Ok(NativeResult::ok(cost, vec![]))
+    }
+
     pub fn swap(
         &self,
         idx1: usize,
@@ -2026,6 +2051,42 @@ impl Vector {
                     ))))
                 }
             }
+
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("invalid type param for vector: {:?}", type_param)),
+                )
+            }
+        };
+
+        Ok(NativeResult::ok(cost, vec![container]))
+    }
+
+    pub fn initialize(
+        e: Value,
+        len: usize,
+        cost: GasUnits<GasCarrier>,
+        type_param: &Type,
+    ) -> PartialVMResult<NativeResult> {
+        let container = match type_param {
+            Type::U8 => Value(ValueImpl::Container(Container::VecU8(Rc::new(
+                RefCell::new(vec![e.value_as()?; len]),
+            )))), 
+            Type::U64 => Value(ValueImpl::Container(Container::VecU64(Rc::new(
+                RefCell::new(vec![e.value_as()?; len]),
+            )))),
+            Type::U128 => Value(ValueImpl::Container(Container::VecU128(Rc::new(
+                RefCell::new(vec![e.value_as()?; len]),
+            )))),
+            Type::Bool => Value(ValueImpl::Container(Container::VecBool(Rc::new(
+                RefCell::new(vec![e.value_as()?; len]),
+            )))), 
+            Type::Address => Value(ValueImpl::Container(Container::VecAddress(Rc::new(
+                RefCell::new(vec![e.value_as()?; len]),
+            )))),
+
+            Type::Signer | Type::Vector(_) | Type::Struct(_) | Type::StructInstantiation(_, _) => unreachable!(),
 
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(

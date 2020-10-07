@@ -312,4 +312,6 @@ pub enum NativeCostIndex {
     CREATE_SIGNER = 15,
     DESTROY_SIGNER = 16,
     EMIT_EVENT = 17,
+    INITIALIZE = 18,
+    CLEAR = 19,
 }

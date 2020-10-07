@@ -15,13 +15,11 @@
 -  [Function `finish_shard_registration`](#0x1_ShardedBitVectorBatches_finish_shard_registration)
 -  [Function `time_expired`](#0x1_ShardedBitVectorBatches_time_expired)
 -  [Function `div_ceil`](#0x1_ShardedBitVectorBatches_div_ceil)
--  [Function `vector_with_copies`](#0x1_ShardedBitVectorBatches_vector_with_copies)
 -  [Function `issue_batch_on_shard`](#0x1_ShardedBitVectorBatches_issue_batch_on_shard)
 -  [Function `min`](#0x1_ShardedBitVectorBatches_min)
 -  [Function `issue_batch`](#0x1_ShardedBitVectorBatches_issue_batch)
 -  [Function `test_and_set_bit_on_shard`](#0x1_ShardedBitVectorBatches_test_and_set_bit_on_shard)
 -  [Function `test_and_set_bit`](#0x1_ShardedBitVectorBatches_test_and_set_bit)
--  [Function `clear_vector`](#0x1_ShardedBitVectorBatches_clear_vector)
 -  [Function `compress_expired_batch_on_shard`](#0x1_ShardedBitVectorBatches_compress_expired_batch_on_shard)
 -  [Function `compress_expired_batch`](#0x1_ShardedBitVectorBatches_compress_expired_batch)
 -  [Function `compress_expired_batches`](#0x1_ShardedBitVectorBatches_compress_expired_batches)
@@ -160,7 +158,8 @@ data-structure.
  >num_bits_per_shard bits, other shards always store
  <= num_bits_per_shard bits, and if a shard stores
  <num_bits_per_shard bits, then all previous shards must be
- storing exactly =num_bits_per_shard bits.
+ storing exactly =num_bits_per_shard bits and all later shards
+ must store 0 bits.
 </dd>
 <dt>
 
@@ -400,38 +399,6 @@ be called by the primary.
 
 </details>
 
-<a name="0x1_ShardedBitVectorBatches_vector_with_copies"></a>
-
-## Function `vector_with_copies`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_ShardedBitVectorBatches_vector_with_copies">vector_with_copies</a>(num_copies: u64, element: u128): vector&lt;u128&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_ShardedBitVectorBatches_vector_with_copies">vector_with_copies</a>(num_copies: u64, element: u128,
-): vector&lt;u128&gt; {
-    <b>let</b> ret = <a href="Vector.md#0x1_Vector_empty">Vector::empty</a>();
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; num_copies) {
-        <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> ret, element);
-        i = i + 1;
-    };
-
-    ret
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_ShardedBitVectorBatches_issue_batch_on_shard"></a>
 
 ## Function `issue_batch_on_shard`
@@ -460,7 +427,7 @@ be called by the primary.
 
     <b>let</b> batch_id = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(&shard.batch_store);
     <a href="Vector.md#0x1_Vector_push_back">Vector::push_back</a>(&<b>mut</b> shard.batch_store, <a href="#0x1_ShardedBitVectorBatches_BitVectorBatch">BitVectorBatch</a> {
-        stored_bits: <a href="#0x1_ShardedBitVectorBatches_vector_with_copies">vector_with_copies</a>(<a href="#0x1_ShardedBitVectorBatches_div_ceil">div_ceil</a>(num_bits, 128), 0),
+        stored_bits: <a href="Vector.md#0x1_Vector_initialize">Vector::initialize</a>(0, <a href="#0x1_ShardedBitVectorBatches_div_ceil">div_ceil</a>(num_bits, 128)),
 
         expiration_time: <a href="LibraTimestamp.md#0x1_LibraTimestamp_now_microseconds">LibraTimestamp::now_microseconds</a>() +
             duration_microseconds,
@@ -668,36 +635,6 @@ and the access control is the responsibility of the info holder.
 
 </details>
 
-<a name="0x1_ShardedBitVectorBatches_clear_vector"></a>
-
-## Function `clear_vector`
-
-
-
-<pre><code><b>fun</b> <a href="#0x1_ShardedBitVectorBatches_clear_vector">clear_vector</a>(v: &<b>mut</b> vector&lt;u128&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="#0x1_ShardedBitVectorBatches_clear_vector">clear_vector</a>(v: &<b>mut</b> vector&lt;u128&gt;,) {
-    <b>let</b> length = <a href="Vector.md#0x1_Vector_length">Vector::length</a>(v);
-
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; length) {
-        <a href="Vector.md#0x1_Vector_pop_back">Vector::pop_back</a>(v);
-        i = i + 1;
-    };
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_ShardedBitVectorBatches_compress_expired_batch_on_shard"></a>
 
 ## Function `compress_expired_batch_on_shard`
@@ -725,7 +662,7 @@ save memory and return true.
     <b>let</b> batch = <a href="Vector.md#0x1_Vector_borrow_mut">Vector::borrow_mut</a>(&<b>mut</b> shard.batch_store, batch_index);
 
     <b>if</b> (<a href="#0x1_ShardedBitVectorBatches_time_expired">time_expired</a>(batch.expiration_time)) {
-        <a href="#0x1_ShardedBitVectorBatches_clear_vector">clear_vector</a>(&<b>mut</b> batch.stored_bits);
+        <a href="Vector.md#0x1_Vector_clear">Vector::clear</a>(&<b>mut</b> batch.stored_bits);
         <b>return</b> <b>true</b>
     };
 

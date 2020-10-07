@@ -23,6 +23,26 @@ pub fn native_empty(
     Vector::empty(cost, &ty_args[0], context)
 }
 
+pub fn native_initialize(
+    context: &impl NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let len = pop_arg!(args, u64) as usize;
+    let e = args.pop_back().unwrap();
+
+    let cost = native_gas(
+        context.cost_table(),
+        NativeCostIndex::INITIALIZE,
+        1,
+    );
+    
+    Vector::initialize(e, len, cost, &ty_args[0])
+}
+
 pub fn native_length(
     context: &impl NativeContext,
     ty_args: Vec<Type>,
@@ -89,6 +109,20 @@ pub fn native_pop(
     let cost = native_gas(context.cost_table(), NativeCostIndex::POP_BACK, 1);
 
     r.pop(cost, &ty_args[0], context)
+}
+
+pub fn native_clear(
+    context: &impl NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    let r = pop_arg!(args, VectorRef);
+
+    let cost = native_gas(context.cost_table(), NativeCostIndex::CLEAR, 1);
+    r.clear(cost, &ty_args[0], context)
 }
 
 pub fn native_destroy_empty(

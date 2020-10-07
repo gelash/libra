@@ -12,6 +12,10 @@ module Vector {
     /// Return the length of the vector.
     native public fun length<Element>(v: &vector<Element>): u64;
 
+    /// Initialize vector with length copies of e.
+    native public fun initialize<Element: copyable>(e: Element,
+                                                    length: u64): vector<Element>;
+    
     /// Acquire an immutable reference to the `i`th element of the vector `v`.
     /// Aborts if `i` is out of bounds.
     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
@@ -26,6 +30,9 @@ module Vector {
     /// Pop an element from the end of vector `v`.
     /// Aborts if `v` is empty.
     native public fun pop_back<Element>(v: &mut vector<Element>): Element;
+
+    /// Clears the vector.
+    native public fun clear<Element: copyable>(v: &mut vector<Element>);
 
     /// Destroy the vector `v`.
     /// Aborts if `v` is not empty.

@@ -51,7 +51,8 @@ address 0x1 {
             /// >num_bits_per_shard bits, other shards always store
             /// <= num_bits_per_shard bits, and if a shard stores
             /// <num_bits_per_shard bits, then all previous shards must be
-            /// storing exactly =num_bits_per_shard bits.
+            /// storing exactly =num_bits_per_shard bits and all later shards
+            /// must store 0 bits.
             num_bits_per_shard: u64,
             /// Number of total bits in a batch, length of the vector is
             /// equal to the number of batches.
@@ -145,20 +146,6 @@ address 0x1 {
             (a + b - 1) / b
         }
 
-        // TODO: get rid if and when vector supports initializers for copyable
-        // elements (templated on the type?).
-        fun vector_with_copies(num_copies: u64, element: u128,
-        ): vector<u128> {
-            let ret = Vector::empty();
-            let i = 0;
-            while (i < num_copies) {
-                Vector::push_back(&mut ret, element);
-                i = i + 1;
-            };
-
-            ret
-        }
-
         // Issue a (corresponding part of the whole) batch on a given shard.
         fun issue_batch_on_shard(shard_address: address,
                                  primary_address: address,
@@ -173,7 +160,7 @@ address 0x1 {
 
             let batch_id = Vector::length(&shard.batch_store);
             Vector::push_back(&mut shard.batch_store, BitVectorBatch {
-                stored_bits: vector_with_copies(div_ceil(num_bits, 128), 0),
+                stored_bits: Vector::initialize(0, div_ceil(num_bits, 128)),
                 
                 expiration_time: LibraTimestamp::now_microseconds() +
                     duration_microseconds,
@@ -301,18 +288,6 @@ address 0x1 {
                                       assert_expiry)
         }
 
-        // TODO: get rid of when vector with copyable elements (non-resource types)
-        // supports clearing.
-        fun clear_vector(v: &mut vector<u128>,) {
-            let length = Vector::length(v);
-
-            let i = 0;
-            while (i < length) {
-                Vector::pop_back(v);
-                i = i + 1;
-            };
-        }
-
         /// If a batch has expired, clear its stored_bits on a given shard to
         /// save memory and return true.
         public fun compress_expired_batch_on_shard(shard_address: address,
@@ -325,7 +300,7 @@ address 0x1 {
             let batch = Vector::borrow_mut(&mut shard.batch_store, batch_index);
             
             if (time_expired(batch.expiration_time)) {
-                clear_vector(&mut batch.stored_bits);
+                Vector::clear(&mut batch.stored_bits);
                 return true
             };
             

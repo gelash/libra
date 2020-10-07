@@ -8,10 +8,12 @@
 -  [Const `EINDEX_OUT_OF_BOUNDS`](#0x1_Vector_EINDEX_OUT_OF_BOUNDS)
 -  [Function `empty`](#0x1_Vector_empty)
 -  [Function `length`](#0x1_Vector_length)
+-  [Function `initialize`](#0x1_Vector_initialize)
 -  [Function `borrow`](#0x1_Vector_borrow)
 -  [Function `push_back`](#0x1_Vector_push_back)
 -  [Function `borrow_mut`](#0x1_Vector_borrow_mut)
 -  [Function `pop_back`](#0x1_Vector_pop_back)
+-  [Function `clear`](#0x1_Vector_clear)
 -  [Function `destroy_empty`](#0x1_Vector_destroy_empty)
 -  [Function `swap`](#0x1_Vector_swap)
 -  [Function `singleton`](#0x1_Vector_singleton)
@@ -88,6 +90,30 @@ Return the length of the vector.
 
 
 <pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="#0x1_Vector_length">length</a>&lt;Element&gt;(v: &vector&lt;Element&gt;): u64;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_Vector_initialize"></a>
+
+## Function `initialize`
+
+Initialize vector with length copies of e.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_Vector_initialize">initialize</a>&lt;Element: <b>copyable</b>&gt;(e: Element, length: u64): vector&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="#0x1_Vector_initialize">initialize</a>&lt;Element: <b>copyable</b>&gt;(e: Element,
+                                                length: u64): vector&lt;Element&gt;;
 </code></pre>
 
 
@@ -193,6 +219,29 @@ Aborts if
 
 
 <pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="#0x1_Vector_pop_back">pop_back</a>&lt;Element&gt;(v: &<b>mut</b> vector&lt;Element&gt;): Element;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_Vector_clear"></a>
+
+## Function `clear`
+
+Clears the vector.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_Vector_clear">clear</a>&lt;Element: <b>copyable</b>&gt;(v: &<b>mut</b> vector&lt;Element&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="#0x1_Vector_clear">clear</a>&lt;Element: <b>copyable</b>&gt;(v: &<b>mut</b> vector&lt;Element&gt;);
 </code></pre>
 
 
