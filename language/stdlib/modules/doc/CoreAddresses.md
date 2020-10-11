@@ -13,6 +13,7 @@
 -  [Function `CURRENCY_INFO_ADDRESS`](#0x1_CoreAddresses_CURRENCY_INFO_ADDRESS)
 -  [Function `TREASURY_COMPLIANCE_ADDRESS`](#0x1_CoreAddresses_TREASURY_COMPLIANCE_ADDRESS)
 -  [Function `VM_RESERVED_ADDRESS`](#0x1_CoreAddresses_VM_RESERVED_ADDRESS)
+-  [Function `TOKEN_REGISTRY_COUNTER_ADDRESS`](#0x1_CoreAddresses_TOKEN_REGISTRY_COUNTER_ADDRESS)
 -  [Function `assert_libra_root`](#0x1_CoreAddresses_assert_libra_root)
 -  [Function `assert_treasury_compliance`](#0x1_CoreAddresses_assert_treasury_compliance)
 -  [Function `assert_vm`](#0x1_CoreAddresses_assert_vm)
@@ -179,6 +180,36 @@ is no signer for the transaction.
 
 <pre><code><b>public</b> <b>fun</b> <a href="#0x1_CoreAddresses_VM_RESERVED_ADDRESS">VM_RESERVED_ADDRESS</a>(): address {
     0x0
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_CoreAddresses_TOKEN_REGISTRY_COUNTER_ADDRESS"></a>
+
+## Function `TOKEN_REGISTRY_COUNTER_ADDRESS`
+
+The (singleton) address under which the
+<code><a href="TokenRegistry.md#0x1_TokenRegistry_IdCounter">0x1::TokenRegistry::IdCounter</a></code> resource
+is published. This is the same as the
+<code>LIBRA_ROOT_ADDRESS</code> but there is no
+requirement that it must be this from an operational viewpoint, so this is
+why this is separated out.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_CoreAddresses_TOKEN_REGISTRY_COUNTER_ADDRESS">TOKEN_REGISTRY_COUNTER_ADDRESS</a>(): address
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="#0x1_CoreAddresses_TOKEN_REGISTRY_COUNTER_ADDRESS">TOKEN_REGISTRY_COUNTER_ADDRESS</a>(): address {
+    0xA550C18
 }
 </code></pre>
 

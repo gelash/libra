@@ -34,6 +34,14 @@ module CoreAddresses {
         0x0
     }
 
+    /// The (singleton) address under which the `0x1::TokenRegistry::IdCounter` resource
+    /// is published. This is the same as the `LIBRA_ROOT_ADDRESS` but there is no
+    /// requirement that it must be this from an operational viewpoint, so this is
+    /// why this is separated out.
+    public fun TOKEN_REGISTRY_COUNTER_ADDRESS(): address {
+        0xA550C18
+    }
+
     /// The operation can only be performed by the account at 0xA550C18 (Libra Root)
     const ELIBRA_ROOT: u64 = 0;
     /// The operation can only be performed by the account at 0xB1E55ED (Treasury & Compliance)
