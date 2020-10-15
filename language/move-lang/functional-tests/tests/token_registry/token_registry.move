@@ -1,4 +1,5 @@
 //! account: bob
+//! account: alice
 
 
 //! new-transaction
@@ -24,7 +25,7 @@ module ACoin {
         assert(Signer::address_of(account) == {{bob}}, 8000);
 
       let a_coin = ACoin{};
-      TokenRegistry::register<ACoin>(account, &a_coin, 0)
+      TokenRegistry::register<ACoin>(account, &a_coin, true)
     }
   }
 // check: "Keep(EXECUTED)"
@@ -88,7 +89,7 @@ script {
 
 // Defining the BCoin module so we can test increment of unique id (tested through prints)
 //! new-transaction
-//! sender: bob
+//! sender: alice
 module BCoin {
     use 0x1::TokenRegistry::{Self, TokenRegistryWithMintCapability};
     use 0x1::Signer;
@@ -96,19 +97,34 @@ module BCoin {
     struct BCoin {}
 
     public fun register(account: &signer) :TokenRegistryWithMintCapability<BCoin> {
-        assert(Signer::address_of(account) == {{bob}}, 8000);
+        assert(Signer::address_of(account) == {{alice}}, 8000);
 
       let b_coin = BCoin{};
-      TokenRegistry::register<BCoin>(account, &b_coin, 0)
+      TokenRegistry::register<BCoin>(account, &b_coin, true)
     }
   }
 // check: "Keep(EXECUTED)"
 
 
+// Bob should fail registering alice's token
 //! new-transaction
 //! sender: bob
 script {
-    use {{bob}}::BCoin;
+    use {{alice}}::BCoin;
+    use {{default}}::Holder;
+
+    fun main(sender: &signer) {
+        let mint_cap = BCoin::register(sender);
+        Holder::hold(sender, mint_cap);
+    }
+}
+// check: "ABORTED { code: 8000"
+
+
+//! new-transaction
+//! sender: alice
+script {
+    use {{alice}}::BCoin;
     use {{default}}::Holder;
 
     fun main(sender: &signer) {

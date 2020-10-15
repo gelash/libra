@@ -8,20 +8,27 @@ address 0x1 {
 
 
         resource struct IdCounter {
-            count : u64,
+            count: u64,
         }
 
-        resource struct Registered<CoinType> {
-            id : u64,
-            metadata : u64, // later change to some metadata struct
+        resource struct TokenMetadata<CoinType> {
+            id: u64,
+            transferable: bool,
+            // possible other metadata fields can be added here
         }
 
         resource struct TokenRegistryWithMintCapability<CoinType> {
-            maker_account : address,
+            maker_account: address,
+        }
+
+        resource struct TokenMadeBy<CoinType> { //what should be the fields for this?
+            maker_account: address,
         }
 
         /// A property expected of a `IdCounter` resource didn't hold
         const EID_COUNTER: u64 = 1;
+        /// A property expected of a `TokenMetadata` resource didn't hold
+        const ETOKEN_REG: u64 = 2;
 
         /// Initialization of the `TokenRegistry` module; initializes
         /// the counter of unique IDs
@@ -45,19 +52,41 @@ address 0x1 {
 
         public fun register<CoinType>(maker_account: &signer, 
                                     _t: &CoinType,                                
-                                    metadata: u64,
+                                    transferable: bool,
         ): TokenRegistryWithMintCapability<CoinType> acquires IdCounter {
+            // add test for the line below
+            assert(!exists<TokenMetadata<CoinType>>(Signer::address_of(maker_account)), Errors::already_published(ETOKEN_REG));
             // increments unique counter under global registry address  
             let unique_id = get_fresh_id(); 
             // print for testing, can remove later
             Debug::print(&unique_id);
-            move_to<Registered<CoinType>>(
+            move_to<TokenMetadata<CoinType>>(
                 maker_account,  
-                Registered { id: unique_id, metadata }
+                TokenMetadata { id: unique_id, transferable}
             ); 
             let address = Signer::address_of(maker_account);
             TokenRegistryWithMintCapability<CoinType>{maker_account: address}
         }
+
+
+        /// Asserts that `CoinType` is a registered type at the given address
+        // add test
+        public fun assert_is_registered_at<CoinType> (registered_at: address){
+            assert(exists<TokenMetadata<CoinType>>(registered_at), Errors::not_published(ETOKEN_REG));
+        }
+
+        // add test
+        public fun is_transferable<CoinType>(registered_at: address): bool acquires TokenMetadata{
+            assert_is_registered_at<CoinType>(registered_at);
+            let metadata = borrow_global<TokenMetadata<CoinType>>(registered_at);
+            metadata.transferable
+        }
+
+        // public fun would_not_work<CoinType>(registered_at: address): &TokenMetadata<CoinType> acquires TokenMetadata {
+        //     // assert_is_registered_at<CoinType>(registered_at);
+        //     let metadata = borrow_global<TokenMetadata<CoinType>>(registered_at);
+        //     metadata
+        // }
 
 
     }
